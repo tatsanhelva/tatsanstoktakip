@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v1.9</title>
+<title>Tatsan Stok Takip v2.0</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -51,7 +51,7 @@
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(kullanıcı adı ve şifre)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note"><b>İlk giriş:</b> kullanıcı adı <b>admin</b>, şifre <b>1234</b>. Giriş yaptıktan sonra Kullanıcılar bölümünden şifreyi değiştirin.<br><b>Beni Hatırla</b> seçildiğinde kullanıcı adı ve şifre bu tarayıcıda saklanır.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
-<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small>Stok ve depo yönetimi v1.9</small></div>
+<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small>Stok ve depo yönetimi v2.0</small></div>
 <nav class="nav" id="nav">
 <button class="active" data-page="dashboard">📊 Ana Panel</button>
 <button data-page="products">📦 Ürünler</button>
@@ -145,7 +145,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='https://script.google.com/macros/s/AKfycbwQEKnPIQEK5wny4v-7LJF3960uJkFRlojLA7leCnIFbzxBAHVL5vafivR3PuymxUU/exec';
 const DEFAULT_SHEETS_TOKEN='birkantatsan2234';
-const APP_VERSION='1.9';
+const APP_VERSION='2.0';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
@@ -155,6 +155,9 @@ let db=loadDB();
 let currentUser=null;
 let autoSyncTimer=null;
 let activePage='dashboard';
+let syncBootstrapComplete=false;
+let syncPullInProgress=false;
+let syncPushInProgress=false;
 
 function defaultDB(){return {version:APP_VERSION,updatedAt:new Date().toISOString(),settings:{companyName:'Tatsan Stok Takip',allowNegative:false,currency:'TRY',sheetsUrl:DEFAULT_SHEETS_URL,sheetsToken:DEFAULT_SHEETS_TOKEN,autoSync:true,lastPush:'',lastPull:''},warehouses:[{id:'wh-main',code:'D001',name:'Ana Depo',manager:'',phone:'',address:'',notes:''}],products:[],categories:[],firms:[],stocks:{},movements:[],users:[{id:'usr-admin',username:'admin',fullName:'Yönetici',role:'admin',active:true,passwordHash:DEFAULT_ADMIN_HASH,permissions:Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true])),createdAt:new Date().toISOString()}],auditLogs:[]}}
 function normalizeDB(x){
@@ -178,6 +181,17 @@ function normalizeDB(x){
 function loadDB(){try{const x=JSON.parse(localStorage.getItem(DB_KEY));return normalizeDB(x)}catch(e){return defaultDB()}}
 function persistDB(){db.updatedAt=new Date().toISOString();localStorage.setItem(DB_KEY,JSON.stringify(db))}
 function saveDB(options={}){const {render=true,sync=true}=options;persistDB();if(render&&currentUser)renderAll();if(sync)scheduleAutoSync()}
+function hasOperationalData(data=db){
+  const stockValues=Object.values(data?.stocks||{});
+  return !!((data?.products||[]).length||(data?.categories||[]).length||(data?.firms||[]).length||(data?.movements||[]).length||(data?.warehouses||[]).length>1||(data?.users||[]).length>1||stockValues.some(v=>Math.abs(num(v))>0));
+}
+function setLoginBusy(busy,message=''){
+  const form=el('loginForm');if(!form)return;
+  const btn=form.querySelector('button[type="submit"]');
+  ['loginUsername','loginPassword','rememberMe'].forEach(id=>{const node=el(id);if(node)node.disabled=!!busy});
+  if(btn){btn.disabled=!!busy;btn.textContent=busy?'Google Sheets verileri yükleniyor…':'Giriş Yap'}
+  if(message)el('loginError').textContent=message;
+}
 function uid(prefix='id'){return prefix+'-'+Date.now().toString(36)+'-'+Math.random().toString(36).slice(2,8)}
 function el(id){return document.getElementById(id)}
 function esc(s){return String(s??'').replace(/[&<>'"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;',"'":'&#39;','"':'&quot;'}[c]))}
@@ -251,6 +265,30 @@ async function login(e){
 }
 function logout(){if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
 function initSession(){const id=sessionStorage.getItem('stokDepoCurrentUser');const user=userById(id);if(user&&user.active!==false){currentUser=user;showApp()}else showLogin()}
+async function bootstrapSheetsBeforeLogin(){
+  setLoginBusy(true,'Google Sheets verileri güvenli şekilde yükleniyor…');
+  syncPullInProgress=true;syncBootstrapComplete=false;
+  try{
+    const r=await jsonpRequest('pull');
+    if(!r?.ok)throw new Error(r?.message||'Google Sheets verileri alınamadı.');
+    if(r.data){
+      db=normalizeDB(r.data);
+      db.settings={...db.settings,sheetsUrl:DEFAULT_SHEETS_URL,sheetsToken:DEFAULT_SHEETS_TOKEN,autoSync:true,lastPull:new Date().toISOString()};
+      localStorage.setItem(DB_KEY,JSON.stringify(db));
+    }
+    syncBootstrapComplete=true;
+    el('syncIndicator').textContent=r.data?'Sheets: açılışta çekildi':'Sheets: veri bekleniyor';
+    setLoginBusy(false,'');
+  }catch(err){
+    syncBootstrapComplete=false;
+    el('syncIndicator').textContent='Sheets: çekme hatası';
+    setLoginBusy(false,'Google Sheets açılamadı. Yerel veriler açıldı; boş veri gönderilmemesi için otomatik gönderme durduruldu.');
+  }finally{syncPullInProgress=false}
+}
+async function initializeApplication(){
+  await bootstrapSheetsBeforeLogin();
+  initSession();
+}
 
 function addMovement({type,warehouseId,productId,quantity,before,after,date,doc='',detail='',lot='',expiry='',unitCost=0,groupId='',firmId='',firmName='',reason='',inputUnit='Koli',inputQuantity=null}){
   const normalizedUnit=inputUnit==='Adet'?'Adet':'Koli';db.movements.push({id:uid('mv'),groupId,type,warehouseId,productId,quantity:num(quantity),inputUnit:normalizedUnit,inputQuantity:num(inputQuantity??fromCartons(productId,quantity,normalizedUnit)),before:num(before),after:num(after),date:date||new Date().toISOString(),doc,detail,lot,expiry,unitCost:num(unitCost),firmId,firmName,userId:currentUser?.id||'',userName:currentUser?.fullName||currentUser?.username||'',reason});
@@ -404,12 +442,59 @@ function renderSettings(){if(!isAdmin())return;el('settingCompany').value=db.set
 function saveSettings(e){e.preventDefault();db.settings.companyName=el('settingCompany').value.trim()||'Tatsan Stok Takip';db.settings.allowNegative=el('settingNegative').value==='true';db.settings.currency=el('settingCurrency').value;audit('Genel ayarlar güncellendi','Ayarlar',`Firma: ${db.settings.companyName}, negatif stok: ${db.settings.allowNegative?'açık':'kapalı'}`);saveDB();notify('Ayarlar kaydedildi.')}
 function saveSheetsSettings(e){e.preventDefault();db.settings.sheetsUrl=DEFAULT_SHEETS_URL;db.settings.sheetsToken=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;audit('Google Sheets ayarları güncellendi','Google Sheets','Sabit bağlantı korundu, otomatik senkronizasyon sürekli açık.');saveDB();notify('Google Sheets bağlantısı kaydedildi. Otomatik gönderme sürekli açık.')}
 function sheetsConfigured(){if(!db.settings.sheetsUrl||!db.settings.sheetsToken){notify('Önce Web App URL ve güvenlik anahtarını kaydedin.',true);return false}if(!/^https:\/\/script\.google\.com\//.test(db.settings.sheetsUrl)){notify('Geçerli Google Apps Script Web App URL girin.',true);return false}return true}
-function scheduleAutoSync(){clearTimeout(autoSyncTimer);if(!currentUser||!db.settings.sheetsUrl||!db.settings.sheetsToken)return;autoSyncTimer=setTimeout(()=>pushToSheets(false),1800)}
+function scheduleAutoSync(){
+  clearTimeout(autoSyncTimer);
+  if(!currentUser||!db.settings.sheetsUrl||!db.settings.sheetsToken||!syncBootstrapComplete||syncPullInProgress||syncPushInProgress)return;
+  autoSyncTimer=setTimeout(()=>pushToSheets(false),1800);
+}
 function postFormToSheets(payload){return new Promise((resolve,reject)=>{const frame=el('sheetSyncFrame');const form=document.createElement('form');form.method='POST';form.action=db.settings.sheetsUrl;form.target='sheetSyncFrame';form.style.display='none';const fields={mode:'push',token:db.settings.sheetsToken,payload:JSON.stringify(payload)};Object.entries(fields).forEach(([name,value])=>{const input=document.createElement('input');input.name=name;input.value=value;form.appendChild(input)});document.body.appendChild(form);let submitted=false;const timer=setTimeout(()=>{cleanup();reject(new Error('Google Sheets yanıt vermedi.'))},20000);function cleanup(){clearTimeout(timer);frame.onload=null;form.remove()}frame.onload=()=>{if(!submitted)return;cleanup();resolve()};submitted=true;form.submit()})}
-async function pushToSheets(manual=true){if(!sheetsConfigured())return;const started=Date.now();try{el('syncIndicator').textContent='Sheets: gönderiliyor…';if(manual){audit('Veriler Sheets’e gönderildi','Google Sheets','Manuel veri gönderimi başlatıldı.');persistDB()}await postFormToSheets(db);const status=await jsonpRequest('status');if(!status?.ok||!status.hasData)throw new Error(status?.message||'Google Sheets kaydı doğrulanamadı.');const remoteTime=Date.parse(status.lastUpdate||'');if(Number.isFinite(remoteTime)&&remoteTime<started-15000)throw new Error('Google Sheets üzerinde yeni kayıt doğrulanamadı.');db.settings.lastPush=new Date().toISOString();persistDB();el('syncIndicator').textContent='Sheets: güncel';if(isAdmin())renderSettings();if(manual)notify('Veriler Google Sheets’e gönderildi ve doğrulandı.')}catch(err){el('syncIndicator').textContent='Sheets: hata';if(manual)notify(err.message||'Google Sheets gönderimi başarısız.',true)}}
+async function pushToSheets(manual=true){
+  if(!sheetsConfigured()||syncPullInProgress||syncPushInProgress)return;
+  if(!syncBootstrapComplete){
+    el('syncIndicator').textContent='Sheets: önce çekme gerekli';
+    if(manual)notify('Önce Google Sheets verileri güvenli şekilde çekilmelidir. Sayfayı yenileyin veya Sheets’ten Çek düğmesini kullanın.',true);
+    return;
+  }
+  if(!hasOperationalData(db)){
+    el('syncIndicator').textContent='Sheets: boş veri gönderilmedi';
+    if(manual&&!confirm('Bu cihazda ürün, stok veya hareket bulunmuyor. Boş veriyi Google Sheets’e göndermek mevcut kayıtları silebilir. Yine de devam edilsin mi?'))return;
+    if(!manual)return;
+  }
+  const started=Date.now();syncPushInProgress=true;
+  try{
+    el('syncIndicator').textContent='Sheets: gönderiliyor…';
+    if(manual){audit('Veriler Sheets’e gönderildi','Google Sheets','Manuel veri gönderimi başlatıldı.');persistDB()}
+    await postFormToSheets(db);
+    const status=await jsonpRequest('status');
+    if(!status?.ok||!status.hasData)throw new Error(status?.message||'Google Sheets kaydı doğrulanamadı.');
+    const remoteTime=Date.parse(status.lastUpdate||'');
+    if(Number.isFinite(remoteTime)&&remoteTime<started-15000)throw new Error('Google Sheets üzerinde yeni kayıt doğrulanamadı.');
+    db.settings.lastPush=new Date().toISOString();persistDB();el('syncIndicator').textContent='Sheets: güncel';if(isAdmin())renderSettings();if(manual)notify('Veriler Google Sheets’e gönderildi ve doğrulandı.');
+  }catch(err){el('syncIndicator').textContent='Sheets: hata';if(manual)notify(err.message||'Google Sheets gönderimi başarısız.',true)}
+  finally{syncPushInProgress=false}
+}
 function jsonpRequest(mode){return new Promise((resolve,reject)=>{if(!sheetsConfigured())return reject(new Error('Google Sheets ayarları eksik.'));const cb='stokDepoJsonp_'+Date.now()+'_'+Math.random().toString(36).slice(2);const script=document.createElement('script');const timer=setTimeout(()=>cleanup(new Error('Google Sheets bağlantısı zaman aşımına uğradı.')),20000);function cleanup(err,data){clearTimeout(timer);delete window[cb];script.remove();err?reject(err):resolve(data)}window[cb]=data=>cleanup(null,data);script.onerror=()=>cleanup(new Error('Google Sheets bağlantısı kurulamadı.'));const sep=db.settings.sheetsUrl.includes('?')?'&':'?';script.src=`${db.settings.sheetsUrl}${sep}mode=${encodeURIComponent(mode)}&token=${encodeURIComponent(db.settings.sheetsToken)}&callback=${encodeURIComponent(cb)}&_=${Date.now()}`;document.head.appendChild(script)})}
 async function testSheetsConnection(){try{el('syncIndicator').textContent='Sheets: test ediliyor…';const r=await jsonpRequest('status');if(!r?.ok)throw new Error(r?.message||'Bağlantı reddedildi.');el('syncIndicator').textContent='Sheets: bağlı';notify('Google Sheets bağlantısı başarılı.')}catch(err){el('syncIndicator').textContent='Sheets: hata';notify(err.message,true)}}
-async function pullFromSheets(){try{el('syncIndicator').textContent='Sheets: çekiliyor…';const r=await jsonpRequest('pull');if(!r?.ok)throw new Error(r?.message||'Veriler alınamadı.');if(!r.data)throw new Error('Google Sheets üzerinde henüz veri bulunmuyor.');if(!confirm('Google Sheets verileri bu cihazdaki verilerin üzerine yazılacak. Devam edilsin mi?')){el('syncIndicator').textContent='Sheets: iptal';return}const conn={sheetsUrl:DEFAULT_SHEETS_URL,sheetsToken:DEFAULT_SHEETS_TOKEN,autoSync:true};db=normalizeDB(r.data);db.settings={...db.settings,...conn,lastPull:new Date().toISOString()};const still=userById(currentUser.id);if(!still||still.active===false){persistDB();notify('Çekilen verilerde mevcut kullanıcı bulunamadı. Yeniden giriş yapın.',true);logout();return}currentUser=still;audit('Veriler Sheets’ten çekildi','Google Sheets','Uzak veriler bu cihaza uygulandı.');saveDB({sync:false});el('syncIndicator').textContent='Sheets: güncel';notify('Google Sheets verileri yüklendi.')}catch(err){el('syncIndicator').textContent='Sheets: hata';notify(err.message||'Google Sheets verileri alınamadı.',true)}}
+async function pullFromSheets(){
+  if(syncPullInProgress||syncPushInProgress)return;
+  syncPullInProgress=true;clearTimeout(autoSyncTimer);
+  try{
+    el('syncIndicator').textContent='Sheets: çekiliyor…';
+    const r=await jsonpRequest('pull');
+    if(!r?.ok)throw new Error(r?.message||'Veriler alınamadı.');
+    if(!r.data)throw new Error('Google Sheets üzerinde henüz veri bulunmuyor.');
+    if(!confirm('Google Sheets verileri bu cihazdaki verilerin üzerine yazılacak. Devam edilsin mi?')){el('syncIndicator').textContent='Sheets: iptal';return}
+    const conn={sheetsUrl:DEFAULT_SHEETS_URL,sheetsToken:DEFAULT_SHEETS_TOKEN,autoSync:true};
+    db=normalizeDB(r.data);db.settings={...db.settings,...conn,lastPull:new Date().toISOString()};
+    const still=currentUser?userById(currentUser.id):null;
+    if(currentUser&&(!still||still.active===false)){localStorage.setItem(DB_KEY,JSON.stringify(db));notify('Çekilen verilerde mevcut kullanıcı bulunamadı. Yeniden giriş yapın.',true);logout();return}
+    if(still)currentUser=still;
+    syncBootstrapComplete=true;
+    if(currentUser)audit('Veriler Sheets’ten çekildi','Google Sheets','Uzak veriler bu cihaza uygulandı.');
+    saveDB({sync:false});el('syncIndicator').textContent='Sheets: güncel';notify('Google Sheets verileri yüklendi.');
+  }catch(err){syncBootstrapComplete=false;el('syncIndicator').textContent='Sheets: hata';notify(err.message||'Google Sheets verileri alınamadı.',true)}
+  finally{syncPullInProgress=false}
+}
 
 function downloadFile(name,content,type){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([content],{type}));a.download=name;a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000)}
 function downloadBackup(){audit('Yedek indirildi','Yedekleme','JSON yedeği oluşturuldu.');persistDB();downloadFile(`StokDepoPro_Yedek_${new Date().toISOString().slice(0,10)}.json`,JSON.stringify(db,null,2),'application/json')}
@@ -467,7 +552,7 @@ el('dashboardWarehouseFilter').addEventListener('change',renderDashboard);['repo
 ['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id).addEventListener('change',renderAudit));el('auditSearch').addEventListener('input',renderAudit);
 el('userForm').addEventListener('submit',saveUser);el('userRole').addEventListener('change',updatePermissionEditorState);el('settingsForm').addEventListener('submit',saveSettings);el('sheetsForm').addEventListener('submit',saveSheetsSettings);el('backupInput').addEventListener('change',loadBackup);
 setInterval(()=>el('clock').textContent=new Date().toLocaleString('tr-TR'),1000);el('clock').textContent=new Date().toLocaleString('tr-TR');
-renderPermissionEditor(Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true])));resetDefaultUnits();updateCartonPrice();initSession();
+renderPermissionEditor(Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true])));resetDefaultUnits();updateCartonPrice();initializeApplication();
 </script>
 </body>
 </html>
