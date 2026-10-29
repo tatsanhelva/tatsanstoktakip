@@ -462,7 +462,10 @@ function configureCloud(){
  el('cloudDialog').showModal();
 }
 function validCloudFields(url,key){
- if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url))throw new Error('Geçerli Google Apps Script /exec adresini girin.');
+ let parsed;
+ try{parsed=new URL(url)}catch(_){throw new Error('Geçerli Google Apps Script /exec adresini girin.')}
+ if(parsed.protocol!=='https:'||parsed.hostname!=='script.google.com'||!/^\/macros\/s\/[A-Za-z0-9_-]+\/exec\/?$/.test(parsed.pathname))
+  throw new Error('Geçerli Google Apps Script /exec adresini girin.');
  if(key.length<6)throw new Error('Özel bulut anahtarı en az 6 karakter olmalıdır.');
 }
 function cloudResultCheck(r){if(!r||!Number.isInteger(r.revision)||r.revision<0)throw new Error('Beklenen Drive yanıtı alınamadı. Apps Script sürümünü kontrol edin.');return r}
