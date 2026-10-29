@@ -1,0 +1,11 @@
+# Never commit Google OAuth credentials
+.clasprc.json
+**/.clasprc.json
+.clasp.json
+**/.clasp.json
+.env
+.env.*
+**/.env
+**/.env.*
+node_modules/
+**/node_modules/
