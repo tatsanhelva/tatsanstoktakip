@@ -263,11 +263,22 @@ function updateRememberedLogin(username,password){if(el('rememberMe').checked){l
 function showLogin(){document.body.classList.add('app-locked');el('loginScreen').classList.remove('hidden');el('loginError').textContent='';applyRememberedLogin();setTimeout(()=>{(el('loginUsername').value?el('loginPassword'):el('loginUsername')).focus()},50)}
 function showApp(){document.body.classList.remove('app-locked');el('loginScreen').classList.add('hidden');el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';applyPermissionUI();if(!canAccessPage(activePage))activePage=firstAllowedPage();goPage(activePage)}
 async function login(e){
-  e.preventDefault();const enteredUsername=el('loginUsername').value.trim(),username=enteredUsername.toLowerCase(),password=el('loginPassword').value;el('loginError').textContent='';
-  try{const hash=await hashPassword(password);const user=db.users.find(u=>u.username.toLowerCase()===username&&u.active!==false&&u.passwordHash===hash);if(!user){el('loginError').textContent='Kullanıcı adı veya şifre hatalı.';return}updateRememberedLogin(enteredUsername,password);currentUser=user;sessionStorage.setItem('stokDepoCurrentUser',user.id);audit('Giriş yapıldı','Oturum',`${user.username} uygulamaya giriş yaptı.`);saveDB({render:false});showApp();notify(`Hoş geldiniz, ${user.fullName}.`)}catch(err){el('loginError').textContent=err.message||'Giriş yapılamadı.'}
+  e.preventDefault();
+  // Development-only central license gate. Legacy local credentials are still
+  // required until the complete stock API and identity migration is finished.
+  try {
+    const centralName=el('loginUsername').value.trim();
+    const centralPassword=el('loginPassword').value;
+    if(!centralName||!centralPassword)throw Error('Kullanıcı adı ve şifre gerekli.');
+    await window.TatsanMerkez.login(centralName,centralPassword);
+  } catch (centralError) {
+    el('loginError').textContent='Merkezî lisans girişi reddedildi: '+centralError.message;
+    return;
+  }const enteredUsername=el('loginUsername').value.trim(),username=enteredUsername.toLowerCase(),password=el('loginPassword').value;el('loginError').textContent='';
+  try{const hash=await hashPassword(password);const user=db.users.find(u=>u.username.toLowerCase()===username&&u.active!==false&&u.passwordHash===hash);if(!user){el('loginError').textContent='Kullanıcı adı veya şifre hatalı.';return}currentUser=user;sessionStorage.setItem('stokDepoCurrentUser',user.id);audit('Giriş yapıldı','Oturum',`${user.username} uygulamaya giriş yaptı.`);saveDB({render:false});showApp();notify(`Hoş geldiniz, ${user.fullName}.`)}catch(err){el('loginError').textContent=err.message||'Giriş yapılamadı.'}
 }
-function logout(){if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
-function initSession(){const id=sessionStorage.getItem('stokDepoCurrentUser');const user=userById(id);if(user&&user.active!==false){currentUser=user;showApp()}else showLogin()}
+function logout(){window.TatsanMerkez.logout();if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
+function initSession(){sessionStorage.removeItem('stokDepoCurrentUser');const id=null;const user=userById(id);if(user&&user.active!==false){currentUser=user;showApp()}else showLogin()}
 async function bootstrapSheetsBeforeLogin(){
  setLoginBusy(true,'Drive verileri yükleniyor…');
  try{const r=await rpc('cloudRead');
@@ -277,7 +288,7 @@ async function bootstrapSheetsBeforeLogin(){
 }
 window.addEventListener('online',async()=>{if(!syncBootstrapComplete)await bootstrapSheetsBeforeLogin();else pushToSheets(false)});
 async function initializeApplication(){
-  await bootstrapSheetsBeforeLogin();
+  // Avoid downloading legacy full stock JSON before central authentication.
   initSession();
 }
 
@@ -551,5 +562,6 @@ el('userForm').addEventListener('submit',saveUser);el('userRole').addEventListen
 setInterval(()=>el('clock').textContent=new Date().toLocaleString('tr-TR'),1000);el('clock').textContent=new Date().toLocaleString('tr-TR');
 renderPermissionEditor(Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true])));resetDefaultUnits();updateCartonPrice();initializeApplication();
 </script>
+<script src="merkez-stok/merkez-istemci.js"></script>
 </body>
 </html>
