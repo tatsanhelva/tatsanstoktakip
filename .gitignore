@@ -1,0 +1,11 @@
+# Google OAuth refresh tokens and clasp project configuration must stay local
+.clasprc.json
+**/.clasprc.json
+.clasp.json
+**/.clasp.json
+.env
+.env.*
+**/.env
+**/.env.*
+node_modules/
+**/node_modules/
