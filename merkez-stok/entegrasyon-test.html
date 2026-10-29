@@ -7,13 +7,13 @@
 <label>Kullanıcı adı<input id="username" autocomplete="username"></label>
 <label>Şifre<input id="password" type="password" autocomplete="current-password"></label>
 <button id="login">Giriş ve lisans kontrolü</button><button id="summary" disabled>Yetkili stok özeti</button><button id="preview" disabled>+1 Koli Önizle (KAYDETMEZ)</button><button id="logout" disabled>Çıkış</button>
-<pre id="result" role="status">Hazır.</pre><small>Bu test ekranında şifre veya oturum anahtarı saklanmaz. Yalnızca test kopyasının özetini gösterir.</small></main>
+<pre id="result" role="status">Hazır.</pre><section id="stockTable"></section><small>Bu test ekranında şifre veya oturum anahtarı saklanmaz. Yalnızca test kopyasının özetini gösterir.</small></main>
 <script>
 'use strict';
 let token=null;
 const $=id=>document.getElementById(id);
 const ORIGIN='https://tatsanhelva.github.io';
-function log(message){$('result').textContent=message;}
+function log(message){$('result').textContent=message;}\nfunction renderStock(r){const host=$('stockTable');host.replaceChildren();const title=document.createElement('h3');title.textContent='Yetkili stok listesi — yalnızca test kopyası';host.append(title);const table=document.createElement('table');table.style.width='100%';table.style.borderCollapse='collapse';const header=document.createElement('tr');for(const name of ['Ürün','Depo','Koli']){const th=document.createElement('th');th.textContent=name;th.style.textAlign='left';header.append(th);}table.append(header);for(const p of r.products){for(const w of r.warehouses){const row=document.createElement('tr');for(const value of [p.name,w.name,r.stocks[w.id+'::'+p.id]??0]){const cell=document.createElement('td');cell.textContent=String(value);cell.style.padding='6px';row.append(cell);}table.append(row);}}host.append(table);}
 function call(method,arg={}){
  const url=$('endpoint').value.trim();
  if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url))return Promise.reject(Error('Geçerli merkez /exec adresi girin.'));
@@ -34,5 +34,5 @@ function call(method,arg={}){
 $('login').onclick=async()=>{try{log('Giriş denetleniyor...');const r=await call('userLogin',{username:$('username').value,password:$('password').value});$('password').value='';token=r.token;$('summary').disabled=false;$('preview').disabled=false;$('logout').disabled=false;log('Giriş başarılı: '+r.user.fullName+'\nLisans: '+r.user.expiresAt);}catch(e){log('Hata: '+e.message);}};
 $('summary').onclick=async()=>{try{const r=await call('stockSummary',{token});log('Test kopyası sürüm: '+r.revision+'\nÜrün: '+r.products.length+'\nDepo: '+r.warehouses.length+'\nTest: '+r.testOnly);}catch(e){log('Hata: '+e.message);}};
 $('preview').onclick=async()=>{try{const r=await call('stockSummary',{token});const product=r.products.find(p=>p.active!==false);const warehouse=r.warehouses[0];if(!product||!warehouse)throw Error('Aktif ürün veya depo bulunamadı.');const p=await call('stockPreview',{token,operation:{type:'entry',productId:product.id,warehouseId:warehouse.id,quantity:1}});log('SADECE ÖNİZLEME (KAYDEDİLMEDİ)\\nÜrün: '+product.name+'\\nDepo: '+warehouse.name+'\\nÖnce: '+p.before+'\\nSonra: '+p.after+'\\nSürüm: '+p.revision);}catch(e){log('Hata: '+e.message);}};
-$('logout').onclick=async()=>{try{await call('userLogout',{token});}catch(e){}token=null;$('summary').disabled=true;$('preview').disabled=true;$('logout').disabled=true;log('Oturum kapatıldı.');};
+$('logout').onclick=async()=>{try{await call('userLogout',{token});}catch(e){}token=null;$('stockTable').replaceChildren();$('summary').disabled=true;$('preview').disabled=true;$('logout').disabled=true;log('Oturum kapatıldı.');};
 </script></body></html>
