@@ -271,6 +271,7 @@ async function login(e){
     const centralPassword=el('loginPassword').value;
     if(!centralName||!centralPassword)throw Error('Kullanıcı adı ve şifre gerekli.');
     await window.TatsanMerkez.login(centralName,centralPassword);
+    await bootstrapSheetsBeforeLogin();
   } catch (centralError) {
     el('loginError').textContent='Merkezî lisans girişi reddedildi: '+centralError.message;
     return;
