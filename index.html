@@ -502,7 +502,7 @@ async function testCloudVisible(){
  button.disabled=true;out.textContent='Yazdığınız adres ve anahtarla Drive kontrol ediliyor…';
  try{validCloudFields(url,key);const r=cloudResultCheck(await rpc('cloudRead',null,{url,key}));
   out.textContent='✓ Bağlantı çalışıyor.\n'+(r.data?'Bulutta veri var. Sürüm: '+r.revision:'Drive hazır, henüz kayıt yok.')+'\nBağlantıyı kullanmak için Kaydet ve Bağlan düğmesine basın.';
- }catch(err){out.textContent='✗ Bağlantı kurulamadı.\n'+err.message}
+ }catch(err){const deployment=(url.match(/\/macros\/s\/([^/]+)\/exec/)||[])[1]||'';out.textContent='✗ Bağlantı kurulamadı.\n'+err.message+'\nTeşhis: dağıtım '+(deployment?deployment.slice(0,12)+'…':'tanınmadı')+' · anahtar uzunluğu '+key.length+' karakter · kaynak: bu ekrandaki alanlar';}
  finally{button.disabled=false}
 }
 function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
