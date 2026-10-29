@@ -73,12 +73,18 @@ function doPost(e){
  try{
   req=JSON.parse(e.parameter.request||'{}');reply.nonce=req.nonce;
   const key=PropertiesService.getScriptProperties().getProperty('API_KEY');
-  const isAdmin=req.method==='adminList'||req.method==='adminSave';
+  const isAdmin=['adminList','adminSave','adminPassword'].includes(req.method);
   const adminKey=PropertiesService.getScriptProperties().getProperty('ADMIN_KEY');
+  const isSession=['authLogin','authRead','authWrite','authLogout'].includes(req.method);
   if(isAdmin){
    if(!adminKey||typeof req.key!=='string'||req.key!==adminKey)throw new Error('Yönetici anahtarı geçersiz.');
-  }else if(!key||typeof req.key!=='string'||req.key!==key)throw new Error('Bulut erişim anahtarı geçersiz.');
-  if(req.method==='adminList')reply.result=adminRead_();
+  }else if(!isSession&&(!key||typeof req.key!=='string'||req.key!==key))throw new Error('Bulut erişim anahtarı geçersiz.');
+  if(req.method==='authLogin')reply.result=authLogin_(req.arg);
+  else if(req.method==='authRead')reply.result=authRead_(req.arg);
+  else if(req.method==='authWrite')reply.result=authWrite_(req.arg);
+  else if(req.method==='authLogout')reply.result=authLogout_(req.arg&&req.arg.token);
+  else if(req.method==='adminPassword')reply.result=adminPassword_(req.arg);
+  else if(req.method==='adminList')reply.result=adminRead_();
   else if(req.method==='adminSave')reply.result=adminSave_(req.arg);
   else if(req.method==='cloudRead')reply.result=cloudRead_();
   else if(req.method==='cloudWrite')reply.result=cloudWrite_(req.arg);
