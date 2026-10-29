@@ -1,0 +1,37 @@
+<!doctype html>
+<html lang="tr"><head><meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>Tatsan Merkezi Entegrasyon - Güvenli Test</title>
+<style>body{font:16px system-ui;max-width:720px;margin:40px auto;padding:16px;background:#f5f7fa;color:#18243a}main{background:white;padding:24px;border-radius:14px}label{display:block;margin:12px 0}input{padding:10px;width:100%;box-sizing:border-box}button{padding:10px;margin:6px 5px 6px 0}pre{white-space:pre-wrap;background:#edf2f8;padding:14px;border-radius:8px}small{color:#5c6472}</style></head>
+<body><main><h2>Tatsan Merkezi Entegrasyon Testi</h2><p>Bu sayfa yalnızca merkez sunucusuna bağlanır. Canlı stok dosyasına yazmaz.</p>
+<label>Merkez Apps Script /exec adresi<input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
+<label>Kullanıcı adı<input id="username" autocomplete="username"></label>
+<label>Şifre<input id="password" type="password" autocomplete="current-password"></label>
+<button id="login">Giriş ve lisans kontrolü</button><button id="summary" disabled>Yetkili stok özeti</button><button id="logout" disabled>Çıkış</button>
+<pre id="result" role="status">Hazır.</pre><small>Bu test ekranında şifre veya oturum anahtarı saklanmaz. Yalnızca test kopyasının özetini gösterir.</small></main>
+<script>
+'use strict';
+let token=null;
+const $=id=>document.getElementById(id);
+const ORIGIN='https://tatsanhelva.github.io';
+function log(message){$('result').textContent=message;}
+function call(method,arg={}){
+ const url=$('endpoint').value.trim();
+ if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url))return Promise.reject(Error('Geçerli merkez /exec adresi girin.'));
+ const nonce='t'+Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
+ return new Promise((resolve,reject)=>{
+  const frame=document.createElement('iframe');frame.hidden=true;frame.sandbox='allow-scripts allow-forms';document.body.append(frame);
+  const timeout=setTimeout(()=>finish(Error('Merkez sunucusundan yanıt gelmedi (20 saniye).')),20000);
+  function finish(err,result){clearTimeout(timeout);window.removeEventListener('message',receive);frame.remove();err?reject(err):resolve(result);}
+  function receive(event){if(event.origin!==ORIGIN && !event.origin.endsWith('.googleusercontent.com'))return;
+   const data=event.data;if(!data||data.channel!=='tatsan-drive'||data.nonce!==nonce)return;
+   finish(data.error?Error(String(data.error)):null,data.result);
+  }
+  window.addEventListener('message',receive);
+  const form=document.createElement('form');form.method='POST';form.action=url;form.target=frame.name='bridge_'+nonce;
+  form.style.display='none';const field=document.createElement('input');field.name='request';field.value=JSON.stringify({nonce,method,arg});form.append(field);document.body.append(form);form.submit();form.remove();
+ });
+}
+$('login').onclick=async()=>{try{log('Giriş denetleniyor...');const r=await call('userLogin',{username:$('username').value,password:$('password').value});$('password').value='';token=r.token;$('summary').disabled=false;$('logout').disabled=false;log('Giriş başarılı: '+r.user.fullName+'\nLisans: '+r.user.expiresAt);}catch(e){log('Hata: '+e.message);}};
+$('summary').onclick=async()=>{try{const r=await call('stockSummary',{token});log('Test kopyası sürüm: '+r.revision+'\nÜrün: '+r.products.length+'\nDepo: '+r.warehouses.length+'\nTest: '+r.testOnly);}catch(e){log('Hata: '+e.message);}};
+$('logout').onclick=async()=>{try{await call('userLogout',{token});}catch(e){}token=null;$('summary').disabled=true;$('logout').disabled=true;log('Oturum kapatıldı.');};
+</script></body></html>
