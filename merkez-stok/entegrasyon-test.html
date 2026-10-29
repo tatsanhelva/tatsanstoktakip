@@ -6,7 +6,7 @@
 <label>Merkez Apps Script /exec adresi<input id="endpoint" type="url" placeholder="https://script.google.com/macros/s/.../exec"></label>
 <label>Kullanıcı adı<input id="username" autocomplete="username"></label>
 <label>Şifre<input id="password" type="password" autocomplete="current-password"></label>
-<button id="login">Giriş ve lisans kontrolü</button><button id="summary" disabled>Yetkili stok özeti</button><button id="logout" disabled>Çıkış</button>
+<button id="login">Giriş ve lisans kontrolü</button><button id="summary" disabled>Yetkili stok özeti</button><button id="preview" disabled>+1 Koli Önizle (KAYDETMEZ)</button><button id="logout" disabled>Çıkış</button>
 <pre id="result" role="status">Hazır.</pre><small>Bu test ekranında şifre veya oturum anahtarı saklanmaz. Yalnızca test kopyasının özetini gösterir.</small></main>
 <script>
 'use strict';
@@ -19,10 +19,10 @@ function call(method,arg={}){
  if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url))return Promise.reject(Error('Geçerli merkez /exec adresi girin.'));
  const nonce='t'+Array.from(crypto.getRandomValues(new Uint8Array(16)),x=>x.toString(16).padStart(2,'0')).join('');
  return new Promise((resolve,reject)=>{
-  const frame=document.createElement('iframe');frame.hidden=true;frame.sandbox='allow-scripts allow-forms';document.body.append(frame);
+  const frame=document.createElement('iframe');frame.hidden=true;frame.sandbox='allow-scripts allow-forms allow-same-origin';document.body.append(frame);
   const timeout=setTimeout(()=>finish(Error('Merkez sunucusundan yanıt gelmedi (20 saniye).')),20000);
   function finish(err,result){clearTimeout(timeout);window.removeEventListener('message',receive);frame.remove();err?reject(err):resolve(result);}
-  function receive(event){if(event.origin!==ORIGIN && !event.origin.endsWith('.googleusercontent.com'))return;
+  function receive(event){if(event.origin!==ORIGIN && event.origin!=='https://script.googleusercontent.com' && !/^https:\/\/[a-z0-9-]+\.script\.googleusercontent\.com$/.test(event.origin))return;
    const data=event.data;if(!data||data.channel!=='tatsan-drive'||data.nonce!==nonce)return;
    finish(data.error?Error(String(data.error)):null,data.result);
   }
@@ -31,7 +31,7 @@ function call(method,arg={}){
   form.style.display='none';const field=document.createElement('input');field.name='request';field.value=JSON.stringify({nonce,method,arg});form.append(field);document.body.append(form);form.submit();form.remove();
  });
 }
-$('login').onclick=async()=>{try{log('Giriş denetleniyor...');const r=await call('userLogin',{username:$('username').value,password:$('password').value});$('password').value='';token=r.token;$('summary').disabled=false;$('logout').disabled=false;log('Giriş başarılı: '+r.user.fullName+'\nLisans: '+r.user.expiresAt);}catch(e){log('Hata: '+e.message);}};
+$('login').onclick=async()=>{try{log('Giriş denetleniyor...');const r=await call('userLogin',{username:$('username').value,password:$('password').value});$('password').value='';token=r.token;$('summary').disabled=false;$('preview').disabled=false;$('logout').disabled=false;log('Giriş başarılı: '+r.user.fullName+'\nLisans: '+r.user.expiresAt);}catch(e){log('Hata: '+e.message);}};
 $('summary').onclick=async()=>{try{const r=await call('stockSummary',{token});log('Test kopyası sürüm: '+r.revision+'\nÜrün: '+r.products.length+'\nDepo: '+r.warehouses.length+'\nTest: '+r.testOnly);}catch(e){log('Hata: '+e.message);}};
-$('logout').onclick=async()=>{try{await call('userLogout',{token});}catch(e){}token=null;$('summary').disabled=true;$('logout').disabled=true;log('Oturum kapatıldı.');};
+$('preview').onclick=async()=>{try{const r=await call('stockSummary',{token});const product=r.products.find(p=>p.active!==false);const warehouse=r.warehouses[0];if(!product||!warehouse)throw Error('Aktif ürün veya depo bulunamadı.');const p=await call('stockPreview',{token,operation:{type:'entry',productId:product.id,warehouseId:warehouse.id,quantity:1}});log('SADECE ÖNİZLEME (KAYDEDİLMEDİ)\\nÜrün: '+product.name+'\\nDepo: '+warehouse.name+'\\nÖnce: '+p.before+'\\nSonra: '+p.after+'\\nSürüm: '+p.revision);}catch(e){log('Hata: '+e.message);}};\n$('logout').onclick=async()=>{try{await call('userLogout',{token});}catch(e){}token=null;$('summary').disabled=true;$('preview').disabled=true;$('logout').disabled=true;log('Oturum kapatıldı.');};
 </script></body></html>
