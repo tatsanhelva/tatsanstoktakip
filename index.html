@@ -48,7 +48,7 @@
     @media(max-width:760px){.report-filter-grid{grid-template-columns:1fr}.dashboard-filter .field{min-width:100%}}
 </style>
 </head>
-<body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(kullanıcı adı ve şifre)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note"><b>İlk giriş:</b> kullanıcı adı <b>admin</b>, şifre <b>1234</b>. Giriş yaptıktan sonra Kullanıcılar bölümünden şifreyi değiştirin.<br><b>Beni Hatırla</b> seçildiğinde kullanıcı adı ve şifre bu tarayıcıda saklanır.</div></div></div>
+<body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(kullanıcı adı ve şifre)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note"><b>İlk giriş:</b> kullanıcı adı <b>admin</b>, şifre <b>1234</b>. Giriş yaptıktan sonra Kullanıcılar bölümünden şifreyi değiştirin.<br><b>Beni Hatırla</b> seçildiğinde kullanıcı adı ve şifre bu tarayıcıda saklanır.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
 <div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small>Stok ve depo yönetimi v2.0</small></div>
@@ -67,6 +67,7 @@
 <button data-page="movements">🕒 Hareketler</button>
 <button data-page="reports">📈 Raporlar</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
 <button data-admin-only="" data-page="settings">⚙️ Ayarlar</button>
+<button type="button" onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
 </nav>
 </aside>
 <div class="mobile-overlay" id="overlay"></div>
@@ -142,8 +143,8 @@
 </main>
 </div>
 <div class="modal-overlay" id="movementEditModal" aria-hidden="true"><div class="modal-card"><div class="modal-head"><div><h3>Stok Hareketini Düzelt</h3><div class="muted" id="movementEditSubtitle">Yalnızca yönetici kullanabilir.</div></div><button class="modal-close" onclick="closeMovementEditor()" type="button">✕</button></div><div class="movement-warning">Kaydetme veya silme sonrasında tüm stoklar hareket tarih sırasına göre yeniden hesaplanır. İşlem ayrıca kullanıcı işlem kayıtlarına yazılır.</div><form id="movementEditForm"><input id="movementEditId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>İşlem Türü</label><input id="movementEditType" readonly=""/></div><div class="field"><label>İşlem Tarihi *</label><input id="movementEditDate" required="" type="datetime-local"/></div><div class="field"><label>Belge No</label><input id="movementEditDoc"/></div><div class="field"><label id="movementEditWarehouseLabel">Depo *</label><select id="movementEditWarehouse" required=""></select></div><div class="field" id="movementEditTargetWrap" style="display:none"><label>Hedef Depo *</label><select id="movementEditTargetWarehouse"></select></div><div class="field"><label>Ürün *</label><select id="movementEditProduct" required=""></select></div><div class="field"><label>Birim *</label><select id="movementEditUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="movementEditQtyLabel">Miktar (Koli) *</label><input id="movementEditQty" min="0" required="" step="1" inputmode="numeric" type="number"/></div><div class="field" id="movementEditFirmWrap" style="display:none"><label>Teslim Edilen Firma</label><select id="movementEditFirm"></select></div><div class="field" id="movementEditReasonWrap" style="display:none"><label>Çıkış Nedeni</label><select id="movementEditReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Diğer</option></select></div><div class="field" id="movementEditLotWrap" style="display:none"><label>Lot / Parti No</label><input id="movementEditLot"/></div><div class="field" id="movementEditExpiryWrap" style="display:none"><label>Son Kullanma Tarihi</label><input id="movementEditExpiry" type="date"/></div><div class="field full"><label>Açıklama / Detay</label><textarea id="movementEditDetail"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">Düzeltmeyi Kaydet</button><button class="btn btn-light" onclick="closeMovementEditor()" type="button">Vazgeç</button><button class="btn btn-danger" id="movementDeleteBtn" onclick="deleteMovementFromEditor()" type="button">Hareketi Sil</button></div></form></div></div><iframe id="sheetSyncFrame" name="sheetSyncFrame" style="display:none"></iframe><div class="toast" id="toast"></div>
-<dialog id="cloudDialog" style="max-width:560px;width:90%;border:0;border-radius:14px;padding:24px"><form onsubmit="connectCloud(event)"><h3>Google Drive Bağlantısı</h3><p>Sunucu adresini ve Apps Script kurulumunda oluşturulan özel anahtarı girin.</p><label>Apps Script /exec adresi</label><input id="cloudUrl" type="url" required style="width:100%;margin:10px 0"><label>Özel bulut anahtarı</label><input id="cloudKey" type="password" required minlength="32" autocomplete="off" style="width:100%;margin:10px 0"><button class="btn btn-primary" type="submit">Bağlan</button> <button class="btn btn-light" type="button" onclick="document.getElementById('cloudDialog').close()">Kapat</button></form></dialog>
-<button style="position:fixed;bottom:16px;left:16px;z-index:20000" class="btn btn-light" onclick="configureCloud()">Bulut Bağlantısı</button>
+<dialog id="cloudDialog" style="max-width:560px;width:90%;border:0;border-radius:14px;padding:24px"><form onsubmit="connectCloud(event)"><h3>Google Drive Bağlantısı</h3><p>Sunucu adresini ve Apps Script kurulumunda oluşturulan özel anahtarı girin.</p><label>Apps Script /exec adresi</label><input id="cloudUrl" type="url" required style="width:100%;margin:10px 0"><label>Özel bulut anahtarı</label><input id="cloudKey" type="password" required minlength="32" autocomplete="off" style="width:100%;margin:10px 0"><div id="cloudFeedback" role="status" aria-live="polite" style="margin:12px 0;padding:12px;background:#eef2ff;border-radius:8px;white-space:pre-wrap">Bağlantı henüz doğrulanmadı.</div><button id="cloudConnectButton" class="btn btn-primary" type="submit">Kaydet ve Bağlan</button> <button id="cloudTestButton" class="btn btn-light" type="button" onclick="testCloudVisible()">Bağlantıyı Test Et</button> <button class="btn btn-light" type="button" onclick="document.getElementById('cloudDialog').close()">Kapat</button></form></dialog>
+
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
@@ -438,6 +439,7 @@ function connection(){try{return JSON.parse(localStorage.getItem(CLOUD_CONFIG_KE
 function configureCloud(){
  document.getElementById('cloudUrl').value=connection().url||'';
  document.getElementById('cloudKey').value=sessionStorage.getItem('tatsanCloudKey')||'';
+ document.getElementById('cloudFeedback').textContent=(document.getElementById('syncIndicator')?.textContent||'Bağlantı henüz doğrulanmadı.')+'\nKesin kontrol için Bağlantıyı Test Et düğmesine basın.';
  document.getElementById('cloudDialog').showModal();
 }
 async function connectCloud(e){
@@ -445,8 +447,18 @@ async function connectCloud(e){
  if(!/^https:\/\/script\.google\.com\/macros\/s\/[A-Za-z0-9_-]+\/exec$/.test(url)||key.length<32){alert('Geçerli /exec adresi ve en az 32 karakterli erişim anahtarı girin.');return}
  if(connection().url&&connection().url!==url&&cloudState.dirty){alert('Bekleyen kayıtlar var. Önce mevcut sunucuya gönderin veya JSON yedeği alın ve mevcut sunucudan çekerek bekleyen kayıtları çözün.');return}
  if(connection().url!==url){cloudState={revision:0,dirty:false};rememberCloud()}
- localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url}));sessionStorage.setItem('tatsanCloudKey',key);document.getElementById('cloudDialog').close();
- await bootstrapSheetsBeforeLogin();if(currentUser){currentUser=userById(currentUser.id);if(currentUser&&currentUser.active!==false)showApp();else{currentUser=null;showLogin()}}
+ localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url}));sessionStorage.setItem('tatsanCloudKey',key);document.getElementById('cloudFeedback').textContent='Drive bağlantısı kontrol ediliyor…';
+ await bootstrapSheetsBeforeLogin();document.getElementById('cloudFeedback').textContent=syncBootstrapComplete?'✓ Drive bağlantısı kuruldu. Bu pencereyi kapatabilirsiniz.':'✗ Drive bağlantısı kurulamadı. Ayrıntılı hata için Bağlantıyı Test Et düğmesine basın.';if(currentUser){currentUser=userById(currentUser.id);if(currentUser&&currentUser.active!==false)showApp();else{currentUser=null;showLogin()}}
+}
+async function testCloudVisible(){
+ const out=document.getElementById('cloudFeedback'),button=document.getElementById('cloudTestButton');
+ button.disabled=true;out.textContent='Drive kontrol ediliyor… (en fazla 45 saniye)';
+ try{
+  const r=await rpc('cloudRead');
+  if(!r||!Number.isInteger(r.revision))throw new Error('Sunucudan beklenen Drive yanıtı alınamadı.');
+  out.textContent='✓ Drive bağlantısı çalışıyor.\n'+(r.data?'Bulutta veri var. Kayıt sürümü: '+r.revision:'Drive hazır; henüz bulut kaydı yok.')+'\n'+(cloudState.dirty?'Bu cihazda gönderilmeyi bekleyen değişiklikler var.':'Bu cihazda bekleyen değişiklik yok.');
+ }catch(e){out.textContent='✗ Bağlantı kurulamadı.\n'+e.message}
+ finally{button.disabled=false}
 }
 function rpc(name,arg){return new Promise((resolve,reject)=>{
  const cfg=connection(),key=sessionStorage.getItem('tatsanCloudKey');
