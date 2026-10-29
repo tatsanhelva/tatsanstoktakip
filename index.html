@@ -509,7 +509,7 @@ function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
  frame.name='tatsan_'+nonce;frame.hidden=true;document.body.appendChild(frame);
  let timer;function cleanup(){clearTimeout(timer);window.removeEventListener('message',receive);form.remove();frame.remove()}
  function receive(e){
-  let trusted=false;try{const u=new URL(e.origin);trusted=u.protocol==='https:'&&(u.hostname==='script.googleusercontent.com'||u.hostname.endsWith('.script.googleusercontent.com')||u.hostname==='script.google.com')}catch(_){}
+  let trusted=false;try{const u=new URL(e.origin);trusted=u.protocol==='https:'&&(u.hostname==='script.googleusercontent.com'||u.hostname.endsWith('.script.googleusercontent.com')||u.hostname==='script.google.com'||u.hostname.endsWith('.googleusercontent.com'))}catch(_){}
   if(!trusted||e.data?.channel!=='tatsan-drive'||e.data?.nonce!==nonce)return;
   cleanup();if(e.data.error)reject(new Error(e.data.error));else resolve(e.data.result);
  }
