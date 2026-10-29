@@ -1,146 +1,54 @@
-name: TATSAN Merkez - Apps Script Senkronizasyon
+name: TATSAN Merkezi - Google Baglanti Testi
 
+# This repository serves a PUBLIC GitHub Pages site.
+# NEVER sync Apps Script source code or OAuth credentials into this repository.
 on:
   workflow_dispatch:
-    inputs:
-      islem:
-        description: "Ilk kez kodu GitHub'a al (KODU_AL) veya Apps Script /dev'e aktar (DEV_GUNCELLE)"
-        required: true
-        type: choice
-        default: KODU_AL
-        options:
-          - KODU_AL
-          - DEV_GUNCELLE
-      onay:
-        description: "Ilk aktarim: HERKESE_ACIK; /dev guncellemesi: DEV_GUNCELLE yaz"
-        required: true
-        type: string
-        default: HAYIR
-  push:
-    branches:
-      - feature/merkezi-stok-entegrasyonu
-    paths:
-      - 'gas-merkez/Kod.gs'
 
 permissions:
-  contents: write
-
-concurrency:
-  group: tatsan-gas-merkez
-  cancel-in-progress: false
+  contents: read
 
 jobs:
-  merkez:
-    name: Apps Script kodunu esitle
+  baglanti:
+    name: Apps Script baglantisini dogrula - salt okuma
     runs-on: ubuntu-latest
     timeout-minutes: 10
     steps:
-      - name: Kaynaklari test dalindan al
-        uses: actions/checkout@v4
-        with:
-          ref: feature/merkezi-stok-entegrasyonu
-          persist-credentials: true
-
       - name: Node.js hazirla
         uses: actions/setup-node@v4
         with:
           node-version: '22'
 
-      - name: Google clasp kur
+      - name: Google Apps Script istemcisini kur
         run: npm install --global @google/clasp@3.4.1
 
-      - name: Google kimligini ve hedef projeyi kontrol et
+      - name: Baglantiyi test et - uzaktaki projede hicbir degisiklik yapmaz
         env:
           CLASPRC_JSON: ${{ secrets.CLASPRC_JSON }}
           GAS_SCRIPT_ID: ${{ secrets.GAS_SCRIPT_ID }}
+        shell: bash
         run: |
           set -euo pipefail
-          if [ -z "$CLASPRC_JSON" ] || [ -z "$GAS_SCRIPT_ID" ]; then
-            echo 'Eksik GitHub Secret: CLASPRC_JSON veya GAS_SCRIPT_ID' >&2
+          if [[ -z "$CLASPRC_JSON" || -z "$GAS_SCRIPT_ID" ]]; then
+            echo 'Eksik secret: CLASPRC_JSON veya GAS_SCRIPT_ID' >&2
             exit 1
           fi
-          # Credentials are intentionally NEVER printed to logs.
           printf '%s' "$CLASPRC_JSON" > "$HOME/.clasprc.json"
           chmod 600 "$HOME/.clasprc.json"
-          mkdir -p "$RUNNER_TEMP/merkez-remote"
-          SCRIPT_ID="$GAS_SCRIPT_ID" node -e "const fs=require('fs');fs.writeFileSync(process.env.RUNNER_TEMP+'/merkez-remote/.clasp.json',JSON.stringify({scriptId:process.env.SCRIPT_ID}))"
-
-      - name: Kaynaktan kodu oku - Apps Script uzerine YAZMAZ
-        run: |
-          set -euo pipefail
-          cd "$RUNNER_TEMP/merkez-remote"
-          clasp pull
-          # Remote project must be the known Tatsan central license project.
-          if [ -f Kod.js ]; then BASENAME='Kod.js'; elif [ -f Kod.gs ]; then BASENAME='Kod.gs'; else echo 'Kod yok' >&2; exit 1; fi
-          if ! grep -q 'function setupMerkez' "$BASENAME"; then
-            echo 'GUVENLIK: Hedef script Tatsan merkezi projesi gibi gorunmuyor. Islem durduruldu.' >&2
+          mkdir -p "$RUNNER_TEMP/tatsan-check"
+          cd "$RUNNER_TEMP/tatsan-check"
+          node -e "const fs=require('fs');fs.writeFileSync('.clasp.json',JSON.stringify({scriptId:process.env.GAS_SCRIPT_ID}))"
+          if ! clasp pull >/dev/null 2>&1; then
+            echo 'Google Apps Script baglantisi basarisiz. API ayari, OAuth yetkisi veya Script ID kontrol edilmeli.' >&2
             exit 1
           fi
-          if ! grep -q 'function stockSandboxOperation_' "$BASENAME"; then
-            echo 'GUVENLIK: Sandbox islevi bulunamadi. Hedef script dogrulanamadi.' >&2
+          if ! grep -Eq 'function[[:space:]]+setupMerkez' --include='*.js' --include='*.gs' *.js *.gs 2>/dev/null; then
+            echo 'Baglanildi, ancak beklenen TATSAN merkezi kodu bulunamadi. Yanlis Script ID olabilir.' >&2
             exit 1
           fi
-
-      - name: GitHub kaynak senkronizasyonu (bir kerelik)
-        if: github.event_name == 'workflow_dispatch' && inputs.islem == 'KODU_AL'
-        env:
-          ONAY: ${{ inputs.onay }}
-        run: |
-          set -euo pipefail
-          if [ "$ONAY" != 'HERKESE_ACIK' ]; then
-            echo 'Bu depo herkese acik. Kodun yayimlanmasini onaylamak icin HERKESE_ACIK yazilmali.' >&2
+          if ! grep -Eq 'function[[:space:]]+stockSandboxOperation_' --include='*.js' --include='*.gs' *.js *.gs 2>/dev/null; then
+            echo 'Baglanildi, ancak sandbox islem islevi bulunamadi. Script ID/versiyon kontrol edilmeli.' >&2
             exit 1
           fi
-          mkdir -p gas-merkez
-          if [ -f "$RUNNER_TEMP/merkez-remote/Kod.js" ]; then
-            cp "$RUNNER_TEMP/merkez-remote/Kod.js" gas-merkez/Kod.gs
-          elif [ -f "$RUNNER_TEMP/merkez-remote/Kod.gs" ]; then
-            cp "$RUNNER_TEMP/merkez-remote/Kod.gs" gas-merkez/Kod.gs
-          else
-            echo 'Kod.gs veya Kod.js bulunamadi.' >&2; exit 1
-          fi
-          # Manifest is tracked for review; /dev sync preserves remote manifest.
-          cp "$RUNNER_TEMP/merkez-remote/appsscript.json" gas-merkez/appsscript.json
-          cp gas-merkez/Kod.gs "$RUNNER_TEMP/merkez-kod-kontrol.js"
-          node --check "$RUNNER_TEMP/merkez-kod-kontrol.js"
-          git config user.name 'tatsan-ci'
-          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          git add gas-merkez/Kod.gs gas-merkez/appsscript.json
-          if ! git diff --cached --quiet; then
-            git commit -m 'Import current central GAS source [skip ci]'
-            git push origin HEAD:feature/merkezi-stok-entegrasyonu
-          else
-            echo 'Kod zaten GitHub ile ayni.'
-          fi
-
-      - name: Guvenli /dev aktarimi - uzaktan once yedek surum al
-        if: github.event_name == 'push' || (github.event_name == 'workflow_dispatch' && inputs.islem == 'DEV_GUNCELLE')
-        env:
-          ONAY: ${{ inputs.onay }}
-        run: |
-          set -euo pipefail
-          if [ "${{ github.event_name }}" = 'workflow_dispatch' ] && [ "$ONAY" != 'DEV_GUNCELLE' ]; then
-            echo 'Manuel aktarim icin DEV_GUNCELLE onayi gerekli.' >&2; exit 1
-          fi
-          if [ ! -f gas-merkez/Kod.gs ]; then
-            echo 'GitHub GAS kaynagi yok. Once KODU_AL islemini calistirin.' >&2; exit 1
-          fi
-          cp gas-merkez/Kod.gs "$RUNNER_TEMP/merkez-kod-kontrol.js"
-          node --check "$RUNNER_TEMP/merkez-kod-kontrol.js"
-          if ! grep -q 'function setupMerkez' gas-merkez/Kod.gs || ! grep -q 'function stockSandboxOperation_' gas-merkez/Kod.gs; then
-            echo 'Beklenen merkez ve sandbox islevleri kaynakta yok.' >&2; exit 1
-          fi
-          cd "$RUNNER_TEMP/merkez-remote"
-          if [ -f Kod.js ]; then
-            TARGET='Kod.js'
-          elif [ -f Kod.gs ]; then
-            TARGET='Kod.gs'
-          else
-            echo 'Mevcut merkez projesinde Kod dosyasi yok.' >&2; exit 1
-          fi
-          # Immutable copy of CURRENT remote code before changing HEAD.
-          clasp create-version "TATSAN GitHub /dev oncesi yedek"
-          cp "$GITHUB_WORKSPACE/gas-merkez/Kod.gs" "$TARGET"
-          # All remote files + current appsscript.json were pulled and are retained.
-          clasp push --force
-          echo 'Merkezi Apps Script HEAD guncellendi. Mevcut /exec deployment DEGISMEDI.'
+          echo 'BASARILI: Google Apps Script proje baglantisi dogrulandi.'
+          echo 'Bu test yalnizca okudu. GitHub deposuna kod yuklenmedi, Apps Script degistirilmedi.'
