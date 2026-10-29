@@ -224,7 +224,7 @@ function isAdmin(){return currentUser?.role==='admin'}
 function requireAdminAction(){if(isAdmin())return true;notify('Düzenleme ve silme işlemleri yalnızca yöneticiye açıktır.',true);return false}
 function hasPermission(permission){return !!currentUser&&(isAdmin()||currentUser.permissions?.[permission]===true)}
 function requirePermission(permission){if(hasPermission(permission))return true;notify('Bu işlem için kullanıcı yetkiniz bulunmuyor.',true);return false}
-function canAccessPage(name){if(['users','audit','settings'].includes(name))return isAdmin();const permission=PAGE_PERMISSION[name];return !permission||hasPermission(permission)}
+function canAccessPage(name){if(['users','audit','settings'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
 function firstAllowedPage(){return PERMISSION_DEFS.find(([key])=>hasPermission(key))?.[0]||'dashboard'}
 function applyPermissionUI(){document.querySelectorAll('#nav button[data-page]').forEach(btn=>{btn.style.display=canAccessPage(btn.dataset.page)?'':'none'});document.querySelectorAll('[data-admin-only],[data-admin-column]').forEach(x=>x.style.display=isAdmin()?'':'none')}
 function notify(msg,error=false){const t=el('toast');t.textContent=msg;t.className='toast show'+(error?' error':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='toast',3000)}
