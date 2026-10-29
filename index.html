@@ -48,7 +48,7 @@
     @media(max-width:760px){.report-filter-grid{grid-template-columns:1fr}.dashboard-filter .field{min-width:100%}}
 </style>
 </head>
-<body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(kullanıcı adı ve şifre)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note"><b>İlk giriş:</b> kullanıcı adı <b>admin</b>, şifre <b>1234</b>. Giriş yaptıktan sonra Kullanıcılar bölümünden şifreyi değiştirin.<br><b>Beni Hatırla</b> seçildiğinde kullanıcı adı ve şifre bu tarayıcıda saklanır.</div></div></div>
+<body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
 <div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small>Stok ve depo yönetimi v2.0</small></div>
@@ -67,7 +67,7 @@
 <button data-page="movements">🕒 Hareketler</button>
 <button data-page="reports">📈 Raporlar</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
 <button data-admin-only="" data-page="settings">⚙️ Ayarlar</button>
-<button type="button" onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
+<button type="button" data-admin-only="" onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
 </nav>
 </aside>
 <div class="mobile-overlay" id="overlay"></div>
@@ -148,7 +148,8 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='2.0';
+const APP_VERSION='3.0';
+const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu781xw2F9Wy1Ru0oKxiKWQvalu_gJFga3DDVdCe01o5tp_ISlVPwDx/exec';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
@@ -159,6 +160,7 @@ let currentUser=null;
 let autoSyncTimer=null;
 let activePage='dashboard';
 let syncBootstrapComplete=false;
+let secureMode=false;
 let syncPullInProgress=false;
 let syncPushInProgress=false;
 
@@ -177,7 +179,7 @@ function normalizeDB(x){
   d.movements=Array.isArray(d.movements)?d.movements:[];d.auditLogs=Array.isArray(d.auditLogs)?d.auditLogs:[];
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
   d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{})},createdAt:u.createdAt||new Date().toISOString()}});
-  if(!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
+  if(!d._restricted&&!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
   d.movements=d.movements.map(m=>{const inputUnit=m.inputUnit==='Adet'?'Adet':'Koli';const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
   return d;
 }
@@ -260,13 +262,34 @@ function decodeRememberedValue(value){try{return decodeURIComponent(escape(atob(
 function getRememberedLogin(){try{const saved=JSON.parse(localStorage.getItem(REMEMBER_LOGIN_KEY)||'null');if(!saved||!saved.username)return null;const username=decodeRememberedValue(saved.username);if(saved.password){localStorage.setItem(REMEMBER_LOGIN_KEY,JSON.stringify({username:saved.username,savedAt:saved.savedAt||new Date().toISOString()}))}return {username}}catch(e){return null}}
 function applyRememberedLogin(){const saved=getRememberedLogin();el('loginUsername').value=saved?.username||'';el('loginPassword').value='';el('rememberMe').checked=!!saved}
 function updateRememberedLogin(username,password){if(el('rememberMe').checked){localStorage.setItem(REMEMBER_LOGIN_KEY,JSON.stringify({username:encodeRememberedValue(username),savedAt:new Date().toISOString()}))}else localStorage.removeItem(REMEMBER_LOGIN_KEY)}
-function showLogin(){document.body.classList.add('app-locked');el('loginScreen').classList.remove('hidden');el('loginError').textContent=syncBootstrapComplete?'':'Google Drive bağlantısı gerekli. Üstteki Bulut Bağlantısı düğmesinden bağlanın.';applyRememberedLogin();setTimeout(()=>{(el('loginUsername').value?el('loginPassword'):el('loginUsername')).focus()},50)}
+function showLogin(){document.body.classList.add('app-locked');el('loginScreen').classList.remove('hidden');el('loginCloudButton').style.display=secureMode?'none':'';el('loginError').textContent=secureMode?'':syncBootstrapComplete?'':'Google Drive bağlantısı gerekli. Üstteki Bulut Bağlantısı düğmesinden bağlanın.';applyRememberedLogin();setTimeout(()=>{(el('loginUsername').value?el('loginPassword'):el('loginUsername')).focus()},50)}
 function showApp(){document.body.classList.remove('app-locked');el('loginScreen').classList.add('hidden');el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';applyPermissionUI();if(!canAccessPage(activePage))activePage=firstAllowedPage();goPage(activePage)}
 async function login(e){
   e.preventDefault();const enteredUsername=el('loginUsername').value.trim(),username=enteredUsername.toLowerCase(),password=el('loginPassword').value;el('loginError').textContent='';
-  try{if(!syncBootstrapComplete){el('loginError').textContent='Google Drive bağlantısı gerekli. Önce Bulut Bağlantısı düğmesinden bağlanın.';return}const hash=await hashPassword(password);const user=db.users.find(u=>u.username.toLowerCase()===username&&u.active!==false&&u.passwordHash===hash);if(!user){el('loginError').textContent='Kullanıcı adı veya şifre hatalı.';return}updateRememberedLogin(enteredUsername,password);currentUser=user;sessionStorage.setItem('stokDepoCurrentUser',user.id);audit('Giriş yapıldı','Oturum',`${user.username} uygulamaya giriş yaptı.`);saveDB({render:false});showApp();notify(`Hoş geldiniz, ${user.fullName}.`)}catch(err){el('loginError').textContent=err.message||'Giriş yapılamadı.'}
+  try{
+    if(secureMode){
+      setLoginBusy(true,'Kullanıcı doğrulanıyor…');
+      try{
+        const r=await rpc('authLogin',{username,password});
+        if(!r?.ok||!r.token||!r.user||!r.data)throw new Error('Sunucudan giriş yanıtı alınamadı.');
+        sessionStorage.setItem('tatsanSecureSession',r.token);
+        sessionStorage.removeItem('tatsanCloudKey');
+        db=normalizeDB(r.data);
+        localStorage.setItem(DB_KEY,JSON.stringify(db));
+        currentUser=userById(r.user.id);
+        if(!currentUser)throw new Error('Kullanıcı yetkileri yüklenemedi.');
+        cloudState={revision:r.revision,dirty:false,pending:null};rememberCloud();cloudConflict=false;
+        syncBootstrapComplete=true;
+        updateRememberedLogin(enteredUsername,password);
+        el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+r.revision;
+        showApp();
+        notify('Hoş geldiniz, '+currentUser.fullName+'.');
+      }finally{setLoginBusy(false,'')}
+      return;
+    }
+    if(!syncBootstrapComplete){el('loginError').textContent='Google Drive bağlantısı gerekli. Önce Bulut Bağlantısı düğmesinden bağlanın.';return}const hash=await hashPassword(password);const user=db.users.find(u=>u.username.toLowerCase()===username&&u.active!==false&&u.passwordHash===hash);if(!user){el('loginError').textContent='Kullanıcı adı veya şifre hatalı.';return}updateRememberedLogin(enteredUsername,password);currentUser=user;sessionStorage.setItem('stokDepoCurrentUser',user.id);audit('Giriş yapıldı','Oturum',`${user.username} uygulamaya giriş yaptı.`);saveDB({render:false});showApp();notify(`Hoş geldiniz, ${user.fullName}.`)}catch(err){el('loginError').textContent=err.message||'Giriş yapılamadı.'}
 }
-function logout(){if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
+function logout(){if(secureMode){rpc('authLogout').catch(()=>{});sessionStorage.removeItem('tatsanSecureSession');sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;syncBootstrapComplete=false;clearTimeout(autoSyncTimer);localStorage.removeItem(DB_KEY);db=defaultDB();cloudState={revision:0,dirty:false,pending:null};rememberCloud();showLogin();return}if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
 function initSession(){if(!syncBootstrapComplete){currentUser=null;showLogin();return}const id=sessionStorage.getItem('stokDepoCurrentUser');const user=userById(id);if(user&&user.active!==false){currentUser=user;showApp()}else showLogin()}
 async function bootstrapSheetsBeforeLogin(){
  const cfg=connection(), key=sessionStorage.getItem('tatsanCloudKey');
@@ -295,7 +318,35 @@ async function bootstrapSheetsBeforeLogin(){
  finally{setLoginBusy(false,'')}
 }
 window.addEventListener('online',async()=>{if(!syncBootstrapComplete)await bootstrapSheetsBeforeLogin();else pushToSheets(false)});
+async function secureResume(){
+  const token=sessionStorage.getItem('tatsanSecureSession');
+  if(!token){currentUser=null;showLogin();return}
+  setLoginBusy(true,'Oturum doğrulanıyor…');
+  try{
+    const r=await rpc('authResume');
+    if(!r?.ok||!r.user||!r.data)throw new Error('Oturum bilgileri geçersiz.');
+    db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
+    currentUser=userById(r.user.id);
+    if(!currentUser)throw new Error('Kullanıcı bulunamadı.');
+    cloudState={revision:r.revision,dirty:false,pending:null};rememberCloud();cloudConflict=false;
+    syncBootstrapComplete=true;el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+r.revision;
+    showApp();
+  }catch(e){
+    sessionStorage.removeItem('tatsanSecureSession');localStorage.removeItem(DB_KEY);
+    currentUser=null;syncBootstrapComplete=false;showLogin();
+  }finally{setLoginBusy(false,'')}
+}
 async function initializeApplication(){
+  try{
+    const probe=await rpc('authProbe',null,{url:DEFAULT_SERVER_URL,key:''});
+    if(probe?.mode==='secure'){
+      secureMode=true;
+      localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url:DEFAULT_SERVER_URL}));
+      sessionStorage.removeItem('tatsanCloudKey');
+      await secureResume();
+      return;
+    }
+  }catch(e){}
   await bootstrapSheetsBeforeLogin();
   initSession();
 }
@@ -456,6 +507,7 @@ const CLOUD_CONFIG_KEY='tatsanPagesConnection';
 const CLOUD_STATE_KEY='tatsanDriveState';
 function connection(){try{return JSON.parse(localStorage.getItem(CLOUD_CONFIG_KEY)||'{}')}catch(e){return {}}}
 function configureCloud(){
+ if(secureMode){if(!isAdmin())return;notify('Merkezi Google Drive bağlantısı otomatik çalışıyor. Çalışanların anahtar girmesi gerekmiyor.');return}
  el('cloudUrl').value=connection().url||'';
  el('cloudKey').value=sessionStorage.getItem('tatsanCloudKey')||'';
  el('cloudFeedback').textContent=(el('syncIndicator')?.textContent||'Bağlantı henüz doğrulanmadı.')+'\nBağlantıyı Test Et düğmesi burada yazdığınız adresi ve anahtarı kullanır.';
@@ -506,8 +558,8 @@ async function testCloudVisible(){
  finally{button.disabled=false}
 }
 function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
- const cfg=credentials||{url:connection().url,key:sessionStorage.getItem('tatsanCloudKey')};
- if(!cfg.url||!cfg.key)return reject(new Error('Önce Bulut Bağlantısı ekranından /exec adresini ve özel anahtarı girin.'));
+ const cfg=credentials||{url:secureMode?DEFAULT_SERVER_URL:connection().url,key:secureMode?'':sessionStorage.getItem('tatsanCloudKey')};
+ if(!cfg.url||(!cfg.key&&!secureMode&&!['authProbe'].includes(name)))return reject(new Error('Önce Bulut Bağlantısı ekranından /exec adresini ve özel anahtarı girin.'));
  const nonce='nonce_'+(window.crypto?.randomUUID?.()||uid('rpc')).replace(/[^a-zA-Z0-9_-]/g,''),frame=document.createElement('iframe'),form=document.createElement('form');
  frame.name='tatsan_'+nonce;frame.hidden=true;document.body.appendChild(frame);
  let timer;function cleanup(){clearTimeout(timer);window.removeEventListener('message',receive);form.remove();frame.remove()}
@@ -519,7 +571,7 @@ function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
  window.addEventListener('message',receive);
  timer=setTimeout(()=>{cleanup();reject(new Error('Drive 45 saniye içinde yanıt vermedi. /exec dağıtımını, izinleri ve sunucu kodunu kontrol edin.'))},45000);
  form.method='POST';form.action=cfg.url;form.target=frame.name;form.hidden=true;
- const input=document.createElement('input');input.name='request';input.value=JSON.stringify({method:name,arg:arg||null,key:cfg.key,nonce});form.appendChild(input);document.body.appendChild(form);
+ const input=document.createElement('input');input.name='request';input.value=JSON.stringify({method:name,arg:arg||null,key:cfg.key||'',session:sessionStorage.getItem('tatsanSecureSession')||'',nonce});form.appendChild(input);document.body.appendChild(form);
  try{form.submit()}catch(err){cleanup();reject(err)}
 })}
 function readCloudState(){try{const x=JSON.parse(localStorage.getItem(CLOUD_STATE_KEY)||'{}');return {revision:Number.isInteger(x.revision)?x.revision:0,dirty:!!x.dirty,pending:x.pending||null}}catch(e){return {revision:0,dirty:false,pending:null}}}
