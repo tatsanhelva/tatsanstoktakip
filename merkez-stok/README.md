@@ -16,3 +16,11 @@ Yeni **TATSAN MERKEZİ YÖNETİM** Apps Script projesi ile eski stok uygulaması
 6. Kopya veriyle işlemleri ve oturum iptalini test et. Ancak sonra kontrollü taşıma, yedek ve geri dönüş planıyla canlıya al.
 
 **Durum:** Test için taslak hazır. Eski stok verileri ve çalışan uygulama değiştirilmedi. Sunucu yetkilendirmesi henüz üretime hazır değil.
+
+
+## Yeni: izole tarayıcı entegrasyon testi (29 Ekim 2026)
+- `merkez-stok/entegrasyon-test.html` eklendi. Merkez `/exec` adresine kullanıcı girişi, oturum kapatma ve `stockSummary` isteği gönderir.
+- Bu sayfa **yalnızca geliştirme dalında** bulunur; GitHub Pages ana sayfasına eklenmedi. Canlı siteyi veya Apps Script dağıtımını değiştirmez.
+- `stockSummary` yanıtı yalnızca test kopyasına işaret eder. Stok yazma veya canlı geçiş bu değişiklikte yoktur.
+- Uçtan uca tarayıcı testi henüz çalıştırılmadı; iframe köprü davranışı, tarayıcı kaynak ilkesi ve merkez `doPost` dağıtımı doğrulanmalıdır.
+- Eski `cloudRead/cloudWrite` kapatılmadığı sürece canlı sistemin güvenli olduğu iddia edilemez.
