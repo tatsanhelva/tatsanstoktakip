@@ -395,7 +395,7 @@ async function bootstrapSheetsBeforeLogin(){
    }
   }else{
    if(r.data){db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db))}
-   cloudState.revision=r.revision;cloudState.pending=null;rememberCloud();
+   cloudState.revision=r.revision;cloudState.pending=null;markSyncedBase(r.data,r.revision);rememberCloud();
   }
   syncBootstrapComplete=true;
   if(!cloudConflict){
@@ -780,10 +780,11 @@ async function connectCloud(e){
   localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url}));
   sessionStorage.setItem('tatsanCloudKey',key);
   syncBootstrapComplete=true;cloudConflict=false;
-  if(changed){cloudState={revision:r.revision,dirty:!r.data&&hasOperationalData(db),pending:null};}
+  if(changed){cloudState={revision:r.revision,dirty:!r.data&&hasOperationalData(db),pending:null,baseMovementCount:r.data?.movements?.length??0,baseAuditCount:r.data?.auditLogs?.length??0,ownerId:currentUser?.id||null};}
   if(r.data&&!cloudState.dirty){db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db));cloudState.revision=r.revision;cloudState.pending=null;}
   else if(cloudState.dirty&&cloudState.revision!==r.revision){cloudConflict=true;}
   else cloudState.revision=r.revision;
+  if(!cloudState.dirty&&r.data)markSyncedBase(r.data,r.revision);
   rememberCloud();
   el('syncIndicator').textContent=cloudConflict?'Drive: sürüm çakışması':cloudState.dirty?'Drive: gönderim bekliyor':'Drive: bağlı · v'+cloudState.revision;
   out.textContent=cloudConflict?'⚠ Drive bağlantısı var ancak bekleyen değişiklikler başka bir sürümle çakışıyor. Önce JSON yedeği alın.':'✓ Drive bağlantısı doğrulandı. Sürüm: '+r.revision+(r.data?'\nBuluttaki kayıtlar yüklendi.':'\nBulut henüz boş.');
@@ -817,32 +818,157 @@ function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
  const input=document.createElement('input');input.name='request';input.value=JSON.stringify({method:name,arg:arg||null,key:cfg.key||'',session:sessionStorage.getItem('tatsanSecureSession')||'',nonce});form.appendChild(input);document.body.appendChild(form);
  try{form.submit()}catch(err){cleanup();reject(err)}
 })}
-function readCloudState(){try{const x=JSON.parse(localStorage.getItem(CLOUD_STATE_KEY)||'{}');return {revision:Number.isInteger(x.revision)?x.revision:0,dirty:!!x.dirty,pending:x.pending||null}}catch(e){return {revision:0,dirty:false,pending:null}}}
+function readCloudState(){
+ const empty={revision:0,dirty:false,pending:null,baseMovementCount:null,baseAuditCount:null,ownerId:null};
+ try{
+  const x=JSON.parse(localStorage.getItem(CLOUD_STATE_KEY)||'{}');
+  return {revision:Number.isInteger(x.revision)?x.revision:0,dirty:!!x.dirty,pending:x.pending||null,
+   baseMovementCount:Number.isInteger(x.baseMovementCount)?x.baseMovementCount:null,
+   baseAuditCount:Number.isInteger(x.baseAuditCount)?x.baseAuditCount:null,
+   ownerId:x.ownerId||null};
+ }catch(e){return empty}
+}
 let cloudState=readCloudState();
 let cloudConflict=false;
 function rememberCloud(){localStorage.setItem(CLOUD_STATE_KEY,JSON.stringify(cloudState))}
-function scheduleAutoSync(){cloudState.dirty=true;rememberCloud();el('syncIndicator').textContent='Drive: gönderim bekliyor';clearTimeout(autoSyncTimer);if(!syncPushInProgress&&!cloudConflict&&syncBootstrapComplete)autoSyncTimer=setTimeout(()=>pushToSheets(false),1500)}
+function markSyncedBase(data,revision){
+ cloudState.revision=revision;
+ cloudState.baseMovementCount=Array.isArray(data?.movements)?data.movements.length:0;
+ cloudState.baseAuditCount=Array.isArray(data?.auditLogs)?data.auditLogs.length:0;
+ cloudState.ownerId=currentUser?.id||null;
+}
+function sameStockStructure(a,b){
+ return ['products','categories','warehouses','firms','users','settings','version'].every(key=>
+  JSON.stringify(a?.[key])===JSON.stringify(b?.[key]));
+}
+/* Bekleyen yalnizca EKLEME/CIKIS/TRANSFER hareketlerini en guncel Drive stoklari uzerine yeniden uygular.
+   Sayim, kart duzenleme ve eski kayit degisiklikleri sessizce birlestirilmez. */
+function rebaseQueuedStockMovements(latest){
+ if(!latest?.data||!Number.isInteger(latest.revision)||!currentUser)return false;
+ if(latest.user&&(latest.user.id!==currentUser.id||latest.user.active===false))return false;
+ const baseMoves=cloudState.baseMovementCount,baseAudit=cloudState.baseAuditCount;
+ if(!Number.isInteger(baseMoves)||!Number.isInteger(baseAudit)||cloudState.ownerId!==currentUser.id)return false;
+ const local=db,remote=normalizeDB(JSON.parse(JSON.stringify(latest.data)));
+ if(!sameStockStructure(local,remote))return false;
+ if(local.movements.length<baseMoves||remote.movements.length<baseMoves||
+    local.auditLogs.length<baseAudit||remote.auditLogs.length<baseAudit)return false;
+ if(JSON.stringify(local.movements.slice(0,baseMoves))!==JSON.stringify(remote.movements.slice(0,baseMoves)))return false;
+ if(JSON.stringify(local.auditLogs.slice(0,baseAudit))!==JSON.stringify(remote.auditLogs.slice(0,baseAudit)))return false;
+ const known=new Map(remote.movements.map(m=>[m.id,m]));
+ const queued=local.movements.slice(baseMoves).filter(m=>!known.has(m.id));
+ if(queued.length>100)return false;
+ const allowed={GIRIS:'entry',CIKIS:'exit',TRANSFER_CIKIS:'transfer',TRANSFER_GIRIS:'transfer'};
+ const transferGroups={};
+ for(const movement of queued){
+  const permission=allowed[movement.type];
+  if(!permission||movement.userId!==currentUser.id||
+     (latest.user&&latest.user.role!=='admin'&&latest.user.permissions?.[permission]!==true))return false;
+  if(!remote.products.some(p=>p.id===movement.productId&&p.active!==false)||
+     !remote.warehouses.some(w=>w.id===movement.warehouseId))return false;
+  if(movement.type.startsWith('TRANSFER_')){
+   if(!movement.groupId)return false;
+   (transferGroups[movement.groupId]||(transferGroups[movement.groupId]=[])).push(movement);
+  }
+ }
+ for(const group of Object.values(transferGroups)){
+  if(group.length!==2||group[0].type===group[1].type||group[0].productId!==group[1].productId||
+    group[0].warehouseId===group[1].warehouseId||
+    Math.abs(group[0].quantity-group[1].quantity)>0.000001)return false;
+ }
+ const stocks={...remote.stocks},shifted=[];
+ for(const movement of queued){
+  const m={...movement},key=m.warehouseId+'::'+m.productId,
+    before=Number(stocks[key]||0),quantity=Number(m.quantity);
+  if(!Number.isFinite(quantity)||quantity<=0)return false;
+  const after=before+(m.type==='GIRIS'||m.type==='TRANSFER_GIRIS'?quantity:-quantity);
+  if(after< -0.000000001&&!remote.settings.allowNegative)return false;
+  m.before=Math.round(before*1e9)/1e9;m.after=Math.round(after*1e9)/1e9;
+  stocks[key]=m.after;shifted.push(m);
+ }
+ const localLogs=local.auditLogs.slice(baseAudit);
+ if(localLogs.some(a=>a.userId!==currentUser.id))return false;
+ const logs=new Map(remote.auditLogs.map(a=>[a.id,a]));
+ for(const item of localLogs)if(!logs.has(item.id)){remote.auditLogs.push(item);logs.set(item.id,item)}
+ remote.stocks=stocks;
+ remote.movements.push(...shifted);
+ const owner=userById(currentUser.id);
+ const newOwner=remote.users.find(u=>u.id===currentUser.id&&u.active!==false);
+ if(!newOwner)return false;
+ db=remote;currentUser=newOwner;
+ localStorage.setItem(DB_KEY,JSON.stringify(db));
+ markSyncedBase(latest.data,latest.revision);
+ cloudState.pending={revision:latest.revision,requestId:uid('save'),data:JSON.parse(JSON.stringify(db))};
+ cloudState.dirty=true;rememberCloud();
+ el('syncIndicator').textContent='Drive: bekleyen işlemler birleştirildi · kaydediliyor';
+ return true;
+}
+
+function scheduleAutoSync(){
+ cloudState.dirty=true;
+ if(currentUser&&!cloudState.ownerId)cloudState.ownerId=currentUser.id;
+ rememberCloud();el('syncIndicator').textContent='Drive: işlem kuyruğunda · gönderim bekliyor';
+ clearTimeout(autoSyncTimer);
+ if(!syncPushInProgress&&!cloudConflict&&syncBootstrapComplete)autoSyncTimer=setTimeout(()=>pushToSheets(false),900);
+}
 async function pushToSheets(manual=true){
- if(syncPushInProgress||syncPullInProgress||cloudConflict){if(manual)notify('Bir senkronizasyon işlemi veya sürüm çakışması devam ediyor.',true);return}
- if(!syncBootstrapComplete){const ready=await bootstrapSheetsBeforeLogin();if(!ready){if(manual)configureCloud();return}}
+ if(syncPushInProgress||syncPullInProgress||cloudConflict){
+  if(manual)notify('Bir senkronizasyon işlemi veya sürüm çakışması devam ediyor.',true);
+  return;
+ }
+ if(!syncBootstrapComplete){
+  const ready=await bootstrapSheetsBeforeLogin();if(!ready){if(manual&&!secureMode)configureCloud();return}
+ }
  if(!cloudState.dirty&&manual){cloudState.dirty=true;rememberCloud()}
  if(!cloudState.dirty)return;
+ if(cloudState.ownerId&&currentUser?.id!==cloudState.ownerId){
+  cloudConflict=true;notify('Bekleyen stok kaydı başka kullanıcıya ait. Veriyi silmeyin.',true);return;
+ }
  syncPushInProgress=true;
  try{
-  el('syncIndicator').textContent='Drive: kaydediliyor…';
-  if(!cloudState.pending){cloudState.pending={revision:cloudState.revision,requestId:uid('save'),data:JSON.parse(JSON.stringify(db))};rememberCloud()}
-  const sent=JSON.stringify(cloudState.pending.data),r=await rpc('cloudWrite',cloudState.pending);
-  if(r?.conflict){
-   cloudConflict=true;el('syncIndicator').textContent='Drive: sürüm çakışması';
-   notify('Başka kullanıcı verileri değiştirdi. Yerel JSON yedeğinizi indirin; Drive’dan Çek ile en güncel kaydı alın. Çakışan değişiklikler otomatik üzerine yazılmaz.',true);return;
+  let saved=null,sent='';
+  for(let attempt=0;attempt<4;attempt++){
+   el('syncIndicator').textContent=attempt?'Drive: işlem kuyruğu yeniden deneniyor…':'Drive: kaydediliyor…';
+   if(!cloudState.pending){
+    cloudState.pending={revision:cloudState.revision,requestId:uid('save'),data:JSON.parse(JSON.stringify(db))};
+    rememberCloud();
+   }
+   sent=JSON.stringify(cloudState.pending.data);
+   const response=await rpc('cloudWrite',cloudState.pending);
+   if(response?.conflict){
+    const latest=cloudResultCheck(await rpc('cloudRead'));
+    if(!rebaseQueuedStockMovements(latest)){
+     cloudConflict=true;
+     el('syncIndicator').textContent='Drive: işlem kuyruğu bekliyor · çakışma';
+     notify('Stok kaydı kuyruğa alındı ama otomatik birleştirilemedi. Yerel kayıt korunuyor; önce JSON yedeği alın.',true);
+     return;
+    }
+    if(attempt===3){
+     el('syncIndicator').textContent='Drive: kuyruk yeniden denenecek';
+     break;
+    }
+    continue;
+   }
+   if(!response?.ok||!Number.isInteger(response.revision))throw new Error('Sunucu kayıt işlemini doğrulamadı.');
+   saved=response;break;
   }
-  if(!r?.ok||!Number.isInteger(r.revision))throw new Error('Sunucu kayıt işlemini doğrulamadı.');
-  cloudState.revision=Math.max(r.revision,r.currentRevision||r.revision);
-  cloudState.pending=null;cloudState.dirty=JSON.stringify(db)!==sent;rememberCloud();
-  el('syncIndicator').textContent=cloudState.dirty?'Drive: kayıt bekliyor':'Drive: kaydedildi · v'+cloudState.revision;
+  if(!saved)return;
+  const confirmedData=cloudState.pending.data;
+  markSyncedBase(confirmedData,saved.revision);
+  cloudState.pending=null;
+  cloudState.dirty=JSON.stringify(db)!==sent;
+  rememberCloud();
+  el('syncIndicator').textContent=cloudState.dirty?'Drive: sıradaki kayıt bekliyor':'Drive: kaydedildi · v'+cloudState.revision;
   if(manual)notify('Drive kaydı tamamlandı. Sürüm: '+cloudState.revision);
- }catch(err){el('syncIndicator').textContent='Drive: bağlantı bekleniyor';if(manual)notify(err.message,true)}
- finally{syncPushInProgress=false;if(cloudState.dirty&&!cloudConflict&&syncBootstrapComplete){clearTimeout(autoSyncTimer);autoSyncTimer=setTimeout(()=>pushToSheets(false),12000)}}
+ }catch(err){
+  el('syncIndicator').textContent='Drive: işlem kuyruğu bekliyor';
+  if(manual)notify(err.message,true);
+ }finally{
+  syncPushInProgress=false;
+  if(cloudState.dirty&&!cloudConflict&&syncBootstrapComplete){
+   clearTimeout(autoSyncTimer);
+   autoSyncTimer=setTimeout(()=>pushToSheets(false),6000);
+  }
+ }
 }
 async function testSheetsConnection(){try{cloudResultCheck(await rpc('cloudRead'));notify('Drive bağlantısı başarılı')}catch(e){notify(e.message,true)}}
 async function pullFromSheets(){
@@ -854,7 +980,9 @@ async function pullFromSheets(){
  syncPullInProgress=true;clearTimeout(autoSyncTimer);
  try{const r=cloudResultCheck(await rpc('cloudRead'));if(!r.data)throw new Error('Drive henüz boş.');
   db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
-  cloudState={revision:r.revision,dirty:false,pending:null};rememberCloud();cloudConflict=false;syncBootstrapComplete=true;
+  cloudState={revision:r.revision,dirty:false,pending:null,baseMovementCount:r.data.movements?.length||0,
+    baseAuditCount:r.data.auditLogs?.length||0,ownerId:currentUser?.id||null};
+  rememberCloud();cloudConflict=false;syncBootstrapComplete=true;
   const u=currentUser?userById(currentUser.id):null;
   if(u&&u.active!==false){currentUser=u;showApp();notify('Drive verileri güncellendi.')}else{currentUser=null;sessionStorage.removeItem('stokDepoCurrentUser');showLogin();notify('Kullanıcı kaydı silinmiş veya pasifleştirilmiş. Yeniden giriş yapın.',true)}
   el('syncIndicator').textContent='Drive: güncel · v'+r.revision;
@@ -867,7 +995,7 @@ async function refreshCloudIfIdle(manual=false){
  try{const r=cloudResultCheck(await rpc('cloudRead'));
   if(r.revision!==cloudState.revision){
    if(r.data){db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db))}
-   cloudState.revision=r.revision;rememberCloud();
+   markSyncedBase(r.data,r.revision);rememberCloud();
    const u=currentUser?userById(currentUser.id):null;
    if(currentUser&&!u){currentUser=null;sessionStorage.removeItem('stokDepoCurrentUser');showLogin()}
    else if(u){currentUser=u;showApp()}
