@@ -74,7 +74,7 @@
 <main class="main">
 <header class="topbar">
 <div style="display:flex;align-items:center;gap:10px"><button class="btn btn-light hamburger" id="hamburger">☰</button><h2 id="pageTitle">Ana Panel</h2></div>
-<div class="top-actions"><span class="sync-indicator" id="syncIndicator">Drive: bağlı değil</span><span class="muted" id="clock"></span><div class="user-chip"><div class="user-avatar">👤</div><div class="user-meta"><b id="currentUserName">-</b><small id="currentUserRole">-</small></div></div><button class="btn btn-light btn-sm" id="logoutBtn">Çıkış</button></div>
+<div class="top-actions"><span class="sync-indicator" id="syncIndicator">Drive: bağlı değil</span><span class="muted" id="clock"></span><div class="user-chip"><div class="user-avatar">👤</div><div class="user-meta"><b id="currentUserName">-</b><small id="currentUserRole">-</small></div></div><button class="btn btn-light btn-sm" id="changePasswordBtn" type="button" style="display:none" onclick="showPasswordDialog()">🔒 Şifremi Değiştir</button><button class="btn btn-light btn-sm" id="logoutBtn">Çıkış</button></div>
 </header>
 <section class="content">
 <div class="page active" id="page-dashboard">
@@ -143,6 +143,17 @@
 </main>
 </div>
 <div class="modal-overlay" id="movementEditModal" aria-hidden="true"><div class="modal-card"><div class="modal-head"><div><h3>Stok Hareketini Düzelt</h3><div class="muted" id="movementEditSubtitle">Yalnızca yönetici kullanabilir.</div></div><button class="modal-close" onclick="closeMovementEditor()" type="button">✕</button></div><div class="movement-warning">Kaydetme veya silme sonrasında tüm stoklar hareket tarih sırasına göre yeniden hesaplanır. İşlem ayrıca kullanıcı işlem kayıtlarına yazılır.</div><form id="movementEditForm"><input id="movementEditId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>İşlem Türü</label><input id="movementEditType" readonly=""/></div><div class="field"><label>İşlem Tarihi *</label><input id="movementEditDate" required="" type="datetime-local"/></div><div class="field"><label>Belge No</label><input id="movementEditDoc"/></div><div class="field"><label id="movementEditWarehouseLabel">Depo *</label><select id="movementEditWarehouse" required=""></select></div><div class="field" id="movementEditTargetWrap" style="display:none"><label>Hedef Depo *</label><select id="movementEditTargetWarehouse"></select></div><div class="field"><label>Ürün *</label><select id="movementEditProduct" required=""></select></div><div class="field"><label>Birim *</label><select id="movementEditUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="movementEditQtyLabel">Miktar (Koli) *</label><input id="movementEditQty" min="0" required="" step="1" inputmode="numeric" type="number"/></div><div class="field" id="movementEditFirmWrap" style="display:none"><label>Teslim Edilen Firma</label><select id="movementEditFirm"></select></div><div class="field" id="movementEditReasonWrap" style="display:none"><label>Çıkış Nedeni</label><select id="movementEditReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Diğer</option></select></div><div class="field" id="movementEditLotWrap" style="display:none"><label>Lot / Parti No</label><input id="movementEditLot"/></div><div class="field" id="movementEditExpiryWrap" style="display:none"><label>Son Kullanma Tarihi</label><input id="movementEditExpiry" type="date"/></div><div class="field full"><label>Açıklama / Detay</label><textarea id="movementEditDetail"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">Düzeltmeyi Kaydet</button><button class="btn btn-light" onclick="closeMovementEditor()" type="button">Vazgeç</button><button class="btn btn-danger" id="movementDeleteBtn" onclick="deleteMovementFromEditor()" type="button">Hareketi Sil</button></div></form></div></div><iframe id="sheetSyncFrame" name="sheetSyncFrame" style="display:none"></iframe><div class="toast" id="toast"></div>
+<dialog id="passwordDialog" style="max-width:460px;width:92%;border:0;border-radius:14px;padding:24px">
+  <form id="passwordChangeForm">
+    <h3 style="margin:0 0 12px">Şifremi Değiştir</h3>
+    <p style="margin:0 0 18px">Kendi hesabınızın şifresini değiştirebilirsiniz.</p>
+    <div class="field"><label for="passwordOld">Mevcut Şifre</label><input id="passwordOld" type="password" autocomplete="current-password" required style="width:100%"></div>
+    <div class="field" style="margin-top:12px"><label for="passwordNew">Yeni Şifre (en az 8 karakter)</label><input id="passwordNew" type="password" autocomplete="new-password" minlength="8" maxlength="128" required style="width:100%"></div>
+    <div class="field" style="margin-top:12px"><label for="passwordConfirm">Yeni Şifre Tekrar</label><input id="passwordConfirm" type="password" autocomplete="new-password" minlength="8" maxlength="128" required style="width:100%"></div>
+    <div id="passwordFeedback" role="status" aria-live="polite" style="margin:12px 0;min-height:22px"></div>
+    <div class="actions"><button id="passwordSaveBtn" class="btn btn-primary" type="submit">Şifremi Güncelle</button><button class="btn btn-light" type="button" onclick="document.getElementById('passwordDialog').close()">Vazgeç</button></div>
+  </form>
+</dialog>
 <dialog id="cloudDialog" style="max-width:560px;width:90%;border:0;border-radius:14px;padding:24px"><form onsubmit="connectCloud(event)"><h3>Google Drive Bağlantısı</h3><p>Sunucu adresini ve Apps Script kurulumunda oluşturulan özel anahtarı girin.</p><label>Apps Script /exec adresi</label><input id="cloudUrl" type="url" required style="width:100%;margin:10px 0"><label>Özel bulut anahtarı</label><input id="cloudKey" type="password" required minlength="6" autocomplete="off" style="width:100%;margin:10px 0"><div id="cloudFeedback" role="status" aria-live="polite" style="margin:12px 0;padding:12px;background:#eef2ff;border-radius:8px;white-space:pre-wrap">Bağlantı henüz doğrulanmadı. Test, bu pencerede yazılı adresi ve anahtarı kontrol eder.</div><button id="cloudConnectButton" class="btn btn-primary" type="submit">Kaydet ve Bağlan</button> <button id="cloudTestButton" class="btn btn-light" type="button" onclick="testCloudVisible()">Bağlantıyı Test Et</button> <button class="btn btn-light" type="button" onclick="document.getElementById('cloudDialog').close()">Kapat</button></form></dialog>
 
 <script>const DB_KEY='stokDepoPro_v1_0';
@@ -263,7 +274,7 @@ function getRememberedLogin(){try{const saved=JSON.parse(localStorage.getItem(RE
 function applyRememberedLogin(){const saved=getRememberedLogin();el('loginUsername').value=saved?.username||'';el('loginPassword').value='';el('rememberMe').checked=!!saved}
 function updateRememberedLogin(username,password){if(el('rememberMe').checked){localStorage.setItem(REMEMBER_LOGIN_KEY,JSON.stringify({username:encodeRememberedValue(username),savedAt:new Date().toISOString()}))}else localStorage.removeItem(REMEMBER_LOGIN_KEY)}
 function showLogin(){document.body.classList.add('app-locked');el('loginScreen').classList.remove('hidden');el('loginCloudButton').style.display=secureMode?'none':'';el('loginError').textContent=secureMode?'':syncBootstrapComplete?'':'Google Drive bağlantısı gerekli. Üstteki Bulut Bağlantısı düğmesinden bağlanın.';applyRememberedLogin();setTimeout(()=>{(el('loginUsername').value?el('loginPassword'):el('loginUsername')).focus()},50)}
-function showApp(){document.body.classList.remove('app-locked');el('loginScreen').classList.add('hidden');el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';applyPermissionUI();if(!canAccessPage(activePage))activePage=firstAllowedPage();goPage(activePage)}
+function showApp(){el('changePasswordBtn').style.display=secureMode?'':'none';document.body.classList.remove('app-locked');el('loginScreen').classList.add('hidden');el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';applyPermissionUI();if(!canAccessPage(activePage))activePage=firstAllowedPage();goPage(activePage)}
 async function login(e){
   e.preventDefault();const enteredUsername=el('loginUsername').value.trim(),username=enteredUsername.toLowerCase(),password=el('loginPassword').value;el('loginError').textContent='';
   try{
@@ -288,6 +299,34 @@ async function login(e){
       return;
     }
     if(!syncBootstrapComplete){el('loginError').textContent='Google Drive bağlantısı gerekli. Önce Bulut Bağlantısı düğmesinden bağlanın.';return}const hash=await hashPassword(password);const user=db.users.find(u=>u.username.toLowerCase()===username&&u.active!==false&&u.passwordHash===hash);if(!user){el('loginError').textContent='Kullanıcı adı veya şifre hatalı.';return}updateRememberedLogin(enteredUsername,password);currentUser=user;sessionStorage.setItem('stokDepoCurrentUser',user.id);audit('Giriş yapıldı','Oturum',`${user.username} uygulamaya giriş yaptı.`);saveDB({render:false});showApp();notify(`Hoş geldiniz, ${user.fullName}.`)}catch(err){el('loginError').textContent=err.message||'Giriş yapılamadı.'}
+}
+function showPasswordDialog(){
+  if(!secureMode||!currentUser)return notify('Şifre değiştirmek için merkezi sisteme giriş yapın.',true);
+  if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce bekleyen Drive kaydının tamamlanmasını bekleyin.',true);
+  el('passwordChangeForm').reset();
+  el('passwordFeedback').textContent='';
+  el('passwordDialog').showModal();
+  el('passwordOld').focus();
+}
+async function changeOwnPassword(e){
+  e.preventDefault();
+  if(!secureMode||!currentUser)return;
+  const oldPassword=el('passwordOld').value,newPassword=el('passwordNew').value,confirmPassword=el('passwordConfirm').value;
+  const output=el('passwordFeedback'),button=el('passwordSaveBtn');
+  if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress){output.textContent='Önce bekleyen Drive kaydının tamamlanmasını bekleyin.';return}
+  if(newPassword!==confirmPassword){output.textContent='Yeni şifreler aynı olmalıdır.';return}
+  if(newPassword.length<8||newPassword.length>128){output.textContent='Yeni şifre 8-128 karakter olmalıdır.';return}
+  if(oldPassword===newPassword){output.textContent='Yeni şifre mevcut şifreden farklı olmalıdır.';return}
+  button.disabled=true;output.textContent='Şifre güncelleniyor…';
+  try{
+    const result=await rpc('authChangePassword',{oldPassword,newPassword});
+    if(!result?.ok)throw new Error('Şifre değişikliği sunucu tarafından onaylanmadı.');
+    el('passwordDialog').close();
+    logout();
+    el('loginError').textContent='Şifreniz değiştirildi. Yeni şifrenizle tekrar giriş yapın.';
+    notify('Şifreniz başarıyla değiştirildi.');
+  }catch(err){output.textContent=err.message||'Şifre değiştirilemedi.'}
+  finally{button.disabled=false}
 }
 function logout(){if(secureMode){rpc('authLogout').catch(()=>{});sessionStorage.removeItem('tatsanSecureSession');sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;syncBootstrapComplete=false;clearTimeout(autoSyncTimer);localStorage.removeItem(DB_KEY);db=defaultDB();cloudState={revision:0,dirty:false,pending:null};rememberCloud();showLogin();return}if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
 function initSession(){if(!syncBootstrapComplete){currentUser=null;showLogin();return}const id=sessionStorage.getItem('stokDepoCurrentUser');const user=userById(id);if(user&&user.active!==false){currentUser=user;showApp()}else showLogin()}
@@ -700,7 +739,7 @@ function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermi
 
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
-el('loginForm').addEventListener('submit',login);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
+el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
 el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productPackQty').addEventListener('input',updateCartonPrice);el('productItemPrice').addEventListener('input',updateCartonPrice);el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('movementEditForm').addEventListener('submit',saveMovementEdit);el('movementEditModal').addEventListener('click',e=>{if(e.target===el('movementEditModal'))closeMovementEditor()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&el('movementEditModal').classList.contains('show'))closeMovementEditor()});
