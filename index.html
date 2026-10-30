@@ -950,14 +950,22 @@ function rebaseQueuedStockMovements(latest){
  const known=new Map(remote.movements.map(m=>[m.id,m]));
  const queued=local.movements.slice(baseMoves).filter(m=>!known.has(m.id));
  if(queued.length>100)return false;
- const allowed={GIRIS:'entry',CIKIS:'exit',TRANSFER_CIKIS:'transfer',TRANSFER_GIRIS:'transfer'};
+ const allowed={GIRIS:'entry',CIKIS:'exit',TRANSFER_CIKIS:'transfer',TRANSFER_GIRIS:'transfer',SAYIM:'count'};
  const transferGroups={};
+ const remoteChanges=new Set(remote.movements.slice(baseMoves).map(m=>m.warehouseId+'::'+m.productId));
  for(const movement of queued){
   const permission=allowed[movement.type];
   if(!permission||movement.userId!==currentUser.id||
      (latest.user&&latest.user.role!=='admin'&&latest.user.permissions?.[permission]!==true))return false;
   if(!remote.products.some(p=>p.id===movement.productId&&p.active!==false)||
      !remote.warehouses.some(w=>w.id===movement.warehouseId))return false;
+  if(movement.type==='SAYIM'){
+   // Mutlak sayım ile yeni hareket çakışıyorsa fark otomatik uygulanmaz.
+   // Sayım sırasında ürünün stokunu başka bir kullanıcı değiştirmişse manuel tekrar sayım gerekir.
+   if(remoteChanges.has(movement.warehouseId+'::'+movement.productId))return false;
+   const actual=Number(movement.countedValue??movement.after);
+   if(!Number.isFinite(actual)||actual<0)return false;
+  }
   if(movement.type.startsWith('TRANSFER_')){
    if(!movement.groupId)return false;
    (transferGroups[movement.groupId]||(transferGroups[movement.groupId]=[])).push(movement);
@@ -972,8 +980,15 @@ function rebaseQueuedStockMovements(latest){
  for(const movement of queued){
   const m={...movement},key=m.warehouseId+'::'+m.productId,
     before=Number(stocks[key]||0),quantity=Number(m.quantity);
-  if(!Number.isFinite(quantity)||quantity<=0)return false;
-  const after=before+(m.type==='GIRIS'||m.type==='TRANSFER_GIRIS'?quantity:-quantity);
+  if(!Number.isFinite(quantity)||quantity<0||(m.type!=='SAYIM'&&quantity===0))return false;
+  let after;
+  if(m.type==='SAYIM'){
+   // Sayılan miktar kesin sonuçtur; güncel stok kullanıcının gördüğü stokla aynı olmalı.
+   if(Math.abs(before-Number(m.before))>0.000001)return false;
+   after=Number(m.countedValue??m.after);
+   if(!Number.isFinite(after)||after<0)return false;
+   m.countedValue=after;m.quantity=Math.abs(after-before);
+  }else after=before+(m.type==='GIRIS'||m.type==='TRANSFER_GIRIS'?quantity:-quantity);
   if(after< -0.000000001&&!remote.settings.allowNegative)return false;
   m.before=Math.round(before*1e9)/1e9;m.after=Math.round(after*1e9)/1e9;
   stocks[key]=m.after;shifted.push(m);
@@ -1038,7 +1053,7 @@ async function pushToSheets(manual=true){
     if(!rebaseQueuedStockMovements(latest)){
      cloudConflict=true;
      el('syncIndicator').textContent='Drive: işlem kuyruğu bekliyor · çakışma';
-     notify('Stok kaydı kuyruğa alındı ama otomatik birleştirilemedi. Yerel kayıt korunuyor; önce JSON yedeği alın.',true);
+     notify('Bekleyen işlem otomatik birleştirilemedi. Aynı ürünün sayımına başka hareket yapılmış olabilir. Yerel kayıt korunuyor; önce JSON yedeği alın.',true);
      return;
     }
     if(attempt===3){
