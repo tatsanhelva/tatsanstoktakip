@@ -699,6 +699,13 @@ function firmExcelValue(row,keys){
  for(const k of keys)if(Object.prototype.hasOwnProperty.call(normalized,firmKey(k)))return String(normalized[firmKey(k)]??'').trim();
  return '';
 }
+function firmExcelHasColumn(row,keys){
+ const labels=new Set(Object.keys(row).map(firmKey));
+ return keys.some(k=>labels.has(firmKey(k)));
+}
+function firmExcelColumn(row,keys,oldValue=''){
+ return firmExcelHasColumn(row,keys)?firmExcelValue(row,keys):String(oldValue||'');
+}
 function previewFirmExcelUpdate(rows){
  if(!Array.isArray(rows)||!rows.length)throw new Error('Excel dosyasında firma satırı bulunamadı.');
  if(rows.length>500)throw new Error('Tek yüklemede en fazla 500 firma güncellenebilir.');
@@ -724,13 +731,14 @@ function previewFirmExcelUpdate(rows){
     !activeValue?prior?.active!==false:!['pasif','false','0','hayır','hayir'].includes(firmKey(activeValue));
   const item={...(prior||{}),id:prior?.id||uid('frm'),
     code:prior?(prior.code||nextFirmCode(proposed)):nextFirmCode(proposed),name,
-    contact:firmExcelValue(row,['Yetkili Kişi','Yetkili']),
-    phone:firmExcelValue(row,['Telefon','Tel']),
-    email:firmExcelValue(row,['E-posta','Email','Eposta','Mail']),
-    taxNo,address:firmExcelValue(row,['Adres']),
-    active:isActive,notes:firmExcelValue(row,['Açıklama','Not'])};
+    contact:firmExcelColumn(row,['Yetkili Kişi','Yetkili'],prior?.contact),
+    phone:firmExcelColumn(row,['Telefon','Tel'],prior?.phone),
+    email:firmExcelColumn(row,['E-posta','Email','Eposta','Mail'],prior?.email),
+    taxNo:firmExcelColumn(row,['Vergi No / TC Kimlik No','Vergi No','TC Kimlik No','Vergi / TC'],prior?.taxNo),
+    address:firmExcelColumn(row,['Adres'],prior?.address),
+    active:isActive,notes:firmExcelColumn(row,['Açıklama','Not'],prior?.notes)};
   if(item.email&&(!item.email.includes('@')||item.email.length>200))throw new Error((i+2)+'. satırda e-posta geçersiz.');
-  if(taxNo&&proposed.some(f=>f.id!==item.id&&firmTax(f.taxNo)===taxNo))
+  if(item.taxNo&&proposed.some(f=>f.id!==item.id&&firmTax(f.taxNo)===item.taxNo))
    throw new Error((i+2)+'. satırda vergi / TC numarası başka firmaya ait.');
   if(prior){proposed[proposed.findIndex(f=>f.id===prior.id)]=item;updated++;}
   else{proposed.push(item);added++}
