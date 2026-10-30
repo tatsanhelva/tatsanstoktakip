@@ -944,10 +944,16 @@ function rebaseQueuedStockMovements(latest){
  return true;
 }
 
+function queuedMovementCount(){
+ return Number.isInteger(cloudState.baseMovementCount)?Math.max(0,db.movements.length-cloudState.baseMovementCount):0;
+}
+function queueStatusLabel(){
+ const n=queuedMovementCount();return n?'Drive: kuyruğa alındı · '+n+' stok hareketi':'Drive: değişiklik gönderim kuyruğunda';
+}
 function scheduleAutoSync(){
  cloudState.dirty=true;
  if(currentUser&&!cloudState.ownerId)cloudState.ownerId=currentUser.id;
- rememberCloud();el('syncIndicator').textContent='Drive: işlem kuyruğunda · gönderim bekliyor';
+ rememberCloud();el('syncIndicator').textContent=queueStatusLabel();
  clearTimeout(autoSyncTimer);
  if(!syncPushInProgress&&!cloudConflict&&syncBootstrapComplete)autoSyncTimer=setTimeout(()=>pushToSheets(false),900);
 }
@@ -1001,7 +1007,7 @@ async function pushToSheets(manual=true){
   el('syncIndicator').textContent=cloudState.dirty?'Drive: sıradaki kayıt bekliyor':'Drive: kaydedildi · v'+cloudState.revision;
   if(manual)notify('Drive kaydı tamamlandı. Sürüm: '+cloudState.revision);
  }catch(err){
-  el('syncIndicator').textContent='Drive: işlem kuyruğu bekliyor';
+  el('syncIndicator').textContent=queueStatusLabel();
   if(manual)notify(err.message,true);
  }finally{
   syncPushInProgress=false;
