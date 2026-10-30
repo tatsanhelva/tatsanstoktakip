@@ -333,14 +333,11 @@ async function login(e){
       try{
         const r=await rpc('authLogin',{username,password});
         if(!r?.ok||!r.token||!r.user||!r.data)throw new Error('Sunucudan giriş yanıtı alınamadı.');
+        if(cloudState.dirty&&cloudState.ownerId&&cloudState.ownerId!==r.user.id)
+          throw new Error('Bu tarayıcıda başka kullanıcıya ait gönderilmemiş stok hareketleri var. Önce o kullanıcıyla giriş yapın.');
         sessionStorage.setItem('tatsanSecureSession',r.token);
         sessionStorage.removeItem('tatsanCloudKey');
-        db=normalizeDB(r.data);
-        localStorage.setItem(DB_KEY,JSON.stringify(db));
-        currentUser=userById(r.user.id);
-        if(!currentUser)throw new Error('Kullanıcı yetkileri yüklenemedi.');
-        cloudState={revision:r.revision,dirty:false,pending:null};rememberCloud();cloudConflict=false;
-        syncBootstrapComplete=true;
+        loadSecureCloudView(r);
         updateRememberedLogin(enteredUsername,password);
         el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+r.revision;
         showApp();
@@ -378,7 +375,17 @@ async function changeOwnPassword(e){
   }catch(err){output.textContent=err.message||'Şifre değiştirilemedi.'}
   finally{button.disabled=false}
 }
-function logout(){if(secureMode){rpc('authLogout').catch(()=>{});sessionStorage.removeItem('tatsanSecureSession');sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;syncBootstrapComplete=false;clearTimeout(autoSyncTimer);localStorage.removeItem(DB_KEY);db=defaultDB();cloudState={revision:0,dirty:false,pending:null};rememberCloud();showLogin();return}if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
+function logout(){if(secureMode){
+ if(cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress){
+  notify('Drive üzerinde bekleyen kayıt var. Kayıt tamamlanmadan çıkış yapılmaz. Gerekirse önce JSON yedeği alın.',true);return;
+ }
+ rpc('authLogout').catch(()=>{});
+ sessionStorage.removeItem('tatsanSecureSession');sessionStorage.removeItem('stokDepoCurrentUser');
+ currentUser=null;syncBootstrapComplete=false;clearTimeout(autoSyncTimer);
+ localStorage.removeItem(DB_KEY);db=defaultDB();
+ cloudState={revision:0,dirty:false,pending:null,baseMovementCount:null,baseAuditCount:null,ownerId:null};
+ rememberCloud();showLogin();return
+}if(currentUser){audit('Çıkış yapıldı','Oturum',`${currentUser.username} uygulamadan çıkış yaptı.`);saveDB({render:false})}sessionStorage.removeItem('stokDepoCurrentUser');currentUser=null;showLogin()}
 function initSession(){if(!syncBootstrapComplete){currentUser=null;showLogin();return}const id=sessionStorage.getItem('stokDepoCurrentUser');const user=userById(id);if(user&&user.active!==false){currentUser=user;showApp()}else showLogin()}
 async function bootstrapSheetsBeforeLogin(){
  const cfg=connection(), key=sessionStorage.getItem('tatsanCloudKey');
@@ -407,22 +414,52 @@ async function bootstrapSheetsBeforeLogin(){
  finally{setLoginBusy(false,'')}
 }
 window.addEventListener('online',async()=>{if(!syncBootstrapComplete)await bootstrapSheetsBeforeLogin();else pushToSheets(false)});
+function loadSecureCloudView(response){
+ if(!response?.data||!response?.user||!Number.isInteger(response.revision))
+  throw new Error('Drive kullanıcı ve sürüm bilgileri eksik.');
+ const unsent=cloudState.dirty||!!cloudState.pending;
+ const cached=localStorage.getItem(DB_KEY);
+ if(unsent&&cached){
+  if(cloudState.ownerId&&cloudState.ownerId!==response.user.id)
+   throw new Error('Bekleyen işlemler başka hesaba ait. Eski hesapla giriş yapın.');
+  db=normalizeDB(JSON.parse(cached));
+  currentUser=userById(response.user.id);
+  if(!currentUser)throw new Error('Bekleyen kaydın kullanıcısı doğrulanamadı. Yerel veriyi silmeyin.');
+  cloudConflict=!cloudState.ownerId||!Number.isInteger(cloudState.baseMovementCount)||
+   !Number.isInteger(cloudState.baseAuditCount);
+  syncBootstrapComplete=true;rememberCloud();
+  el('syncIndicator').textContent=cloudConflict?'Drive: bekleyen eski kayıt · yedek alın':
+   'Drive: bekleyen işlemler sırada';
+  if(!cloudConflict)setTimeout(()=>pushToSheets(false),250);
+ }else{
+  db=normalizeDB(response.data);
+  localStorage.setItem(DB_KEY,JSON.stringify(db));
+  currentUser=userById(response.user.id);
+  if(!currentUser)throw new Error('Kullanıcı yetkileri yüklenemedi.');
+  cloudState={revision:response.revision,dirty:false,pending:null,
+   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,ownerId:currentUser.id};
+  cloudConflict=false;rememberCloud();syncBootstrapComplete=true;
+  el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+response.revision;
+ }
+}
 async function secureResume(){
   const token=sessionStorage.getItem('tatsanSecureSession');
-  if(!token){localStorage.removeItem(DB_KEY);db=defaultDB();currentUser=null;showLogin();return}
+  if(!token){
+   if(!cloudState.dirty&&!cloudState.pending)localStorage.removeItem(DB_KEY);
+   currentUser=null;showLogin();return;
+  }
   setLoginBusy(true,'Oturum doğrulanıyor…');
   try{
     const r=await rpc('authResume');
     if(!r?.ok||!r.user||!r.data)throw new Error('Oturum bilgileri geçersiz.');
-    db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
-    currentUser=userById(r.user.id);
-    if(!currentUser)throw new Error('Kullanıcı bulunamadı.');
-    cloudState={revision:r.revision,dirty:false,pending:null};rememberCloud();cloudConflict=false;
-    syncBootstrapComplete=true;el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+r.revision;
+    loadSecureCloudView(r);
     showApp();
   }catch(e){
-    sessionStorage.removeItem('tatsanSecureSession');localStorage.removeItem(DB_KEY);
+    sessionStorage.removeItem('tatsanSecureSession');
+    if(!cloudState.dirty&&!cloudState.pending)localStorage.removeItem(DB_KEY);
     currentUser=null;syncBootstrapComplete=false;showLogin();
+    if(cloudState.dirty||cloudState.pending)
+      el('loginError').textContent='Bekleyen stok kaydı korunuyor. Aynı kullanıcıyla yeniden giriş yapın. '+(e.message||'');
   }finally{setLoginBusy(false,'')}
 }
 async function initializeApplication(){
@@ -632,6 +669,10 @@ function selectedBatchItems(prefix){
   const rows=[...el(prefix+'BatchRows').querySelectorAll('tr[data-product-id]')].filter(r=>r.querySelector('.batch-check').checked);
   if(!rows.length){notify('Kaydetmek için en az bir ürün seçin ve miktar girin.',true);return null}
   if(rows.length>100){notify('Tek kayıtta en fazla 100 ürün seçilebilir. İşlemi iki parçaya ayırın.',true);return null}
+  const base=cloudState.baseMovementCount;
+  if(Number.isInteger(base)&&db.movements.length-base+rows.length>100){
+   notify('Drive kuyruğunda çok sayıda işlem var. Önce gönderimin tamamlanmasını bekleyin.',true);return null;
+  }
   const warehouse=el(prefix+'Warehouse').value;
   if(!warehouse||!warehouseById(warehouse)){notify('Önce geçerli bir depo seçin.',true);return null}
   const out=[];
