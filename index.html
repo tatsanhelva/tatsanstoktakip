@@ -641,7 +641,7 @@ function deleteWarehouse(id){if(!requirePermission('warehouses')||!requireAdminA
 
 
 function nextFirmCode(firms=db.firms){
- const numbers=firms.map(f=>/^FRM0*(\\d+)$/i.exec(String(f.code||''))).filter(Boolean).map(x=>Number(x[1]));
+ const numbers=firms.map(f=>/^FRM0*(\d+)$/i.exec(String(f.code||''))).filter(Boolean).map(x=>Number(x[1]));
  const occupied=new Set(firms.map(f=>String(f.code||'').toLowerCase()));
  let n=Math.max(0,...numbers)+1;
  while(occupied.has(('FRM'+String(n).padStart(4,'0')).toLowerCase()))n++;
@@ -660,8 +660,109 @@ function firmBalanceStatus(id){
 }
 function firmMoney(cents){return (cents/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₺'}
 function firmKey(value){return String(value||'').trim().toLocaleLowerCase('tr-TR')}
-function firmTax(value){return String(value||'').replace(/\\s/g,'').trim()}
-function validFirmTax(value){return !value||/^\\d{10,11}$/.test(value)}
+function firmTax(value){return String(value||'').replace(/\s/g,'').trim()}
+function validFirmTax(value){return !value||/^\d{10,11}$/.test(value)}
+
+const FIRM_EXCEL_HEADERS=['Firma Kodu','Firma Adı','Yetkili Kişi','Telefon','E-posta','Vergi No / TC Kimlik No','Adres','Durum','Açıklama','Borç Durumu (Bilgi)','Bakiye TRY (Bilgi)'];
+let firmExcelLoader=null;
+function loadFirmExcelLibrary(){
+ if(window.XLSX)return Promise.resolve(window.XLSX);
+ if(firmExcelLoader)return firmExcelLoader;
+ firmExcelLoader=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://cdn.sheetjs.com/xlsx-0.20.3/package/dist/xlsx.full.min.js';
+  script.async=true;
+  script.onload=()=>window.XLSX?resolve(window.XLSX):reject(new Error('Excel kütüphanesi başlatılamadı.'));
+  script.onerror=()=>reject(new Error('Excel bileşeni yüklenemedi. İnterneti kontrol edin.'));
+  document.head.appendChild(script);
+ }).catch(err=>{firmExcelLoader=null;throw err});
+ return firmExcelLoader;
+}
+async function exportFirmsExcel(empty=false){
+ if(!requirePermission('firms'))return;
+ try{
+  const xlsx=await loadFirmExcelLibrary();
+  const rows=empty?[]:db.firms.map(f=>{
+   const b=firmBalanceStatus(f.id);
+   return [f.code||'',f.name||'',f.contact||'',f.phone||'',f.email||'',f.taxNo||'',f.address||'',
+     f.active!==false?'Aktif':'Pasif',f.notes||'',b.label,b.amount/100];
+  });
+  const ws=xlsx.utils.aoa_to_sheet([FIRM_EXCEL_HEADERS,...rows]);
+  ws['!cols']=[{wch:17},{wch:35},{wch:23},{wch:19},{wch:30},{wch:24},{wch:43},{wch:12},{wch:35},{wch:24},{wch:18}];
+  const wb=xlsx.utils.book_new();xlsx.utils.book_append_sheet(wb,ws,'Firmalar');
+  xlsx.writeFile(wb,empty?'Tatsan_Firma_Excel_Sablonu.xlsx':'Tatsan_Firma_Listesi.xlsx');
+ }catch(err){notify(err.message||'Excel oluşturulamadı.',true)}
+}
+function firmExcelValue(row,keys){
+ const normalized={};
+ Object.keys(row).forEach(k=>{normalized[firmKey(k)]=row[k]});
+ for(const k of keys)if(Object.prototype.hasOwnProperty.call(normalized,firmKey(k)))return String(normalized[firmKey(k)]??'').trim();
+ return '';
+}
+function previewFirmExcelUpdate(rows){
+ if(!Array.isArray(rows)||!rows.length)throw new Error('Excel dosyasında firma satırı bulunamadı.');
+ if(rows.length>500)throw new Error('Tek yüklemede en fazla 500 firma güncellenebilir.');
+ const proposed=db.firms.map(f=>({...f})),touched=new Set();let added=0,updated=0;
+ const inputNames=new Set();
+ for(let i=0;i<rows.length;i++){
+  const row=rows[i],code=firmExcelValue(row,['Firma Kodu','Kod']),
+   name=firmExcelValue(row,['Firma Adı','Firma','Unvan']),
+   taxNo=firmTax(firmExcelValue(row,['Vergi No / TC Kimlik No','Vergi No','TC Kimlik No','Vergi / TC']));
+  if(!Object.values(row).some(v=>String(v??'').trim()))continue;
+  if(!name)throw new Error((i+2)+'. satırda Firma Adı eksik.');
+  if(!validFirmTax(taxNo))throw new Error((i+2)+'. satırın vergi / TC numarası 10 veya 11 rakam olmalı.');
+  let matches=proposed.filter(f=>code&&firmKey(f.code)===firmKey(code));
+  if(!matches.length&&taxNo)matches=proposed.filter(f=>firmTax(f.taxNo)===taxNo);
+  if(!matches.length)matches=proposed.filter(f=>firmKey(f.name)===firmKey(name));
+  if(matches.length>1)throw new Error((i+2)+'. satırda firma eşleşmesi belirsiz: '+name);
+  const prior=matches[0];
+  if(prior&&touched.has(prior.id))throw new Error('Excel içinde aynı firma birden fazla kez var: '+name);
+  const matchName=firmKey(name);
+  if(inputNames.has(matchName))throw new Error('Excel dosyasında firma adı tekrar ediyor: '+name);
+  inputNames.add(matchName);
+  const activeValue=firmExcelValue(row,['Durum','Aktif']),isActive=
+    !activeValue?prior?.active!==false:!['pasif','false','0','hayır','hayir'].includes(firmKey(activeValue));
+  const item={...(prior||{}),id:prior?.id||uid('frm'),
+    code:prior?(prior.code||nextFirmCode(proposed)):nextFirmCode(proposed),name,
+    contact:firmExcelValue(row,['Yetkili Kişi','Yetkili']),
+    phone:firmExcelValue(row,['Telefon','Tel']),
+    email:firmExcelValue(row,['E-posta','Email','Eposta','Mail']),
+    taxNo,address:firmExcelValue(row,['Adres']),
+    active:isActive,notes:firmExcelValue(row,['Açıklama','Not'])};
+  if(item.email&&(!item.email.includes('@')||item.email.length>200))throw new Error((i+2)+'. satırda e-posta geçersiz.');
+  if(taxNo&&proposed.some(f=>f.id!==item.id&&firmTax(f.taxNo)===taxNo))
+   throw new Error((i+2)+'. satırda vergi / TC numarası başka firmaya ait.');
+  if(prior){proposed[proposed.findIndex(f=>f.id===prior.id)]=item;updated++;}
+  else{proposed.push(item);added++}
+  touched.add(item.id);
+ }
+ if(!added&&!updated)throw new Error('Güncellenecek firma satırı bulunamadı.');
+ return {proposed,added,updated};
+}
+async function importFirmsExcel(e){
+ const input=e.target,file=input.files?.[0];
+ if(!file)return;
+ try{
+  if(!isAdmin())throw new Error('Excel ile firma güncellemesi yalnızca yöneticiye açıktır.');
+  if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)
+   throw new Error('Excel yüklemeden önce bekleyen Drive işlemleri tamamlansın.');
+  if(file.size>3000000)throw new Error('Excel dosyası 3 MB sınırını aştı.');
+  if(!/\\.(xlsx|xls|csv)$/i.test(file.name))throw new Error('Excel (.xlsx/.xls) veya CSV dosyası seçin.');
+  const xlsx=await loadFirmExcelLibrary();
+  const content=await file.arrayBuffer(),workbook=xlsx.read(content,{type:'array',cellText:true}),
+    sheet=workbook.Sheets[workbook.SheetNames[0]];
+  if(!sheet)throw new Error('Excel sayfası bulunamadı.');
+  const rows=xlsx.utils.sheet_to_json(sheet,{defval:'',raw:false});
+  const plan=previewFirmExcelUpdate(rows);
+  if(!confirm(plan.added+' yeni firma eklenecek, '+plan.updated+' firma güncellenecek. Cari borç ve tahsilat kayıtları değişmeyecek. Onaylıyor musunuz?'))return;
+  // İşlemi tek seferde uygula; önce tüm satırlar doğrulanır.
+  db.firms=plan.proposed;
+  audit('Excel firma güncellemesi','Firmalar',plan.added+' yeni, '+plan.updated+' güncellenen firma | '+file.name);
+  saveDB();resetFirmForm();
+  notify('Excel işlendi: '+plan.added+' yeni firma, '+plan.updated+' güncelleme. Drive kaydı bekleniyor.');
+ }catch(err){notify(err.message||'Excel okunamadı.',true);alert('Excel içe aktarılamadı: '+(err.message||'Bilinmeyen hata'))}
+ finally{input.value=''}
+}
 function renderFirms(){
  const q=firmKey(el('firmSearch').value);
  const found=db.firms.filter(f=>firmKey([f.code,f.name,f.contact,f.phone,f.email,f.taxNo,f.address].join(' ')).includes(q));
@@ -732,7 +833,7 @@ function saveFirmLedger(e){
  if(type!=='DEBT'&&type!=='PAYMENT')return notify('İşlem türü geçersiz.',true);
  const cents=Math.round(amount*100);
  if(!Number.isSafeInteger(cents)||cents<=0||cents>99999999999999)return notify('Geçerli, pozitif tutar girin.',true);
- if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
  const movement={id:uid('cari'),firmId:firm.id,type,amountCents:cents,date,
   doc:el('firmLedgerDoc').value.trim(),note:el('firmLedgerNote').value.trim(),
   userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()};
