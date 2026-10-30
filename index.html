@@ -46,6 +46,21 @@
     .report-section-title{display:flex;align-items:center;justify-content:space-between;gap:10px;margin-bottom:12px}
     .report-note{font-size:12px;color:var(--muted);margin-top:8px}
     @media(max-width:760px){.report-filter-grid{grid-template-columns:1fr}.dashboard-filter .field{min-width:100%}}
+
+    /* Toplu depo hareketleri */
+    .batch-toolbar{display:flex;align-items:end;gap:10px;flex-wrap:wrap;margin:18px 0 12px}
+    .batch-search{min-width:240px;flex:1}
+    .batch-table-wrap{max-height:520px;overflow:auto}
+    .batch-table{min-width:800px}
+    .batch-table td{vertical-align:middle}
+    .batch-table .batch-qty{width:110px;min-width:95px;padding:9px;border:1px solid var(--border);border-radius:8px;background:#fff}
+    .batch-table .batch-unit{width:90px;padding:9px;border:1px solid var(--border);border-radius:8px;background:#fff}
+    .batch-table .batch-check{width:18px;height:18px;cursor:pointer}
+    .batch-table .batch-selected{background:#eff7ff}
+    .batch-table .batch-low{color:#b42318;font-weight:700}
+    .batch-table .batch-name{font-weight:700;max-width:260px;white-space:normal}
+    .batch-table .batch-stock{white-space:nowrap}
+    @media(max-width:650px){.batch-toolbar .btn{flex:1}.batch-search{min-width:100%}}
 </style>
 </head>
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
@@ -123,8 +138,43 @@
 <div class="card"><h3>Depo Kartı</h3><form id="warehouseForm"><input id="warehouseId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>Depo Kodu *</label><input id="warehouseCode" required=""/></div><div class="field"><label>Depo Adı *</label><input id="warehouseName" required=""/></div><div class="field"><label>Sorumlu Kişi</label><input id="warehouseManager"/></div><div class="field"><label>Telefon</label><input id="warehousePhone"/></div><div class="field"><label>Adres</label><input id="warehouseAddress"/></div><div class="field"><label>Açıklama</label><input id="warehouseNotes"/></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kaydet</button><button class="btn btn-light" onclick="resetWarehouseForm()" type="button">Temizle</button></div></form></div>
 <div class="card"><h3>Depo Listesi</h3><div class="table-wrap"><table><thead><tr><th>Kod</th><th>Depo</th><th>Sorumlu</th><th>Telefon</th><th>Adres</th><th>İşlem</th></tr></thead><tbody id="warehouseTable"></tbody></table></div></div>
 </div><div class="page" id="page-firms"><div class="card"><h3>Firma Kartı</h3><form id="firmForm"><input id="firmId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>Firma Kodu</label><input id="firmCode" placeholder="Örn. FRM001"/></div><div class="field"><label>Firma Adı *</label><input id="firmName" required=""/></div><div class="field"><label>Yetkili Kişi</label><input id="firmContact"/></div><div class="field"><label>Telefon</label><input id="firmPhone"/></div><div class="field"><label>E-posta</label><input id="firmEmail" type="email"/></div><div class="field"><label>Vergi No</label><input id="firmTaxNo"/></div><div class="field"><label>Durum</label><select id="firmActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></div><div class="field full"><label>Adres</label><textarea id="firmAddress"></textarea></div><div class="field full"><label>Açıklama</label><textarea id="firmNotes"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kaydet</button><button class="btn btn-light" onclick="resetFirmForm()" type="button">Temizle</button></div></form></div><div class="card"><div class="card-head"><h3>Firma Listesi</h3><input id="firmSearch" placeholder="Firma ara..." style="max-width:280px"/></div><div class="table-wrap"><table><thead><tr><th>Kod</th><th>Firma</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="firmTable"></tbody></table></div></div></div>
-<div class="page" id="page-entry"><div class="card"><h3>Stok Girişi</h3><form id="entryForm"><div class="form-grid cols-3"><div class="field"><label>Depo *</label><select id="entryWarehouse" required=""></select></div><div class="field"><label>Ürün *</label><select id="entryProduct" required=""></select></div><div class="field"><label>Birim *</label><select id="entryUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="entryQtyLabel">Miktar (Koli) *</label><input id="entryQty" min="1" required="" step="1" inputmode="numeric" type="number"/></div><div class="field"><label>Belge / İrsaliye No</label><input id="entryDoc"/></div><div class="field"><label>Lot / Parti No</label><input id="entryLot"/></div><div class="field"><label>Son Kullanma Tarihi</label><input id="entryExpiry" type="date"/></div><div class="field"><label>İşlem Tarihi</label><input id="entryDate" type="datetime-local"/></div><div class="field full"><label>Açıklama</label><textarea id="entryNotes"></textarea></div></div><div class="inline-info" style="margin-top:12px">Varsayılan birim <b>Koli</b> olarak gelir. Gerektiğinde Adet seçebilirsiniz. Ürün maliyeti, Ürünler bölümündeki otomatik hesaplanan koli/adet fiyatından alınır.</div><div class="actions"><button class="btn btn-primary" type="submit">Stok Girişini Kaydet</button></div></form></div></div>
-<div class="page" id="page-exit"><div class="card"><h3>Stok Çıkışı</h3><form id="exitForm"><div class="form-grid cols-3"><div class="field"><label>Depo *</label><select id="exitWarehouse" required=""></select></div><div class="field"><label>Ürün *</label><select id="exitProduct" required=""></select></div><div class="field"><label>Mevcut Stok</label><input id="exitCurrent" readonly=""/></div><div class="field"><label>Birim *</label><select id="exitUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="exitQtyLabel">Miktar (Koli) *</label><input id="exitQty" min="1" required="" step="1" inputmode="numeric" type="number"/></div><div class="field"><label>Çıkış Nedeni</label><select id="exitReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Diğer</option></select></div><div class="field"><label>Teslim Edilen Firma</label><select id="exitFirm"></select></div><div class="field"><label>Teslim Alan Kişi</label><input id="exitReceiver" placeholder="Firma yetkilisi / teslim alan"/></div><div class="field"><label>Belge No</label><input id="exitDoc"/></div><div class="field"><label>İşlem Tarihi</label><input id="exitDate" type="datetime-local"/></div><div class="field full"><label>Açıklama</label><textarea id="exitNotes"></textarea></div></div><div class="inline-info" style="margin-top:12px">Varsayılan çıkış birimi <b>Koli</b> olarak gelir. Adet seçildiğinde koli içi miktara göre stoktan otomatik düşülür. Firma listesi <b>Firmalar</b> menüsünden yönetilir.</div><div class="actions"><button class="btn btn-primary" type="submit">Stok Çıkışını Kaydet</button></div></form></div></div>
+<div class="page" id="page-entry"><div class="card">
+<div class="card-head"><h3>Toplu Stok Girişi</h3><span class="muted">Depo seç, ürünlerin miktarını gir, tek seferde kaydet</span></div>
+<form id="entryForm">
+<div class="form-grid cols-3">
+<div class="field"><label>Giriş Yapılacak Depo *</label><select id="entryWarehouse" required></select></div>
+<div class="field"><label>Belge / İrsaliye No</label><input id="entryDoc"></div>
+<div class="field"><label>İşlem Tarihi</label><input id="entryDate" type="datetime-local"></div>
+<div class="field"><label>Lot / Parti No (isteğe bağlı)</label><input id="entryLot"></div>
+<div class="field"><label>Son Kullanma Tarihi (isteğe bağlı)</label><input id="entryExpiry" type="date"></div>
+<div class="field full"><label>Açıklama</label><textarea id="entryNotes"></textarea></div>
+</div>
+<div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="entryProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',true)">Görünenleri Seç</button>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',false)">Görünen Seçimleri Kaldır</button></div>
+<div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Mevcut Stok</th><th>Miktar Gir</th><th>Birim</th><th>İşlem Sonrası</th></tr></thead><tbody id="entryBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
+<div id="entryBatchSummary" class="inline-info" style="margin-top:12px">Ürün seçmek için depo seçin.</div>
+<div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Stok Girişini Kaydet</button></div>
+</form></div></div>
+<div class="page" id="page-exit"><div class="card">
+<div class="card-head"><h3>Toplu Stok Çıkışı</h3><span class="muted">Cari ve depo seç, birden fazla ürünü tek işlemde çıkar</span></div>
+<form id="exitForm">
+<div class="form-grid cols-3">
+<div class="field"><label>Çıkış Yapılacak Depo *</label><select id="exitWarehouse" required></select></div>
+<div class="field"><label>Cari / Teslim Edilen Firma *</label><select id="exitFirm" required></select></div>
+<div class="field"><label>Çıkış Nedeni</label><select id="exitReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Diğer</option></select></div>
+<div class="field"><label>Teslim Alan Kişi</label><input id="exitReceiver" placeholder="Cari yetkilisi / teslim alan"></div>
+<div class="field"><label>Belge / İrsaliye No</label><input id="exitDoc"></div>
+<div class="field"><label>İşlem Tarihi</label><input id="exitDate" type="datetime-local"></div>
+<div class="field full"><label>Açıklama</label><textarea id="exitNotes"></textarea></div>
+</div>
+<div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="exitProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('exit',true)">Görünenleri Seç</button>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('exit',false)">Görünen Seçimleri Kaldır</button></div>
+<div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Mevcut Stok</th><th>Çıkış Miktarı</th><th>Birim</th><th>İşlem Sonrası</th></tr></thead><tbody id="exitBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
+<div id="exitBatchSummary" class="inline-info" style="margin-top:12px">Çıkış için depo ve cari seçin.</div>
+<div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Stok Çıkışını Kaydet</button></div>
+</form></div></div>
 <div class="page" id="page-transfer"><div class="card"><h3>Depolar Arası Transfer</h3><form id="transferForm"><div class="form-grid cols-3"><div class="field"><label>Kaynak Depo *</label><select id="transferFrom" required=""></select></div><div class="field"><label>Hedef Depo *</label><select id="transferTo" required=""></select></div><div class="field"><label>Ürün *</label><select id="transferProduct" required=""></select></div><div class="field"><label>Kaynak Depo Stoku</label><input id="transferCurrent" readonly=""/></div><div class="field"><label>Birim *</label><select id="transferUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="transferQtyLabel">Miktar (Koli) *</label><input id="transferQty" min="1" required="" step="1" inputmode="numeric" type="number"/></div><div class="field"><label>Transfer No</label><input id="transferDoc"/></div><div class="field"><label>İşlem Tarihi</label><input id="transferDate" type="datetime-local"/></div><div class="field full"><label>Açıklama</label><textarea id="transferNotes"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">Transferi Kaydet</button></div></form></div></div>
 <div class="page" id="page-count"><div class="card"><h3>Stok Sayımı</h3><form id="countForm"><div class="form-grid cols-3"><div class="field"><label>Depo *</label><select id="countWarehouse" required=""></select></div><div class="field"><label>Ürün *</label><select id="countProduct" required=""></select></div><div class="field"><label>Sistem Stoku</label><input id="countSystem" readonly=""/></div><div class="field"><label>Birim *</label><select id="countUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="countActualLabel">Sayılan Gerçek Stok (Koli) *</label><input id="countActual" min="0" required="" step="1" inputmode="numeric" type="number"/></div><div class="field"><label>Sayımı Yapan</label><input id="countPerson"/></div><div class="field"><label>İşlem Tarihi</label><input id="countDate" type="datetime-local"/></div><div class="field full"><label>Açıklama</label><textarea id="countNotes"></textarea></div></div><div class="inline-info" id="countDifference" style="margin-top:12px">Fark: 0</div><div class="actions"><button class="btn btn-primary" type="submit">Sayımı Kaydet ve Stoku Düzelt</button></div></form></div></div>
 <div class="page" id="page-stock"><div class="card"><div class="card-head"><h3>Stok Durumu</h3><button class="btn btn-light btn-sm" onclick="exportStockCSV()">Excel/CSV İndir</button></div><div class="filter-row"><div class="field"><label>Depo</label><select id="stockWarehouseFilter"></select></div><div class="field"><label>Arama</label><input id="stockSearch" placeholder="Kod, barkod, ürün..."/></div><div class="field"><label>Durum</label><select id="stockStatusFilter"><option value="all">Tümü</option><option value="positive">Stokta Var</option><option value="critical">Kritik</option><option value="zero">Stok Bitti</option></select></div></div><div class="table-wrap"><table><thead><tr><th>Depo</th><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Birim</th><th class="num">Mevcut Stok</th><th class="num">Min.</th><th class="num">Stok Değeri</th><th>Durum</th></tr></thead><tbody id="stockTable"></tbody></table></div></div></div>
@@ -445,7 +495,7 @@ function deleteMovement(id,fromEditor=false){
 function fillSelect(id,items,placeholder='Seçiniz'){const node=el(id);if(!node)return;const old=node.value;node.innerHTML=`<option value="">${esc(placeholder)}</option>`+items.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('');if(items.some(x=>x.id===old))node.value=old}
 function fillAllSelects(){
   const wh=db.warehouses.map(x=>({id:x.id,label:`${x.code} - ${x.name}`}));const pr=db.products.filter(x=>x.active!==false).map(x=>({id:x.id,label:`${x.code} - ${x.name}`}));const fi=db.firms.filter(x=>x.active!==false).map(x=>({id:x.id,label:`${x.code?x.code+' - ':''}${x.name}`}));const us=db.users.map(x=>({id:x.id,label:`${x.fullName} (${x.username})`}));
-  ['entryWarehouse','exitWarehouse','transferFrom','transferTo','countWarehouse'].forEach(id=>fillSelect(id,wh));['entryProduct','exitProduct','transferProduct','countProduct'].forEach(id=>fillSelect(id,pr));fillSelect('exitFirm',fi,'Firma seçiniz (isteğe bağlı)');
+  ['entryWarehouse','exitWarehouse','transferFrom','transferTo','countWarehouse'].forEach(id=>fillSelect(id,wh));['transferProduct','countProduct'].forEach(id=>fillSelect(id,pr));fillSelect('exitFirm',fi,'Cari / firma seçiniz');
   fillSelect('dashboardWarehouseFilter',[{id:'all',label:'Tüm Depolar'},...wh],'Tüm Depolar');if(!el('dashboardWarehouseFilter').value)el('dashboardWarehouseFilter').value='all';
   fillSelect('reportWarehouse',[{id:'all',label:'Tüm Depolar'},...wh],'Tüm Depolar');if(!el('reportWarehouse').value)el('reportWarehouse').value='all';
   fillSelect('stockWarehouseFilter',[{id:'all',label:'Tüm Depolar'},...wh],'Tüm Depolar');if(!el('stockWarehouseFilter').value)el('stockWarehouseFilter').value='all';
@@ -499,9 +549,162 @@ function resetFirmForm(){el('firmForm').reset();el('firmId').value='';el('firmAc
 function deleteFirm(id){if(!requirePermission('firms')||!requireAdminAction())return;const f=firmById(id);if(!f)return;if(db.movements.some(m=>m.firmId===id))return notify('Stok hareketinde kullanılan firma silinemez. Pasif yapabilirsiniz.',true);if(!confirm('Firma kartı silinsin mi?'))return;db.firms=db.firms.filter(x=>x.id!==id);audit('Firma silindi','Firmalar',f.name);saveDB();notify('Firma silindi.')}
 
 function requireCards(){if(!db.warehouses.length||!db.products.filter(x=>x.active!==false).length){notify('Önce depo ve ürün kartı oluşturmalısınız.',true);return false}return true}
-function saveEntry(e){e.preventDefault();if(!requirePermission('entry'))return;if(!requireCards())return;const w=el('entryWarehouse').value,p=el('entryProduct').value,inputUnit=el('entryUnit').value||'Koli',inputQuantity=num(el('entryQty').value);if(!requireWhole(el('entryQty').value,'Miktar'))return;if(!w||!p||inputQuantity<=0)return notify('Depo, ürün ve miktar zorunludur.',true);const q=toCartons(p,inputQuantity,inputUnit),before=getStock(w,p),after=before+q,product=productById(p),notes=el('entryNotes').value.trim();setStock(w,p,after);addMovement({type:'GIRIS',warehouseId:w,productId:p,quantity:q,inputUnit,inputQuantity,before,after,date:el('entryDate').value||new Date().toISOString(),doc:el('entryDoc').value.trim(),detail:notes,lot:el('entryLot').value.trim(),expiry:el('entryExpiry').value,unitCost:num(product?.purchasePrice)});audit('Stok girişi','Stok Hareketi',`${product?.name||''} | ${warehouseById(w)?.name||''} | +${qty(inputQuantity)} ${inputUnit}`);saveDB();e.target.reset();el('entryUnit').value='Koli';updateUnitLabel('entry');setDefaultDates();notify('Stok girişi kaydedildi.')}
-function updateExitCurrent(){const p=el('exitProduct').value;el('exitCurrent').value=p?formatStockAmount(p,getStock(el('exitWarehouse').value,p)):'0 Koli'}
-function saveExit(e){e.preventDefault();if(!requirePermission('exit'))return;const w=el('exitWarehouse').value,p=el('exitProduct').value,inputUnit=el('exitUnit').value||'Koli',inputQuantity=num(el('exitQty').value);if(!requireWhole(el('exitQty').value))return;if(!w||!p||inputQuantity<=0)return notify('Depo, ürün ve miktar zorunludur.',true);const q=toCartons(p,inputQuantity,inputUnit),before=getStock(w,p),after=before-q;if(after<-0.000000001&&!db.settings.allowNegative)return notify(`Yetersiz stok. Mevcut: ${formatStockAmount(p,before)}`,true);const firm=firmById(el('exitFirm').value),receiver=el('exitReceiver').value.trim(),reason=el('exitReason').value,notes=el('exitNotes').value.trim();setStock(w,p,after);addMovement({type:'CIKIS',warehouseId:w,productId:p,quantity:q,inputUnit,inputQuantity,before,after,date:el('exitDate').value||new Date().toISOString(),doc:el('exitDoc').value.trim(),firmId:firm?.id||'',firmName:firm?.name||'',reason,detail:`${reason}${firm?` | Firma: ${firm.name}`:''}${receiver?` | Teslim alan: ${receiver}`:''}${notes?' | '+notes:''}`});audit('Stok çıkışı','Stok Hareketi',`${productById(p)?.name||''} | ${warehouseById(w)?.name||''} | -${qty(inputQuantity)} ${inputUnit}${firm?' | '+firm.name:''}`);saveDB();e.target.reset();el('exitUnit').value='Koli';updateUnitLabel('exit');setDefaultDates();updateExitCurrent();notify('Stok çıkışı kaydedildi.')}
+
+function readBatchDraft(prefix){
+  const rows=el(prefix+'BatchRows');const data={};
+  if(!rows)return data;
+  rows.querySelectorAll('tr[data-product-id]').forEach(row=>{
+    const id=row.dataset.productId;
+    data[id]={checked:row.querySelector('.batch-check').checked,
+      quantity:row.querySelector('.batch-qty').value,unit:row.querySelector('.batch-unit').value};
+  });
+  return data;
+}
+function renderBatchRows(prefix,reset=false){
+  const body=el(prefix+'BatchRows'),warehouse=el(prefix+'Warehouse')?.value;
+  if(!body)return;
+  const prior=reset?{}:readBatchDraft(prefix);
+  if(!warehouse){
+    body.innerHTML='<tr><td colspan="7" class="empty">Önce depo seçin.</td></tr>';
+    updateBatchSummary(prefix);return;
+  }
+  const products=db.products.filter(p=>p.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+  if(!products.length){
+    body.innerHTML='<tr><td colspan="7" class="empty">Aktif ürün bulunamadı. Ürünler bölümünden ürün ekleyin.</td></tr>';
+    updateBatchSummary(prefix);return;
+  }
+  body.innerHTML=products.map(p=>{
+    const draft=prior[p.id]||{},unit=draft.unit==='Adet'?'Adet':'Koli',
+      search=[p.code,p.barcode,p.name,p.category].join(' ').toLocaleLowerCase('tr-TR');
+    return `<tr data-product-id="${esc(p.id)}" data-search="${esc(search)}">
+      <td><input class="batch-check" type="checkbox" aria-label="${esc(p.name)} seç" ${draft.checked?'checked':''}></td>
+      <td>${esc(p.code||'-')}</td>
+      <td class="batch-name">${esc(p.name)}</td>
+      <td class="batch-stock">${esc(formatStockAmount(p.id,getStock(warehouse,p.id)))}</td>
+      <td><input class="batch-qty" type="number" min="1" step="1" inputmode="numeric" placeholder="0" value="${esc(draft.quantity||'')}" aria-label="${esc(p.name)} miktarı"></td>
+      <td><select class="batch-unit" aria-label="${esc(p.name)} birimi"><option value="Koli" ${unit==='Koli'?'selected':''}>Koli</option><option value="Adet" ${unit==='Adet'?'selected':''}>Adet</option></select></td>
+      <td class="batch-after">—</td></tr>`;
+  }).join('');
+  body.querySelectorAll('tr[data-product-id]').forEach(row=>updateBatchPreview(prefix,row));
+  filterBatchRows(prefix);
+}
+function updateBatchPreview(prefix,row){
+  const warehouse=el(prefix+'Warehouse').value,id=row.dataset.productId,selected=row.querySelector('.batch-check').checked,
+    value=row.querySelector('.batch-qty').value.trim(),unit=row.querySelector('.batch-unit').value;
+  const amount=Number(value),valid=/^\d+$/.test(value)&&Number.isSafeInteger(amount)&&amount>0;
+  const target=row.querySelector('.batch-after');
+  row.classList.toggle('batch-selected',selected);
+  target.classList.remove('batch-low');
+  if(!selected||!valid){target.textContent='—';return}
+  const after=getStock(warehouse,id)+(prefix==='entry'?1:-1)*toCartons(id,amount,unit);
+  target.textContent=formatStockAmount(id,after);
+  if(after< -0.000000001&&!db.settings.allowNegative)target.classList.add('batch-low');
+}
+function updateBatchSummary(prefix){
+  const root=el(prefix+'BatchRows'),summary=el(prefix+'BatchSummary');
+  if(!summary)return;
+  const selected=[...(root?.querySelectorAll('tr[data-product-id]')||[])].filter(r=>r.querySelector('.batch-check').checked);
+  summary.textContent=selected.length?
+    selected.length+' ürün seçildi. Miktarları kontrol edip tek seferde kaydedebilirsiniz.':
+    (prefix==='entry'?'Ürünleri işaretleyin veya miktar yazın; her satır ayrı stok hareketi olarak kaydedilir.':
+      'Ürünleri işaretleyin veya miktar yazın. Cari ve çıkış miktarları tüm seçilen ürünler için birlikte kaydedilir.');
+}
+function filterBatchRows(prefix){
+  const query=(el(prefix+'ProductSearch')?.value||'').trim().toLocaleLowerCase('tr-TR');
+  el(prefix+'BatchRows').querySelectorAll('tr[data-product-id]').forEach(row=>{row.hidden=!!query&&!row.dataset.search.includes(query)});
+  updateBatchSummary(prefix);
+}
+function toggleBatchVisible(prefix,checked){
+  const rows=[...el(prefix+'BatchRows').querySelectorAll('tr[data-product-id]')].filter(row=>!row.hidden);
+  rows.forEach(row=>{row.querySelector('.batch-check').checked=checked;updateBatchPreview(prefix,row)});
+  updateBatchSummary(prefix);
+}
+function handleBatchInput(prefix,e){
+  const row=e.target.closest('tr[data-product-id]');
+  if(!row)return;
+  if(e.target.classList.contains('batch-qty')){
+    const value=e.target.value.trim();
+    row.querySelector('.batch-check').checked=!!value&&Number(value)>0;
+  }
+  updateBatchPreview(prefix,row);updateBatchSummary(prefix);
+}
+function selectedBatchItems(prefix){
+  const rows=[...el(prefix+'BatchRows').querySelectorAll('tr[data-product-id]')].filter(r=>r.querySelector('.batch-check').checked);
+  if(!rows.length){notify('Kaydetmek için en az bir ürün seçin ve miktar girin.',true);return null}
+  if(rows.length>100){notify('Tek kayıtta en fazla 100 ürün seçilebilir. İşlemi iki parçaya ayırın.',true);return null}
+  const warehouse=el(prefix+'Warehouse').value;
+  if(!warehouse||!warehouseById(warehouse)){notify('Önce geçerli bir depo seçin.',true);return null}
+  const out=[];
+  for(const row of rows){
+    const p=productById(row.dataset.productId),value=row.querySelector('.batch-qty').value.trim(),amount=Number(value),
+      unit=row.querySelector('.batch-unit').value;
+    if(!p||p.active===false){notify('Seçilen ürün artık aktif değil. Sayfayı yenileyin.',true);return null}
+    if(!/^\d+$/.test(value)||!Number.isSafeInteger(amount)||amount<=0){
+      notify(p.name+' için sıfırdan büyük tam sayı miktar girin.',true);return null
+    }
+    const quantity=toCartons(p.id,amount,unit),before=getStock(warehouse,p.id),
+      after=before+(prefix==='entry'?quantity:-quantity);
+    if(prefix==='exit'&&after< -0.000000001&&!db.settings.allowNegative){
+      notify(p.name+' için stok yetersiz. Mevcut: '+formatStockAmount(p.id,before),true);return null
+    }
+    out.push({product:p,amount,unit,quantity,before,after});
+  }
+  return out;
+}
+function resetBatchForm(prefix,warehouse,firmId=''){
+  el(prefix+'Form').reset();
+  el(prefix+'Warehouse').value=warehouse;
+  if(prefix==='exit')el('exitFirm').value=firmId;
+  el(prefix+'ProductSearch').value='';
+  el(prefix+'BatchRows').querySelectorAll('tr[data-product-id]').forEach(row=>{
+    row.querySelector('.batch-check').checked=false;
+    row.querySelector('.batch-qty').value='';
+    row.querySelector('.batch-unit').value='Koli';
+    updateBatchPreview(prefix,row);
+  });
+  filterBatchRows(prefix);
+  setDefaultDates();
+}
+function saveEntry(e){
+  e.preventDefault();if(!requirePermission('entry')||!requireCards())return;
+  const items=selectedBatchItems('entry');if(!items)return;
+  const warehouse=el('entryWarehouse').value,doc=el('entryDoc').value.trim(),
+    date=el('entryDate').value||new Date().toISOString(),
+    notes=el('entryNotes').value.trim(),lot=el('entryLot').value.trim(),expiry=el('entryExpiry').value,
+    batchId=uid('batch');
+  items.forEach(({product,amount,unit,quantity,before,after})=>{
+    setStock(warehouse,product.id,after);
+    addMovement({type:'GIRIS',groupId:batchId,warehouseId:warehouse,productId:product.id,
+      quantity,inputUnit:unit,inputQuantity:amount,before,after,date,doc,detail:notes,lot,expiry,
+      unitCost:num(product.purchasePrice)});
+  });
+  audit('Toplu stok girişi','Stok Hareketi',
+    warehouseById(warehouse).name+' | '+items.length+' ürün | '+(doc||'Belgesiz'));
+  resetBatchForm('entry',warehouse);
+  saveDB();
+  notify(items.length+' ürünün stok girişi kayda alındı. Drive senkronizasyonu başlatıldı.');
+}
+function saveExit(e){
+  e.preventDefault();if(!requirePermission('exit'))return;
+  const warehouse=el('exitWarehouse').value,firm=firmById(el('exitFirm').value);
+  if(!firm||firm.active===false){notify('Stok çıkışı için önce bir cari / firma seçin.',true);return}
+  const items=selectedBatchItems('exit');if(!items)return;
+  const doc=el('exitDoc').value.trim(),date=el('exitDate').value||new Date().toISOString(),
+    receiver=el('exitReceiver').value.trim(),reason=el('exitReason').value,
+    notes=el('exitNotes').value.trim(),batchId=uid('batch');
+  items.forEach(({product,amount,unit,quantity,before,after})=>{
+    setStock(warehouse,product.id,after);
+    addMovement({type:'CIKIS',groupId:batchId,warehouseId:warehouse,productId:product.id,
+      quantity,inputUnit:unit,inputQuantity:amount,before,after,date,doc,
+      firmId:firm.id,firmName:firm.name,reason,
+      detail:`${reason} | Firma: ${firm.name}${receiver?' | Teslim alan: '+receiver:''}${notes?' | '+notes:''}`});
+  });
+  audit('Toplu stok çıkışı','Stok Hareketi',
+    warehouseById(warehouse).name+' | Cari: '+firm.name+' | '+items.length+' ürün | '+(doc||'Belgesiz'));
+  resetBatchForm('exit',warehouse,firm.id);
+  saveDB();
+  notify(items.length+' ürünün stok çıkışı kayda alındı. Drive senkronizasyonu başlatıldı.');
+}
 function updateTransferCurrent(){const p=el('transferProduct').value;el('transferCurrent').value=p?formatStockAmount(p,getStock(el('transferFrom').value,p)):'0 Koli'}
 function saveTransfer(e){e.preventDefault();if(!requirePermission('transfer'))return;const from=el('transferFrom').value,to=el('transferTo').value,p=el('transferProduct').value,inputUnit=el('transferUnit').value||'Koli',inputQuantity=num(el('transferQty').value);if(!requireWhole(el('transferQty').value))return;if(!from||!to||!p||inputQuantity<=0)return notify('Kaynak, hedef, ürün ve miktar zorunludur.',true);if(from===to)return notify('Kaynak ve hedef depo aynı olamaz.',true);const q=toCartons(p,inputQuantity,inputUnit),b1=getStock(from,p),a1=b1-q;if(a1<-0.000000001&&!db.settings.allowNegative)return notify(`Kaynak depoda yeterli stok yok. Mevcut: ${formatStockAmount(p,b1)}`,true);const b2=getStock(to,p),a2=b2+q,g=uid('tr');setStock(from,p,a1);setStock(to,p,a2);const date=el('transferDate').value||new Date().toISOString(),doc=el('transferDoc').value.trim(),notes=el('transferNotes').value.trim();addMovement({type:'TRANSFER_CIKIS',warehouseId:from,productId:p,quantity:q,inputUnit,inputQuantity,before:b1,after:a1,date,doc,detail:`Hedef: ${warehouseById(to)?.name||''}${notes?' | '+notes:''}`,groupId:g});addMovement({type:'TRANSFER_GIRIS',warehouseId:to,productId:p,quantity:q,inputUnit,inputQuantity,before:b2,after:a2,date,doc,detail:`Kaynak: ${warehouseById(from)?.name||''}${notes?' | '+notes:''}`,groupId:g});audit('Depo transferi','Stok Hareketi',`${productById(p)?.name||''} | ${warehouseById(from)?.name||''} → ${warehouseById(to)?.name||''} | ${qty(inputQuantity)} ${inputUnit}`);saveDB();e.target.reset();el('transferUnit').value='Koli';updateUnitLabel('transfer');setDefaultDates();updateTransferCurrent();notify('Depo transferi kaydedildi.')}
 function updateCount(){const p=el('countProduct').value,s=getStock(el('countWarehouse').value,p);el('countSystem').value=p?formatStockAmount(p,s):'0 Koli';const unit=el('countUnit')?.value||'Koli',input=el('countActual').value,a=input===''?s:toCartons(p,num(input),unit),d=a-s;el('countDifference').textContent=`Fark: ${p?formatStockAmount(p,d):'0 Koli'}`;el('countDifference').className='inline-info '+(Math.abs(d)<0.000000001?'ok-info':d<0?'danger-info':'')}
@@ -735,7 +938,7 @@ function clearAllAuditLogs(){
 }
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderStock();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateExitCurrent();updateTransferCurrent();updateCount();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();renderBatchRows('entry');renderBatchRows('exit');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderStock();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();updateCount();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
@@ -744,7 +947,11 @@ el('productSearch').addEventListener('input',renderProducts);el('productForm').a
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('movementEditForm').addEventListener('submit',saveMovementEdit);el('movementEditModal').addEventListener('click',e=>{if(e.target===el('movementEditModal'))closeMovementEditor()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&el('movementEditModal').classList.contains('show'))closeMovementEditor()});
 el('entryForm').addEventListener('submit',saveEntry);el('exitForm').addEventListener('submit',saveExit);el('transferForm').addEventListener('submit',saveTransfer);el('countForm').addEventListener('submit',saveCount);
-el('exitWarehouse').addEventListener('change',updateExitCurrent);el('exitProduct').addEventListener('change',updateExitCurrent);el('transferFrom').addEventListener('change',updateTransferCurrent);el('transferProduct').addEventListener('change',updateTransferCurrent);el('countWarehouse').addEventListener('change',updateCount);el('countProduct').addEventListener('change',updateCount);el('countActual').addEventListener('input',updateCount);['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>el(id).addEventListener('change',()=>{updateUnitLabel(id.replace('Unit',''));if(id==='exitUnit')updateExitCurrent();if(id==='transferUnit')updateTransferCurrent();if(id==='countUnit')updateCount()}));el('movementEditUnit').addEventListener('change',()=>{const type=el('movementEditType').value,unit=el('movementEditUnit').value;el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+` (${unit}) *`});
+['entry','exit'].forEach(prefix=>{
+  el(prefix+'Warehouse').addEventListener('change',()=>renderBatchRows(prefix,true));
+  el(prefix+'ProductSearch').addEventListener('input',()=>filterBatchRows(prefix));
+  ['input','change'].forEach(event=>el(prefix+'BatchRows').addEventListener(event,e=>handleBatchInput(prefix,e)));
+});el('transferFrom').addEventListener('change',updateTransferCurrent);el('transferProduct').addEventListener('change',updateTransferCurrent);el('countWarehouse').addEventListener('change',updateCount);el('countProduct').addEventListener('change',updateCount);el('countActual').addEventListener('input',updateCount);['transferUnit','countUnit'].forEach(id=>el(id).addEventListener('change',()=>{updateUnitLabel(id.replace('Unit',''));if(id==='transferUnit')updateTransferCurrent();if(id==='countUnit')updateCount()}));el('movementEditUnit').addEventListener('change',()=>{const type=el('movementEditType').value,unit=el('movementEditUnit').value;el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+` (${unit}) *`});
 el('dashboardWarehouseFilter').addEventListener('change',renderDashboard);['reportFrom','reportTo','reportWarehouse'].forEach(id=>el(id).addEventListener('change',renderReports));['stockWarehouseFilter','stockStatusFilter'].forEach(id=>el(id).addEventListener('change',renderStock));el('stockSearch').addEventListener('input',renderStock);
 ['movementType','movementWarehouse','movementProduct','movementFirm','movementUser','movementFrom','movementTo'].forEach(id=>el(id).addEventListener('change',renderMovements));
 ['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id).addEventListener('change',renderAudit));el('auditSearch').addEventListener('input',renderAudit);
