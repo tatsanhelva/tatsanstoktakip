@@ -224,19 +224,24 @@
   <div class="field"><label>Genel İskonto (%)</label><input id="orderDiscount" type="text" value="0" maxlength="60" inputmode="decimal" autocomplete="off" placeholder="Örn. 20+5">
   <small class="muted">20+5 = önce %20, sonra kalan tutara %5 (etkili %24)</small>
   <small id="orderDiscountFeedback" role="status" aria-live="polite"></small></div>
+  <div class="field"><label>KDV Oranı (%)</label><input id="orderVatRate" type="number" min="0" max="100" step="0.01" value="1" inputmode="decimal" required>
+  <small class="muted">Varsayılan %1; iskonto sonrası tutara uygulanır.</small>
+  <small id="orderVatFeedback" role="status" aria-live="polite"></small></div>
   <div class="order-totals">
-   <div><span>Ara Toplam</span><b id="orderSubtotal">₺0,00</b></div>
+   <div><span>Ara Toplam (KDV Hariç)</span><b id="orderSubtotal">₺0,00</b></div>
    <div><span>İskonto Tutarı</span><b id="orderDiscountAmount">₺0,00</b></div>
-   <div class="order-total"><span>İskontolu Toplam</span><b id="orderGrandTotal">₺0,00</b></div>
+   <div><span>İskontolu Tutar (KDV Hariç)</span><b id="orderNetTotal">₺0,00</b></div>
+   <div><span>KDV Tutarı</span><b id="orderVatAmount">₺0,00</b></div>
+   <div class="order-total"><span>KDV Dahil Genel Toplam</span><b id="orderGrandTotal">₺0,00</b></div>
   </div>
  </div>
- <p class="muted" style="font-size:12px;margin:12px 0 0">Sipariş kaydı stok miktarlarını veya cari borç bakiyesini değiştirmez. Fiyatlar KDV hariç hesaplanır; KDV bu formda hesaplanmaz.</p>
+ <p class="muted" style="font-size:12px;margin:12px 0 0">Fiyatlar KDV hariç girilir. İskonto düşülür, kalan tutara seçilen KDV oranı uygulanır. Sipariş stok miktarlarını veya cari borç bakiyesini değiştirmez.</p>
  <div class="actions"><button type="submit" id="orderSaveBtn" class="btn btn-primary">Siparişi Kaydet</button><button type="button" class="btn btn-light" onclick="resetOrderForm()">Yeni Sipariş / Temizle</button></div>
  </form>
 </div>
 <div class="card">
  <div class="card-head"><h3>Kaydedilen Siparişler</h3><input id="orderSearch" placeholder="Sipariş no, cari, ürün ara..." style="max-width:300px"></div>
- <div class="table-wrap"><table style="min-width:800px"><thead><tr><th>Sipariş No</th><th>Tarih</th><th>Cari / Firma</th><th>Ürün Sayısı</th><th>İskonto</th><th class="num">Sipariş Toplamı</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="orderListRows"></tbody></table></div>
+ <div class="table-wrap"><table style="min-width:800px"><thead><tr><th>Sipariş No</th><th>Tarih</th><th>Cari / Firma</th><th>Ürün Sayısı</th><th>İskonto</th><th class="num">KDV Dahil Sipariş Toplamı</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="orderListRows"></tbody></table></div>
 </div>
 </div>
 <div class="page" id="page-entry"><div class="card">
@@ -1312,6 +1317,29 @@ function calculateOrderDiscount(subtotalCents,expression){
  const discountCents=Math.round(subtotalCents*discount.basisPoints/10000);
  return {...discount,discountCents,totalCents:subtotalCents-discountCents};
 }
+function parseOrderVatRate(value){
+ const text=String(value??'').trim();
+ if(!/^\d{1,3}(?:[.,]\d{1,2})?$/.test(text))return null;
+ const rate=Number(text.replace(',','.'));
+ if(!Number.isFinite(rate)||rate<0||rate>100)return null;
+ return Math.round(rate*100);
+}
+function calculateOrderVat(netCents,vatRateBasisPoints){
+ if(!Number.isSafeInteger(netCents)||netCents<0||!Number.isInteger(vatRateBasisPoints)||
+    vatRateBasisPoints<0||vatRateBasisPoints>10000)return null;
+ const vatCents=Math.round(netCents*vatRateBasisPoints/10000);
+ const grandTotalCents=netCents+vatCents;
+ return Number.isSafeInteger(grandTotalCents)?{vatRateBasisPoints,vatCents,grandTotalCents}:null;
+}
+function storedOrderVat(order){
+ const net=Number(order?.totalCents||0),bp=order?.vatRateBasisPoints;
+ const vat=calculateOrderVat(net,bp);
+ if(vat&&vat.vatCents===order.vatCents&&vat.grandTotalCents===order.grandTotalCents)
+  return {...vat,hasVat:true};
+ // Eski siparişlere geriye dönük olarak KDV eklemeyiz.
+ return {vatRateBasisPoints:null,vatCents:0,grandTotalCents:net,hasVat:false};
+}
+function orderPayableCents(order){return storedOrderVat(order).grandTotalCents}
 function getOrderQuote(shouldNotify=false){
  const rows=orderEditableRows(),out=[];
  if(shouldNotify&&!rows.length){notify('Siparişe en az bir ürün ekleyin.',true);return null}
@@ -1343,8 +1371,16 @@ function getOrderQuote(shouldNotify=false){
   if(shouldNotify)notify('İskonto 20+5 veya 10+5+2 gibi yazılmalıdır. Her oran 0-100 arasında olabilir.',true);
   return null;
  }
+ const vatRateBasisPoints=parseOrderVatRate(el('orderVatRate').value);
+ const vat=calculateOrderVat(discount.totalCents,vatRateBasisPoints);
+ if(!vat){
+  if(shouldNotify)notify('KDV oranı 0-100 arasında ve en fazla iki ondalıklı olmalıdır.',true);
+  return null;
+ }
  return {lines:out,subtotalCents,discountBasisPoints:discount.basisPoints,
-  discountExpression:discount.expression,discountCents:discount.discountCents,totalCents:discount.totalCents};
+  discountExpression:discount.expression,discountCents:discount.discountCents,
+  // totalCents eski sunucu sözleşmesindeki KDV hariç net tutardır.
+  totalCents:discount.totalCents,...vat};
 }
 function updateOrderTotals(){
  let subtotal=0;
@@ -1365,9 +1401,16 @@ function updateOrderTotals(){
   feedback.textContent='Geçersiz iskonto. Örnek: 20+5 veya 10+5+2';
   feedback.style.color='#b42318';
  }
+ const bp=parseOrderVatRate(el('orderVatRate').value);
+ const vat=discount?calculateOrderVat(discount.totalCents,bp):null;
+ const vatFeedback=el('orderVatFeedback');
+ vatFeedback.textContent=bp===null?'KDV oranını 0-100 arasında girin.':'';
+ vatFeedback.style.color=bp===null?'#b42318':'';
  el('orderSubtotal').textContent=orderMoney(subtotal);
  el('orderDiscountAmount').textContent=discount?'−'+orderMoney(discount.discountCents):'—';
- el('orderGrandTotal').textContent=discount?orderMoney(discount.totalCents):'—';
+ el('orderNetTotal').textContent=discount?orderMoney(discount.totalCents):'—';
+ el('orderVatAmount').textContent=vat?'+'+orderMoney(vat.vatCents):'—';
+ el('orderGrandTotal').textContent=vat?orderMoney(vat.grandTotalCents):'—';
 }
 function handleOrderLineEvent(e){
  const row=e.target.closest('tr[data-order-product-id]');if(!row)return;
@@ -1396,6 +1439,7 @@ function resetOrderForm(){
  el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
  el('orderDate').value=localDateTimeValue().slice(0,10);
  el('orderDiscount').value='0';
+ el('orderVatRate').value='1';
  el('orderNumber').value=nextOrderNumber();
  updateOrderTotals();
 }
