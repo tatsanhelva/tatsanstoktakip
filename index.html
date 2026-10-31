@@ -1584,15 +1584,15 @@ function renderBatchRows(prefix,reset=false){
     updateBatchSummary(prefix);return;
   }
   body.innerHTML=products.map(p=>{
-    const draft=prior[p.id]||{},unit=draft.unit==='Adet'?'Adet':'Koli',
+    const draft=prior[p.id]||{},unit=stockUnitOptions(p.id).includes(draft.unit)?draft.unit:defaultStockUnit(p.id),
       search=[p.code,p.barcode,p.name,p.category].join(' ').toLocaleLowerCase('tr-TR');
     return `<tr data-product-id="${esc(p.id)}" data-search="${esc(search)}">
       <td><input class="batch-check" type="checkbox" aria-label="${esc(p.name)} seç" ${draft.checked?'checked':''}></td>
       <td>${esc(p.code||'-')}</td>
       <td class="batch-name">${esc(p.name)}</td>
       <td class="batch-stock">${esc(formatStockAmount(p.id,getStock(warehouse,p.id)))}</td>
-      <td><input class="batch-qty" type="number" min="${prefix==='count'?'0':'1'}" step="1" inputmode="numeric" placeholder="${prefix==='count'?'Sayılan':'0'}" value="${esc(draft.quantity??'')}" aria-label="${esc(p.name)} ${prefix==='count'?'sayılan stok':'miktarı'}"></td>
-      <td><select class="batch-unit" aria-label="${esc(p.name)} birimi"><option value="Koli" ${unit==='Koli'?'selected':''}>Koli</option><option value="Adet" ${unit==='Adet'?'selected':''}>Adet</option></select></td>
+      <td><input class="batch-qty" type="number" min="${prefix==='count'?'0':'0.001'}" step="${unit==='Kg'?'0.001':'1'}" inputmode="decimal" placeholder="${prefix==='count'?'Sayılan':'0'}" value="${esc(draft.quantity??'')}" aria-label="${esc(p.name)} ${prefix==='count'?'sayılan stok':'miktarı'}"></td>
+      <td><select class="batch-unit" aria-label="${esc(p.name)} birimi">${stockUnitOptions(p.id).map(u=>`<option value="${u}" ${u===unit?'selected':''}>${u}</option>`).join('')}</select></td>
       <td class="batch-after">—</td></tr>`;
   }).join('');
   body.querySelectorAll('tr[data-product-id]').forEach(row=>updateBatchPreview(prefix,row));
@@ -1601,7 +1601,7 @@ function renderBatchRows(prefix,reset=false){
 function updateBatchPreview(prefix,row){
   const warehouse=el(prefix+'Warehouse').value,id=row.dataset.productId,selected=row.querySelector('.batch-check').checked,
     value=row.querySelector('.batch-qty').value.trim(),unit=row.querySelector('.batch-unit').value;
-  const amount=Number(value),valid=/^\d+$/.test(value)&&Number.isSafeInteger(amount)&&(prefix==='count'?amount>=0:amount>0);
+  const amount=Number(value),valid=isValidStockInput(value,id,unit,prefix==='count');
   const target=row.querySelector('.batch-after');
   row.classList.toggle('batch-selected',selected);
   target.classList.remove('batch-low');
@@ -1621,7 +1621,7 @@ function updateBatchSummary(prefix){
     const warehouse=el('countWarehouse').value;
     const changes=selected.filter(row=>{
       const v=row.querySelector('.batch-qty').value.trim();
-      if(!/^\d+$/.test(v))return false;
+      if(!isValidStockInput(v,row.dataset.productId,row.querySelector('.batch-unit').value,true))return false;
       return Math.abs(toCartons(row.dataset.productId,Number(v),row.querySelector('.batch-unit').value)-
         getStock(warehouse,row.dataset.productId))>0.000000001;
     }).length;
@@ -1650,8 +1650,12 @@ function handleBatchInput(prefix,e){
   if(!row)return;
   if(e.target.classList.contains('batch-qty')){
     const value=e.target.value.trim();
-    row.querySelector('.batch-check').checked=prefix==='count'
-      ?(/^\d+$/.test(value)&&Number.isSafeInteger(Number(value))):!!value&&Number(value)>0;
+    const unit=row.querySelector('.batch-unit').value;
+    row.querySelector('.batch-check').checked=isValidStockInput(value,row.dataset.productId,unit,prefix==='count');
+  }
+  if(e.target.classList.contains('batch-unit')){
+   row.querySelector('.batch-qty').step=e.target.value==='Kg'?'0.001':'1';
+   row.querySelector('.batch-qty').min=prefix==='count'?'0':e.target.value==='Kg'?'0.001':'1';
   }
   updateBatchPreview(prefix,row);updateBatchSummary(prefix);
 }
@@ -1670,8 +1674,8 @@ function selectedBatchItems(prefix){
     const p=productById(row.dataset.productId),value=row.querySelector('.batch-qty').value.trim(),amount=Number(value),
       unit=row.querySelector('.batch-unit').value;
     if(!p||p.active===false){notify('Seçilen ürün artık aktif değil. Sayfayı yenileyin.',true);return null}
-    if(!/^\d+$/.test(value)||!Number.isSafeInteger(amount)||(prefix==='count'?amount<0:amount<=0)){
-      notify(p.name+' için '+(prefix==='count'?'sıfır veya pozitif':'sıfırdan büyük')+' tam sayı miktar girin.',true);return null
+    if(!isValidStockInput(value,p.id,unit,prefix==='count')){
+      notify(p.name+' için geçerli '+unit+' miktarı girin (KG en fazla 3 ondalık olabilir).',true);return null
     }
     const quantity=toCartons(p.id,amount,unit),before=getStock(warehouse,p.id),
       after=prefix==='count'?quantity:before+(prefix==='entry'?quantity:-quantity);
@@ -1690,7 +1694,8 @@ function resetBatchForm(prefix,warehouse,firmId=''){
   el(prefix+'BatchRows').querySelectorAll('tr[data-product-id]').forEach(row=>{
     row.querySelector('.batch-check').checked=false;
     row.querySelector('.batch-qty').value='';
-    row.querySelector('.batch-unit').value='Koli';
+    row.querySelector('.batch-unit').value=defaultStockUnit(row.dataset.productId);
+    row.querySelector('.batch-qty').step='1';
     updateBatchPreview(prefix,row);
   });
   filterBatchRows(prefix);
