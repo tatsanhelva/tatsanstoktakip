@@ -137,11 +137,11 @@
 <div class="field"><label>Ürün Birimi *</label><select id="productUnit"><option value="Koli">Koli / Adet</option><option value="Kg">Koli / KG</option></select></div>
 <div class="field"><label id="productPackLabel">Koli İçi Adet (İsteğe Bağlı)</label><input id="productPackQty" min="1" step="1" inputmode="decimal" type="number" placeholder="Boşsa 1 adet"/></div>
 <div class="field"><label id="productSaleLabel">Koli Satış Fiyatı (₺)</label><input id="productSale" min="0" step="0.01" type="number" value="0"/></div>
-<div class="field" id="productKgSaleField" style="display:none"><label>KG Satış Fiyatı (₺)</label><input id="productKgSale" min="0" step="0.01" type="number" value="0"/></div>
+<div class="field" id="productKgSaleField" style="display:none"><label>KG Satış Fiyatı (₺) - Otomatik</label><input id="productKgSale" type="text" readonly value="0,00" aria-label="Hesaplanan KG satış fiyatı"/><small class="muted">Koli satış fiyatı ÷ koli ağırlığı</small></div>
 <div class="field"><label>Satış Fiyatını Göster</label>
 <select id="productPriceUnit" aria-label="Satış fiyatı görüntüleme birimi"><option value="Koli">Koli</option><option value="Adet">Adet</option></select></div>
 <div class="field"><label>Seçilen Birim Satış Fiyatı (₺)</label><input id="productUnitPricePreview" type="text" readonly aria-label="Hesaplanan seçili birim fiyatı" value="0,00"/><small id="productPriceFormula" class="muted">Koli fiyatı / koli içi adet</small></div>
-<div class="field full"><small class="muted">Satış fiyatları KDV hariçtir. KG ürününde: Koli = KG fiyatı × koli ağırlığı. Adetli üründe: Adet = Koli fiyatı ÷ koli içi adet.</small></div>
+<div class="field full"><small class="muted">Satış fiyatları KDV hariçtir. KG ürünü: KG fiyatı = Koli satış fiyatı ÷ Koli ağırlığı. Adetli ürün: Adet fiyatı = Koli satış fiyatı ÷ Koli içi adet. Koli fiyatını her zaman manuel girersin.</small></div>
 <div class="field"><label id="productMinLabel">Minimum Stok (Koli)</label><input id="productMin" min="0" step="1" inputmode="numeric" type="number" value="0"/></div>
 <div class="field"><label>Durum</label><select id="productActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></div>
 <div class="field full"><label>Açıklama</label><textarea id="productNotes"></textarea></div>
@@ -827,20 +827,17 @@ function productSalesPrice(product,unit){
  const content=Math.max(0.001,Number(product?.packQty)||1);
  const carton=Math.max(0,Number(product?.salePrice)||0);
  if(unit==='Koli')return Math.round(carton*100)/100;
- if(isKgProduct(product)&&unit==='Kg'){
-  const kg=product.kgSalePrice==null?carton/content:Number(product.kgSalePrice);
-  return Math.round(Math.max(0,kg)*100)/100;
- }
+ // Koli fiyatı tek kaynaktır; eskiden kaydedilmiş kgSalePrice değeri hesaplamayı değiştiremez.
+ if(isKgProduct(product)&&unit==='Kg')return Math.round(carton/content*100)/100;
  if(!isKgProduct(product)&&unit==='Adet')return Math.round(carton/content*100)/100;
  return null;
 }
 function currentProductPriceInput(){
  const kg=el('productUnit').value==='Kg',raw=Number(el('productPackQty').value);
  const content=kg?(Number.isFinite(raw)&&raw>0?raw:0):Math.max(1,whole(raw||1));
- const unitPrice=Number(kg?el('productKgSale').value:el('productSale').value);
- const price=Number.isFinite(unitPrice)&&unitPrice>=0?unitPrice:0;
- return {unit:kg?'Kg':'Koli',packQty:content,salePrice:kg?Math.round(price*content*100)/100:price,
-  kgSalePrice:kg?price:undefined};
+ const price=Number(el('productSale').value);
+ const salePrice=Number.isFinite(price)&&price>=0?price:0;
+ return {unit:kg?'Kg':'Koli',packQty:content,salePrice};
 }
 function updateProductPricePreview(){
  const fields=currentProductPriceInput();
@@ -848,8 +845,8 @@ function updateProductPricePreview(){
  const price=fields.packQty>0?productSalesPrice(fields,selected):null;
  el('productUnitPricePreview').value=price===null?'Koli ağırlığını girin':price.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
  el('productPriceFormula').textContent=fields.unit==='Kg'?
-  (selected==='Kg'?'Ürün kartındaki KG satış fiyatı':'KG satış fiyatı × koli ağırlığı'):
-  (selected==='Adet'?'Koli satış fiyatı ÷ koli içi adet':'Ürün kartındaki koli satış fiyatı');
+  (selected==='Kg'?'Koli satış fiyatı ÷ koli ağırlığı':'Manuel girilen koli satış fiyatı'):
+  (selected==='Adet'?'Koli satış fiyatı ÷ koli içi adet':'Manuel girilen koli satış fiyatı');
 }
 function updateProductUnitUI(){
  const kg=el('productUnit').value==='Kg';
@@ -858,8 +855,8 @@ function updateProductUnitUI(){
  el('productPackQty').min=kg?'0.001':'1';
  el('productPackQty').placeholder=kg?'Örn. Koli başına 10 KG':'Boşsa 1 adet';
  el('productPackQty').required=kg;
- el('productSaleLabel').textContent=kg?'Koli Satış Fiyatı (₺) - Otomatik':'Koli Satış Fiyatı (₺)';
- el('productSale').readOnly=kg;
+ el('productSaleLabel').textContent='Koli Satış Fiyatı (₺) - Manuel';
+ el('productSale').readOnly=false;
  el('productKgSaleField').style.display=kg?'':'none';
  el('productMinLabel').textContent='Minimum Stok (Koli)';
  const select=el('productPriceUnit'),choices=kg?['Koli','Kg']:['Koli','Adet'];
@@ -872,7 +869,9 @@ function updateProductUnitUI(){
 }
 function updateCartonPrice(){
  const fields=currentProductPriceInput();
- if(fields.unit==='Kg')el('productSale').value=fields.packQty>0?fields.salePrice.toFixed(2):'';
+ const kgPrice=fields.unit==='Kg'&&fields.packQty>0?productSalesPrice(fields,'Kg'):null;
+ el('productKgSale').value=kgPrice===null?'Koli ağırlığını girin':
+  kgPrice.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
  updateProductPricePreview();
 }
 
@@ -1113,11 +1112,12 @@ function saveProduct(e){
  }
  const minText=el('productMin').value.trim(),minStock=minText===''?0:Number(minText);
  if(!Number.isSafeInteger(minStock)||minStock<0)return notify('Minimum stok sıfır veya pozitif tam sayı olmalıdır.',true);
- const saleUnit=Number(kg?el('productKgSale').value:el('productSale').value);
- if(!Number.isFinite(saleUnit)||saleUnit<0||Math.abs(saleUnit*100-Math.round(saleUnit*100))>0.00001)
-  return notify('Satış fiyatı sıfır veya pozitif, en fazla iki ondalıklı olmalıdır.',true);
- const kgSalePrice=kg?Math.round(saleUnit*100)/100:undefined;
- const salePrice=kg?Math.round(kgSalePrice*packQty*100)/100:Math.round(saleUnit*100)/100;
+ const saleUnit=Number(el('productSale').value);
+ if(el('productSale').value.trim()===''||!Number.isFinite(saleUnit)||saleUnit<0||
+    Math.abs(saleUnit*100-Math.round(saleUnit*100))>0.00001)
+  return notify('Koli satış fiyatını manuel girin (en fazla iki ondalık).',true);
+ const salePrice=Math.round(saleUnit*100)/100;
+ const kgSalePrice=kg?Math.round(salePrice/packQty*100)/100:undefined;
  if(!Number.isFinite(salePrice)||salePrice>1000000000000)
   return notify('Koli satış fiyatı hesaplanamayacak kadar büyük.',true);
  const itemPrice=existing?.itemPrice??0,purchasePrice=existing?.purchasePrice??0;
@@ -1142,7 +1142,7 @@ function editProduct(id){
  el('productName').value=p.name;el('productCategory').value=p.category||'';
  el('productUnit').value=isKgProduct(p)?'Kg':'Koli';
  el('productPackQty').value=Number(p.packQty)||1;
- el('productKgSale').value=isKgProduct(p)?num(p.kgSalePrice??(num(p.salePrice)/packQtyFor(p.id))):0;
+ el('productKgSale').value='';
  el('productSale').value=num(p.salePrice);el('productMin').value=p.minStock;
  el('productActive').value=String(p.active!==false);el('productNotes').value=p.notes||'';
  updateProductUnitUI();window.scrollTo({top:0,behavior:'smooth'});
@@ -1150,7 +1150,7 @@ function editProduct(id){
 function resetProductForm(){
  el('productForm').reset();el('productId').value='';
  el('productUnit').value='Koli';el('productPackQty').value='';
- el('productKgSale').value=0;
+ el('productKgSale').value='';
  el('productSale').value=0;el('productMin').value=0;
  el('productActive').value='true';updateProductUnitUI();
 }
@@ -2394,7 +2394,7 @@ el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay'
 el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
 el('productExcelInput').addEventListener('change',importProductsExcel);el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productUnit').addEventListener('change',updateProductUnitUI);
 el('productPackQty').addEventListener('input',updateCartonPrice);
-el('productKgSale').addEventListener('input',updateCartonPrice);
+// KG satış fiyatı hesaplanan alandır; yalnızca koli satış fiyatı değiştirilebilir.
 el('productSale').addEventListener('input',updateCartonPrice);
 el('productPriceUnit').addEventListener('change',updateProductPricePreview);
 el('productTable').addEventListener('change',e=>{
