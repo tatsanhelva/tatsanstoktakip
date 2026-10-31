@@ -977,7 +977,7 @@ async function importFirmsExcel(e){
   if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)
    throw new Error('Excel yüklemeden önce bekleyen Drive işlemleri tamamlansın.');
   if(file.size>3000000)throw new Error('Excel dosyası 3 MB sınırını aştı.');
-  if(!/\\.(xlsx|xls|csv)$/i.test(file.name))throw new Error('Excel (.xlsx/.xls) veya CSV dosyası seçin.');
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name))throw new Error('Excel (.xlsx/.xls) veya CSV dosyası seçin.');
   const xlsx=await loadFirmExcelLibrary();
   const content=await file.arrayBuffer(),workbook=xlsx.read(content,{type:'array',cellText:true}),
     sheet=workbook.Sheets[workbook.SheetNames[0]];
