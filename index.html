@@ -132,12 +132,13 @@
 <div class="field"><label>Barkod</label><input id="productBarcode"/></div>
 <div class="field"><label>Ürün Adı *</label><input id="productName" required=""/></div>
 <div class="field"><label>Kategori</label><select id="productCategory"><option value="">Kategori seçiniz</option></select><small class="muted">Kategorileri Kategoriler menüsünden ekleyip silebilirsiniz.</small></div>
-<div class="field"><label>Stok Birimi</label><input id="productUnit" readonly="" value="Koli"/></div>
-<div class="field"><label>Koli İçi Adet (İsteğe Bağlı)</label><input id="productPackQty" min="1" step="1" inputmode="numeric" type="number" placeholder="Boşsa 1 adet"/></div>
-<div class="field"><label>Adet Fiyatı</label><input id="productItemPrice" min="0" step="0.01" type="number" value="0"/></div>
-<div class="field"><label>Koli Fiyatı</label><input class="price-preview" id="productCartonPrice" readonly="" value="0,00"/></div>
-<div class="field"><label>Koli Satış Fiyatı</label><input id="productSale" min="0" step="0.01" type="number" value="0"/></div>
-<div class="field"><label>Minimum Stok (Koli)</label><input id="productMin" min="0" step="1" inputmode="numeric" type="number" value="0"/></div>
+<div class="field"><label>Stok Takip Birimi *</label><select id="productUnit"><option value="Koli">Koli / Adet</option><option value="Kg">KG / Paket</option></select></div>
+<div class="field"><label id="productPackLabel">Koli İçi Adet (İsteğe Bağlı)</label><input id="productPackQty" min="1" step="1" inputmode="decimal" type="number" placeholder="Boşsa 1 adet"/></div>
+<div class="field"><label id="productItemPriceLabel">Adet Alış Fiyatı (₺)</label><input id="productItemPrice" min="0" step="0.01" type="number" value="0"/></div>
+<div class="field"><label id="productCartonPriceLabel">Koli Alış Fiyatı (₺)</label><input class="price-preview" id="productCartonPrice" readonly="" value="0,00"/></div>
+<div class="field"><label id="productSaleLabel">Koli Satış Fiyatı (₺)</label><input id="productSale" min="0" step="0.01" type="number" value="0"/></div>
+<div class="field" id="productKgSaleField" style="display:none"><label>KG Satış Fiyatı (₺)</label><input id="productKgSale" min="0" step="0.01" type="number" value="0"/></div>
+<div class="field"><label id="productMinLabel">Minimum Stok (Koli)</label><input id="productMin" min="0" step="1" inputmode="numeric" type="number" value="0"/></div>
 <div class="field"><label>Durum</label><select id="productActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></div>
 <div class="field full"><label>Açıklama</label><textarea id="productNotes"></textarea></div>
 </div>
@@ -152,7 +153,7 @@
  <input id="productExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
 <p class="muted" style="font-size:12px;margin:0 0 12px">Ürün kodu veya barkod eşleştirilir. Excel sadece ürün kartlarını günceller; mevcut stok miktarları, hareketler ve siparişler değişmez.</p>
-<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Koli İçi</th><th class="num">Adet Fiyatı</th><th class="num">Koli Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
+<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Paket İçi Adet / KG</th><th class="num">Birim Alış Fiyatı</th><th class="num">Paket Alış Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
 </div>
 <div class="page" id="page-categories">
 <div class="card"><h3>Kategori Kartı</h3><form id="categoryForm"><input id="categoryId" type="hidden"/><div class="form-grid cols-2"><div class="field"><label>Kategori Adı *</label><input id="categoryName" required="" placeholder="Örn. Gıda, Ambalaj, Hammadde"/></div><div class="field"><label>Açıklama</label><input id="categoryNotes"/></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kategoriyi Kaydet</button><button class="btn btn-light" onclick="resetCategoryForm()" type="button">Temizle</button></div></form></div>
@@ -366,7 +367,14 @@ function normalizeDB(x){
   d.settings.sheetsUrl=DEFAULT_SHEETS_URL;d.settings.sheetsToken=DEFAULT_SHEETS_TOKEN;d.settings.autoSync=true;
   if(!d.settings.companyName||d.settings.companyName==='Stok Depo Pro')d.settings.companyName='Tatsan Stok Takip';
   d.warehouses=Array.isArray(d.warehouses)?d.warehouses:[];if(!d.warehouses.length)d.warehouses=defaultDB().warehouses;
-  d.products=(Array.isArray(d.products)?d.products:[]).map(p=>{const pack=Math.max(1,whole(p.packQty||1));const carton=num(p.purchasePrice);const item=p.itemPrice!==undefined?num(p.itemPrice):(pack?carton/pack:carton);return {...p,unit:'Koli',packQty:pack,itemPrice:item,purchasePrice:carton||item*pack,rack:p.rack||''}});
+  d.products=(Array.isArray(d.products)?d.products:[]).map(p=>{const kg=p.unit==='Kg',rawPack=Number(p.packQty);
+    const pack=kg?(Number.isFinite(rawPack)&&rawPack>0?Math.round(rawPack*1000)/1000:1):Math.max(1,whole(rawPack||1));
+    const cost=num(p.purchasePrice),item=p.itemPrice!==undefined?num(p.itemPrice):(pack?cost/pack:cost);
+    const sale=num(p.salePrice);
+    return {...p,unit:kg?'Kg':'Koli',packQty:pack,itemPrice:item,
+      purchasePrice:p.purchasePrice!==undefined?cost:Math.round(item*pack*100)/100,
+      kgSalePrice:kg?(p.kgSalePrice!==undefined?num(p.kgSalePrice):Math.round(sale/pack*100)/100):undefined,
+      rack:p.rack||''}});
   const rawCategories=Array.isArray(d.categories)?d.categories:[];const seenCategories=new Set();d.categories=[];
   [...rawCategories,...d.products.map(p=>p.category).filter(Boolean)].forEach(c=>{const obj=typeof c==='string'?{name:c}:c||{};const name=String(obj.name||'').trim();const key=name.toLocaleLowerCase('tr-TR');if(name&&!seenCategories.has(key)){seenCategories.add(key);d.categories.push({id:obj.id||uid('cat'),name,notes:obj.notes||''})}});
   d.firms=Array.isArray(d.firms)?d.firms:[];d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
@@ -374,7 +382,7 @@ function normalizeDB(x){
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
   d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true)},createdAt:u.createdAt||new Date().toISOString()}});
   if(!d._restricted&&!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
-  d.movements=d.movements.map(m=>{const inputUnit=m.inputUnit==='Adet'?'Adet':'Koli';const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
+  d.movements=d.movements.map(m=>{const inputUnit=['Koli','Adet','Kg','Paket'].includes(m.inputUnit)?m.inputUnit:(d.products.find(p=>p.id===m.productId)?.unit==='Kg'?'Paket':'Koli');const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
   return d;
 }
 function loadDB(){try{const x=JSON.parse(localStorage.getItem(DB_KEY));return normalizeDB(x)}catch(e){return defaultDB()}}
@@ -398,16 +406,70 @@ function num(v){const n=Number(v);return Number.isFinite(n)?n:0}
 function whole(v){return Math.round(num(v))}
 function requireWhole(value,label='Miktar'){const n=num(value);if(!Number.isInteger(n)){notify(`${label} tam sayı olmalıdır.`,true);return false}return true}
 function qty(v){return num(v).toLocaleString('tr-TR',{maximumFractionDigits:3})}
-function packQtyFor(productId){return Math.max(1,whole(productById(productId)?.packQty||1))}
-function toCartons(productId,amount,unit='Koli'){const q=num(amount);return unit==='Adet'?q/packQtyFor(productId):q}
-function fromCartons(productId,cartons,unit='Koli'){return unit==='Adet'?Math.round(num(cartons)*packQtyFor(productId)):num(cartons)}
-function totalPieces(productId,cartons){return Math.round(num(cartons)*packQtyFor(productId))}
+function isKgProduct(productOrId){
+ const p=typeof productOrId==='string'?productById(productOrId):productOrId;
+ return p?.unit==='Kg';
+}
+function packQtyFor(productId){
+ const p=productById(productId),raw=Number(p?.packQty);
+ if(isKgProduct(p))return Number.isFinite(raw)&&raw>0?Math.round(raw*1000)/1000:1;
+ return Math.max(1,whole(raw||1));
+}
+function stockUnitOptions(productId){return isKgProduct(productId)?['Paket','Kg']:['Koli','Adet']}
+function defaultStockUnit(productId){return isKgProduct(productId)?'Paket':'Koli'}
+function isValidStockInput(text,productId,unit,allowZero=false){
+ const value=String(text??'').trim(),n=Number(value);
+ if(!stockUnitOptions(productId).includes(unit))return false;
+ if(unit==='Kg'){if(!/^\d+(?:\.\d{1,3})?$/.test(value))return false}
+ else if(!/^\d+$/.test(value)||!Number.isSafeInteger(n))return false;
+ return Number.isFinite(n)&&n<1000000000&&(allowZero?n>=0:n>0);
+}
+function toCartons(productId,amount,unit){
+ const q=num(amount);
+ if(!stockUnitOptions(productId).includes(unit))return NaN;
+ return (unit==='Adet'||unit==='Kg')?q/packQtyFor(productId):q;
+}
+function fromCartons(productId,cartons,unit){
+ if(!stockUnitOptions(productId).includes(unit))return NaN;
+ return (unit==='Adet'||unit==='Kg')?
+   Math.round(num(cartons)*packQtyFor(productId)*(unit==='Kg'?1000:1))/(unit==='Kg'?1000:1):num(cartons);
+}
+function totalPieces(productId,cartons){
+ const raw=num(cartons)*packQtyFor(productId);
+ return isKgProduct(productId)?Math.round(raw*1000)/1000:Math.round(raw);
+}
 function stockHasVisibleQuantity(productId,cartons){return totalPieces(productId,cartons)>0}
 function stockIsVisiblyEmpty(productId,cartons){return totalPieces(productId,cartons)<=0}
-function formatStockAmount(productId,cartons){const pack=packQtyFor(productId),pieces=totalPieces(productId,cartons),sign=pieces<0?'-':'',abs=Math.abs(pieces),boxes=Math.floor(abs/pack),loose=abs%pack;if(boxes&&loose)return `${sign}${boxes} Koli ${loose} Adet`;if(boxes)return `${sign}${boxes} Koli`;return `${sign}${loose} Adet`}
-function formatMovementQuantity(m,signed=false){const unit=m.inputUnit==='Adet'?'Adet':'Koli',stored=Math.abs(num(m.quantity)),input=num(m.inputQuantity??fromCartons(m.productId,stored,unit)),minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type),prefix=signed?(minus?'-':'+'):'';return `${prefix}${qty(input)} ${unit}`}
+function formatStockAmount(productId,cartons){
+ if(isKgProduct(productId)){
+  const amount=totalPieces(productId,cartons);
+  if(amount===0)return '0 Kg';
+  const pack=packQtyFor(productId),packs=Math.trunc(Math.abs(amount)/pack+1e-9);
+  const rest=Math.round((Math.abs(amount)-packs*pack)*1000)/1000,sign=amount<0?'-':'';
+  if(packs&&rest>0)return sign+qty(packs)+' Paket '+qty(rest)+' Kg';
+  if(packs)return sign+qty(packs)+' Paket ('+qty(Math.abs(amount))+' Kg)';
+  return sign+qty(rest)+' Kg';
+ }
+ const pack=packQtyFor(productId),pieces=totalPieces(productId,cartons),sign=pieces<0?'-':'',abs=Math.abs(pieces),
+   boxes=Math.floor(abs/pack),loose=abs%pack;
+ if(boxes&&loose)return sign+boxes+' Koli '+loose+' Adet';
+ if(boxes)return sign+boxes+' Koli';
+ return sign+loose+' Adet';
+}
+function formatMovementQuantity(m,signed=false){
+ const unit=stockUnitOptions(m.productId).includes(m.inputUnit)?m.inputUnit:defaultStockUnit(m.productId);
+ const stored=Math.abs(num(m.quantity)),input=num(m.inputQuantity??fromCartons(m.productId,stored,unit));
+ const minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type),prefix=signed?(minus?'-':'+'):'';
+ return prefix+qty(input)+' '+unit;
+}
+function setUnitOptions(selectId,productId,preferred=''){
+ const sel=el(selectId);if(!sel)return;
+ const options=stockUnitOptions(productId),wanted=options.includes(preferred)?preferred:(options.includes(sel.value)?sel.value:options[0]);
+ sel.innerHTML=options.map(u=>'<option value="'+u+'">'+u+'</option>').join('');
+ sel.value=wanted;
+}
 function updateUnitLabel(prefix){const unit=el(prefix+'Unit')?.value||'Koli',label=el(prefix+(prefix==='count'?'ActualLabel':'QtyLabel'));if(label)label.textContent=(prefix==='count'?'Sayılan Gerçek Stok':'Miktar')+` (${unit}) *`}
-function resetDefaultUnits(){['entryUnit','exitUnit','transferUnit','countUnit','movementEditUnit'].forEach(id=>{const node=el(id);if(node)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel)}
+function resetDefaultUnits(){['transferUnit','movementEditUnit'].forEach(id=>{const node=el(id);if(node)node.value='Koli'});updateUnitLabel('transfer')}
 function money(v){return new Intl.NumberFormat('tr-TR',{style:'currency',currency:db.settings.currency||'TRY'}).format(num(v))}
 function dt(v){if(!v)return '';const d=new Date(v);return Number.isNaN(d.getTime())?'':d.toLocaleString('tr-TR')}
 function localDateTimeValue(d=new Date()){const p=n=>String(n).padStart(2,'0');return `${d.getFullYear()}-${p(d.getMonth()+1)}-${p(d.getDate())}T${p(d.getHours())}:${p(d.getMinutes())}`}
@@ -743,7 +805,28 @@ function movementBadge(t){const map={GIRIS:['Stok Girişi','b-green'],CIKIS:['St
 function signedQty(m){const minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type);return (minus?'-':'+')+qty(Math.abs(m.quantity))}
 
 function productTotalStock(productId){return db.warehouses.reduce((sum,w)=>sum+getStock(w.id,productId),0)}
-function updateCartonPrice(){const pack=Math.max(1,whole(el('productPackQty')?.value||1)),item=num(el('productItemPrice')?.value);if(el('productCartonPrice'))el('productCartonPrice').value=(item*pack).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+function updateProductUnitUI(){
+ const kg=el('productUnit').value==='Kg';
+ el('productPackLabel').textContent=kg?'Paket Ağırlığı (KG) *':'Koli İçi Adet (İsteğe Bağlı)';
+ el('productPackQty').step=kg?'0.001':'1';
+ el('productPackQty').placeholder=kg?'Örn. 10':'Boşsa 1 adet';
+ el('productPackQty').required=kg;
+ el('productItemPriceLabel').textContent=kg?'KG Alış Fiyatı (₺)':'Adet Alış Fiyatı (₺)';
+ el('productCartonPriceLabel').textContent=kg?'Paket Alış Fiyatı (₺)':'Koli Alış Fiyatı (₺)';
+ el('productSaleLabel').textContent=kg?'Paket Satış Fiyatı (₺) - Otomatik':'Koli Satış Fiyatı (₺)';
+ el('productSale').readOnly=kg;
+ el('productKgSaleField').style.display=kg?'':'none';
+ el('productMinLabel').textContent=kg?'Minimum Stok (Paket)':'Minimum Stok (Koli)';
+ updateCartonPrice();
+}
+function updateCartonPrice(){
+ const kg=el('productUnit').value==='Kg';
+ const raw=Number(el('productPackQty').value);
+ const pack=kg?(Number.isFinite(raw)&&raw>0?raw:0):Math.max(1,whole(raw||1));
+ const item=num(el('productItemPrice').value);
+ el('productCartonPrice').value=(item*pack).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ if(kg)el('productSale').value=(Math.round(num(el('productKgSale').value)*pack*100)/100).toFixed(2);
+}
 
 const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Koli İçi Adet','Adet Alış Fiyatı','Koli Satış Fiyatı','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
 function exportProductsExcel(empty=false){
