@@ -1253,12 +1253,15 @@ function nextOrderNumber(orders=db.orders){
  return 'SIP-'+String(n).padStart(6,'0');
 }
 function orderDefaultPrice(product,unit){
- const packagePrice=Math.max(0,Number(product.salePrice)||0);
- const inside=Math.max(0.001,Number(product.packQty)||1);
+ const cartonPrice=Math.max(0,Number(product.salePrice)||0);
+ const content=Math.max(0.001,Number(product.packQty)||1);
  if(isKgProduct(product)){
-  return Math.round((unit==='Kg'?Number(product.kgSalePrice??(packagePrice/inside)):packagePrice)*100)/100;
+  // KG fiyatı ürün kartından gelir, koli fiyatı KG fiyatı × koli ağırlığıdır.
+  const kgPrice=product.kgSalePrice!=null?Number(product.kgSalePrice):cartonPrice/content;
+  return Math.round((unit==='Kg'?Math.max(0,kgPrice):cartonPrice)*100)/100;
  }
- return Math.round((unit==='Adet'?packagePrice/inside:packagePrice)*100)/100;
+ // Adet seçildiğinde koli fiyatı / koli içi adet doğrudan uygulanır.
+ return Math.round((unit==='Adet'?cartonPrice/content:cartonPrice)*100)/100;
 }
 function orderEditableRows(){
  return [...el('orderLineRows').querySelectorAll('tr[data-order-product-id]')];
@@ -1276,10 +1279,10 @@ function addOrderProduct(){
  if(rows.length>=50)return notify('Tek siparişte en fazla 50 farklı ürün olabilir.',true);
  if(!rows.length)el('orderLineRows').innerHTML='';
  const row=document.createElement('tr');
- row.dataset.orderProductId=id;const kg=isKgProduct(product),initialUnit=kg?'Paket':'Koli';
+ row.dataset.orderProductId=id;const kg=isKgProduct(product),initialUnit='Koli';
  row.dataset.previousUnit=initialUnit;
  row.innerHTML='<td><b>'+esc(product.name)+'</b><div class="muted">'+esc(product.code||'')+
-   ' · '+(kg?'Paket ağırlığı: '+qty(product.packQty||1)+' Kg':'Koli içi: '+qty(product.packQty||1)+' Adet')+'</div></td>'+
+   ' · '+(kg?'Koli ağırlığı: '+qty(product.packQty||1)+' KG':'Koli içi: '+qty(product.packQty||1)+' Adet')+'</div></td>'+
   '<td><input class="order-quantity" type="number" min="1" max="100000" step="1" value="1" inputmode="numeric" aria-label="Sipariş miktarı"></td>'+
   '<td><select class="order-unit" aria-label="Sipariş birimi">'+stockUnitOptions(id).map(u=>'<option value="'+u+'">'+u+'</option>').join('')+'</select></td>'+
   '<td><input class="order-price" type="number" min="0" max="1000000" step="0.01" value="'+orderDefaultPrice(product,initialUnit).toFixed(2)+'" aria-label="Birim satış fiyatı"></td>'+
@@ -1365,7 +1368,7 @@ function getOrderQuote(shouldNotify=false){
   if(!Number.isSafeInteger(subtotalCents)){if(shouldNotify)notify('Sipariş toplamı çok yüksek.',true);return null}
   out.push({productId:product.id,productCode:product.code||'',productName:product.name,
    // Mevcut sunucu Koli/Adet kodlarını doğrular; gerçek satış birimi displayUnit alanında korunur.
-   unit:isKgProduct(product)?(unit==='Paket'?'Koli':'Adet'):unit,
+   unit:unit==='Kg'?'Adet':unit,
    displayUnit:unit,quantity,unitPriceCents,lineTotalCents});
  }
  const discount=calculateOrderDiscount(subtotalCents,el('orderDiscount').value);
@@ -1422,15 +1425,13 @@ function handleOrderLineEvent(e){
   updateOrderTotals();return;
  }
  if(e.type==='change'&&e.target.classList.contains('order-unit')){
-  const next=e.target.value,product=productById(row.dataset.orderProductId),
-    previous=row.dataset.previousUnit||defaultStockUnit(row.dataset.orderProductId);
-  if(next!==previous){
-   const priceInput=row.querySelector('.order-price'),
-    current=Number(priceInput.value),pack=Math.max(0.001,Number(product?.packQty)||1);
-   if(Number.isFinite(current)&&current>=0){
-    const oldIsPackage=previous==='Koli'||previous==='Paket';
-    priceInput.value=(Math.round((oldIsPackage?current/pack:current*pack)*100)/100).toFixed(2);
-   }
+  const next=e.target.value,product=productById(row.dataset.orderProductId);
+  if(product&&stockUnitOptions(product.id).includes(next)){
+   // Birim değişince manuel yazılmış fiyatı çevirme: ürün kartındaki satış
+   // fiyatını kaynak al, böylece KG ve Adet seçimi her zaman doğru fiyatı getirir.
+   const price=orderDefaultPrice(product,next);
+   row.querySelector('.order-price').value=price.toFixed(2);
+   row.querySelector('.order-quantity').step=next==='Kg'?'0.001':'1';
    row.dataset.previousUnit=next;
   }
  }
