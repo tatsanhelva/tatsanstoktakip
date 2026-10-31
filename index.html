@@ -1011,7 +1011,7 @@ function renderOrders(){
  .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
  el('orderListRows').innerHTML=items.length?items.slice(0,200).map(o=>
   '<tr><td><b>'+esc(o.number)+'</b></td><td>'+esc(o.date||'')+'</td><td>'+esc(o.firmName||'')+
-  '</td><td>'+Number(o.lines?.length||0)+'</td><td>'+((Number(o.discountBasisPoints||0)/100).toLocaleString('tr-TR'))+
+  '</td><td>'+Number(o.lines?.length||0)+'</td><td>'+esc(orderDiscountText(o))+
   '</td><td class="num"><b>'+orderMoney(o.totalCents)+'</b></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
   '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button></td></tr>'
  ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
@@ -1058,7 +1058,7 @@ function showOrderDetails(id){
   '<td class="num">'+Number(l.quantity).toLocaleString('tr-TR')+'</td><td>'+esc(l.unit)+'</td>'+
   '<td class="num">'+orderMoney(l.unitPriceCents)+'</td><td class="num">'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
  el('orderDetailsTotals').innerHTML='<div>Ara toplam: <b>'+orderMoney(order.subtotalCents)+
-  '</b></div><div>İskonto: <b>%'+Number(order.discountBasisPoints/100).toLocaleString('tr-TR')+
+  '</b></div><div>İskonto: <b>'+esc(orderDiscountText(order))+
   ' / '+orderMoney(order.discountCents)+'</b></div><div style="font-size:18px">Net Toplam: <b>'+
   orderMoney(order.totalCents)+'</b></div>';
  el('orderDetailsDialog').showModal();
@@ -1078,7 +1078,7 @@ function printCurrentOrder(){
   '<p><b>Cari:</b> '+esc(order.firmName)+'</p>'+
   '<table><thead><tr><th>Kod</th><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Birim Fiyat</th><th>Tutar</th></tr></thead><tbody>'+
   rows+'</tbody></table><p class="total">Ara Toplam: '+orderMoney(order.subtotalCents)+
-  '</p><p class="total">İskonto: %'+(order.discountBasisPoints/100)+' ('+orderMoney(order.discountCents)+
+  '</p><p class="total">İskonto: '+esc(orderDiscountText(order))+' ('+orderMoney(order.discountCents)+
   ')</p><p class="total">Toplam: '+orderMoney(order.totalCents)+'</p>'+
   (order.note?'<p><b>Not:</b> '+esc(order.note)+'</p>':'')+
   '<p style="font-size:11px;color:#555">KDV hesaplanmamıştır. Sipariş stok ve cari bakiyesini değiştirmez.</p></body></html>';
