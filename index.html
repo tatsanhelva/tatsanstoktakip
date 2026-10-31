@@ -384,7 +384,7 @@ function normalizeDB(x){
     const sale=num(p.salePrice);
     return {...p,unit:kg?'Kg':'Koli',packQty:pack,itemPrice:item,
       purchasePrice:p.purchasePrice!==undefined?cost:Math.round(item*pack*100)/100,
-      kgSalePrice:kg?(p.kgSalePrice!==undefined?num(p.kgSalePrice):Math.round(sale/pack*100)/100):undefined,
+      kgSalePrice:kg?Math.round(sale/pack*100)/100:undefined,
       rack:p.rack||''}});
   const rawCategories=Array.isArray(d.categories)?d.categories:[];const seenCategories=new Set();d.categories=[];
   [...rawCategories,...d.products.map(p=>p.category).filter(Boolean)].forEach(c=>{const obj=typeof c==='string'?{name:c}:c||{};const name=String(obj.name||'').trim();const key=name.toLocaleLowerCase('tr-TR');if(name&&!seenCategories.has(key)){seenCategories.add(key);d.categories.push({id:obj.id||uid('cat'),name,notes:obj.notes||''})}});
@@ -875,13 +875,13 @@ function updateCartonPrice(){
  updateProductPricePreview();
 }
 
-const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Stok Birimi','Koli Ağırlığı (KG) / Koli İçi Adet','KG Satış Fiyatı','Koli Satış Fiyatı','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
+const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Stok Birimi','Koli Ağırlığı (KG) / Koli İçi Adet','KG Satış Fiyatı (Otomatik)','Koli Satış Fiyatı (Manuel)','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
 function exportProductsExcel(empty=false){
  if(!requirePermission('products'))return;
  loadFirmExcelLibrary().then(xlsx=>{
   const rows=empty?[]:db.products.map(p=>[String(p.code||''),String(p.barcode||''),String(p.name||''),String(p.category||''),
    p.unit==='Kg'?'KG':'Koli',Number(p.packQty||1),
-   p.unit==='Kg'?Number(p.kgSalePrice??(Number(p.salePrice||0)/Math.max(.001,Number(p.packQty||1)))):'',
+   p.unit==='Kg'?productSalesPrice(p,'Kg'):'',
    Number(p.salePrice||0),Number(p.minStock||0),p.active!==false?'Aktif':'Pasif',String(p.notes||''),
    formatStockAmount(p.id,productTotalStock(p.id))]);
   const ws=xlsx.utils.aoa_to_sheet([PRODUCT_EXCEL_HEADERS,...rows]);
@@ -972,27 +972,22 @@ function prepareProductExcelImport(rows){
       db.orders.some(o=>(o.lines||[]).some(l=>l.productId===previous.id)))
     throw new Error(line+'. satırda '+name+' ürününün stok/hareket/sipariş geçmişi var. Birimi veya paket miktarı değiştirilemez.');
   }
-  const packSaleField=['Koli Satış Fiyatı','Paket/Koli Satış Fiyatı','Paket Satış Fiyatı','Satış Fiyatı'];
-  const kgSaleField=['KG Satış Fiyatı','Kilogram Satış Fiyatı'];
-  const hasKgSale=kg&&firmExcelHasColumn(row,kgSaleField)&&firmExcelValue(row,kgSaleField)!=='';
+  const packSaleField=['Koli Satış Fiyatı (Manuel)','Koli Satış Fiyatı','Paket/Koli Satış Fiyatı','Paket Satış Fiyatı','Satış Fiyatı'];
+  const kgSaleField=['KG Satış Fiyatı (Otomatik)','KG Satış Fiyatı','Kilogram Satış Fiyatı'];
   const hasPackSale=firmExcelHasColumn(row,packSaleField)&&firmExcelValue(row,packSaleField)!=='';
-  let kgSalePrice,salePrice;
-  if(kg){
-   if(hasKgSale){
-    kgSalePrice=excelProductNumber(firmExcelValue(row,kgSaleField),'KG Satış Fiyatı',line,{min:0,max:10000000});
-    salePrice=Math.round(kgSalePrice*packQty*100)/100;
-   }else if(hasPackSale){
-    salePrice=excelProductNumber(firmExcelValue(row,packSaleField),'Koli Satış Fiyatı',line,{min:0,max:10000000});
-    kgSalePrice=Math.round(salePrice/packQty*100)/100;
-   }else{
-    kgSalePrice=Number(previous?.kgSalePrice??0);
-    salePrice=Math.round(kgSalePrice*packQty*100)/100;
-   }
+  const hasKgSale=kg&&firmExcelHasColumn(row,kgSaleField)&&firmExcelValue(row,kgSaleField)!=='';
+  // Manual koli fiyatı daima öncelikli. Eski Excel dosyalarında yalnız KG fiyatı varsa
+  // geriye uyum için kullanılır; güncel şablonun otomatik KG alanı fiyatı değiştiremez.
+  let salePrice;
+  if(hasPackSale){
+   salePrice=excelProductNumber(firmExcelValue(row,packSaleField),'Koli Satış Fiyatı',line,{min:0,max:10000000});
+  }else if(kg&&hasKgSale&&!previous){
+   const legacyKgPrice=excelProductNumber(firmExcelValue(row,kgSaleField),'KG Satış Fiyatı',line,{min:0,max:10000000});
+   salePrice=Math.round(legacyKgPrice*packQty*100)/100;
   }else{
-   salePrice=excelProductNumber(excelProductField(row,packSaleField,previous?.salePrice??0),
-    'Koli Satış Fiyatı',line,{min:0,max:10000000});
-   kgSalePrice=undefined;
+   salePrice=Number(previous?.salePrice??0);
   }
+  const kgSalePrice=kg?Math.round(salePrice/packQty*100)/100:undefined;
   const minStock=excelProductNumber(excelProductField(row,['Minimum Stok (Koli)','Minimum Stok (Paket/Koli)','Minimum Stok','Min Stok'],previous?.minStock??0),
    'Minimum Stok',line,{integer:true,min:0,max:100000000});
   const status=excelProductField(row,['Durum','Aktif'],previous?.active===false?'Pasif':'Aktif').trim().toLocaleLowerCase('tr-TR');
@@ -1316,15 +1311,8 @@ function nextOrderNumber(orders=db.orders){
  return 'SIP-'+String(n).padStart(6,'0');
 }
 function orderDefaultPrice(product,unit){
- const cartonPrice=Math.max(0,Number(product.salePrice)||0);
- const content=Math.max(0.001,Number(product.packQty)||1);
- if(isKgProduct(product)){
-  // KG fiyatı ürün kartından gelir, koli fiyatı KG fiyatı × koli ağırlığıdır.
-  const kgPrice=product.kgSalePrice!=null?Number(product.kgSalePrice):cartonPrice/content;
-  return Math.round((unit==='Kg'?Math.max(0,kgPrice):cartonPrice)*100)/100;
- }
- // Adet seçildiğinde koli fiyatı / koli içi adet doğrudan uygulanır.
- return Math.round((unit==='Adet'?cartonPrice/content:cartonPrice)*100)/100;
+ // Siparişte de Ürün Kartı ile aynı koli bazlı satış fiyatını kullan.
+ return productSalesPrice(product,unit)??0;
 }
 function orderEditableRows(){
  return [...el('orderLineRows').querySelectorAll('tr[data-order-product-id]')];
