@@ -1261,8 +1261,12 @@ function nextOrderNumber(orders=db.orders){
  return 'SIP-'+String(n).padStart(6,'0');
 }
 function orderDefaultPrice(product,unit){
- const carton=Math.max(0,Number(product.salePrice)||0);
- return Math.round((unit==='Adet'?carton/Math.max(1,Math.round(Number(product.packQty)||1)):carton)*100)/100;
+ const packagePrice=Math.max(0,Number(product.salePrice)||0);
+ const inside=Math.max(0.001,Number(product.packQty)||1);
+ if(isKgProduct(product)){
+  return Math.round((unit==='Kg'?Number(product.kgSalePrice??(packagePrice/inside)):packagePrice)*100)/100;
+ }
+ return Math.round((unit==='Adet'?packagePrice/inside:packagePrice)*100)/100;
 }
 function orderEditableRows(){
  return [...el('orderLineRows').querySelectorAll('tr[data-order-product-id]')];
@@ -1280,13 +1284,14 @@ function addOrderProduct(){
  if(rows.length>=50)return notify('Tek siparişte en fazla 50 farklı ürün olabilir.',true);
  if(!rows.length)el('orderLineRows').innerHTML='';
  const row=document.createElement('tr');
- row.dataset.orderProductId=id;row.dataset.previousUnit='Koli';
+ row.dataset.orderProductId=id;const kg=isKgProduct(product),initialUnit=kg?'Paket':'Koli';
+ row.dataset.previousUnit=initialUnit;
  row.innerHTML='<td><b>'+esc(product.name)+'</b><div class="muted">'+esc(product.code||'')+
-   ' · Koli içi: '+qty(product.packQty||1)+' Adet</div></td>'+
+   ' · '+(kg?'Paket ağırlığı: '+qty(product.packQty||1)+' Kg':'Koli içi: '+qty(product.packQty||1)+' Adet')+'</div></td>'+
   '<td><input class="order-quantity" type="number" min="1" max="100000" step="1" value="1" inputmode="numeric" aria-label="Sipariş miktarı"></td>'+
-  '<td><select class="order-unit" aria-label="Sipariş birimi"><option value="Koli">Koli</option><option value="Adet">Adet</option></select></td>'+
-  '<td><input class="order-price" type="number" min="0" max="1000000" step="0.01" value="'+orderDefaultPrice(product,'Koli').toFixed(2)+'" aria-label="Birim satış fiyatı"></td>'+
-  '<td class="num"><b class="order-line-total">'+orderMoney(Math.round(orderDefaultPrice(product,'Koli')*100))+'</b></td>'+
+  '<td><select class="order-unit" aria-label="Sipariş birimi">'+stockUnitOptions(id).map(u=>'<option value="'+u+'">'+u+'</option>').join('')+'</select></td>'+
+  '<td><input class="order-price" type="number" min="0" max="1000000" step="0.01" value="'+orderDefaultPrice(product,initialUnit).toFixed(2)+'" aria-label="Birim satış fiyatı"></td>'+
+  '<td class="num"><b class="order-line-total">'+orderMoney(Math.round(orderDefaultPrice(product,initialUnit)*100))+'</b></td>'+
   '<td><button type="button" class="btn btn-danger btn-sm" data-order-action="remove" aria-label="Satırı sil">Kaldır</button></td>';
  el('orderLineRows').appendChild(row);
  updateOrderTotals();
@@ -1338,12 +1343,14 @@ function getOrderQuote(shouldNotify=false){
   if(priceText===''||!Number.isFinite(price)||price<0||price>1000000||Math.abs(price*100-Math.round(price*100))>0.00001){
    if(shouldNotify)notify(product.name+' için en fazla iki ondalıklı geçerli fiyat girin.',true);return null;
   }
-  if(!['Koli','Adet'].includes(unit)){if(shouldNotify)notify('Geçersiz birim.',true);return null}
+  if(!stockUnitOptions(product.id).includes(unit)){if(shouldNotify)notify('Geçersiz birim.',true);return null}
   const unitPriceCents=Math.round(price*100),lineTotalCents=unitPriceCents*quantity;
   subtotalCents+=lineTotalCents;
   if(!Number.isSafeInteger(subtotalCents)){if(shouldNotify)notify('Sipariş toplamı çok yüksek.',true);return null}
   out.push({productId:product.id,productCode:product.code||'',productName:product.name,
-   unit,quantity,unitPriceCents,lineTotalCents});
+   // Mevcut sunucu Koli/Adet kodlarını doğrular; gerçek satış birimi displayUnit alanında korunur.
+   unit:isKgProduct(product)?(unit==='Paket'?'Koli':'Adet'):unit,
+   displayUnit:unit,quantity,unitPriceCents,lineTotalCents});
  }
  const discount=calculateOrderDiscount(subtotalCents,el('orderDiscount').value);
  if(!discount){
@@ -1384,12 +1391,14 @@ function handleOrderLineEvent(e){
   updateOrderTotals();return;
  }
  if(e.type==='change'&&e.target.classList.contains('order-unit')){
-  const next=e.target.value,previous=row.dataset.previousUnit||'Koli';
+  const next=e.target.value,product=productById(row.dataset.orderProductId),
+    previous=row.dataset.previousUnit||defaultStockUnit(row.dataset.orderProductId);
   if(next!==previous){
-   const product=productById(row.dataset.orderProductId),priceInput=row.querySelector('.order-price'),
-    current=Number(priceInput.value),pack=Math.max(1,Math.round(Number(product?.packQty)||1));
+   const priceInput=row.querySelector('.order-price'),
+    current=Number(priceInput.value),pack=Math.max(0.001,Number(product?.packQty)||1);
    if(Number.isFinite(current)&&current>=0){
-    priceInput.value=(Math.round((previous==='Koli'?current/pack:current*pack)*100)/100).toFixed(2);
+    const oldIsPackage=previous==='Koli'||previous==='Paket';
+    priceInput.value=(Math.round((oldIsPackage?current/pack:current*pack)*100)/100).toFixed(2);
    }
    row.dataset.previousUnit=next;
   }
@@ -1469,7 +1478,7 @@ function showOrderDetails(id){
   (order.note?'<p><b>Not:</b> '+esc(order.note)+'</p>':'');
  el('orderDetailsLines').innerHTML=(order.lines||[]).map(l=>
   '<tr><td><b>'+esc(l.productName)+'</b> '+esc(l.productCode||'')+'</td>'+
-  '<td class="num">'+Number(l.quantity).toLocaleString('tr-TR')+'</td><td>'+esc(l.unit)+'</td>'+
+  '<td class="num">'+Number(l.quantity).toLocaleString('tr-TR')+'</td><td>'+esc(l.displayUnit||l.unit)+'</td>'+
   '<td class="num">'+orderMoney(l.unitPriceCents)+'</td><td class="num">'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
  el('orderDetailsTotals').innerHTML='<div>Ara toplam: <b>'+orderMoney(order.subtotalCents)+
   '</b></div><div>İskonto: <b>'+esc(orderDiscountText(order))+
@@ -1482,7 +1491,7 @@ function printCurrentOrder(){
  const win=window.open('','_blank','width=920,height=740');
  if(!win)return notify('Yazdırma penceresi engellendi. Tarayıcıdan açılır pencereye izin verin.',true);
  const rows=(order.lines||[]).map(l=>'<tr><td>'+esc(l.productCode)+'</td><td>'+esc(l.productName)+
-  '</td><td>'+esc(l.quantity)+'</td><td>'+esc(l.unit)+'</td><td>'+orderMoney(l.unitPriceCents)+
+  '</td><td>'+esc(l.quantity)+'</td><td>'+esc(l.displayUnit||l.unit)+'</td><td>'+orderMoney(l.unitPriceCents)+
   '</td><td>'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
  const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>'+esc(order.number)+
   '</title><style>body{font-family:Arial,sans-serif;margin:30px;color:#1f2937}h1{margin-bottom:6px}'+
