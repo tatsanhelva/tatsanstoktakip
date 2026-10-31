@@ -144,7 +144,15 @@
 <div class="actions"><button class="btn btn-primary" type="submit">Kaydet</button><button class="btn btn-light" onclick="resetProductForm()" type="button">Temizle</button></div>
 </form>
 </div>
-<div class="card"><div class="card-head"><h3>Ürün Listesi</h3><input id="productSearch" placeholder="Ürün ara..." style="max-width:260px"/></div><div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Koli İçi</th><th class="num">Adet Fiyatı</th><th class="num">Koli Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
+<div class="card"><div class="card-head"><h3>Ürün Listesi</h3><input id="productSearch" placeholder="Ürün ara..." style="max-width:260px"/></div>
+<div class="actions" style="margin:0 0 12px">
+ <button type="button" class="btn btn-light btn-sm" onclick="exportProductsExcel(false)">Excel'e Aktar</button>
+ <button type="button" class="btn btn-light btn-sm" onclick="exportProductsExcel(true)">Boş Excel Şablonu</button>
+ <button type="button" class="btn btn-primary btn-sm" data-admin-only onclick="el('productExcelInput').click()">Excel'den Ekle / Güncelle</button>
+ <input id="productExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
+</div>
+<p class="muted" style="font-size:12px;margin:0 0 12px">Ürün kodu veya barkod eşleştirilir. Excel sadece ürün kartlarını günceller; mevcut stok miktarları, hareketler ve siparişler değişmez.</p>
+<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Koli İçi</th><th class="num">Adet Fiyatı</th><th class="num">Koli Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
 </div>
 <div class="page" id="page-categories">
 <div class="card"><h3>Kategori Kartı</h3><form id="categoryForm"><input id="categoryId" type="hidden"/><div class="form-grid cols-2"><div class="field"><label>Kategori Adı *</label><input id="categoryName" required="" placeholder="Örn. Gıda, Ambalaj, Hammadde"/></div><div class="field"><label>Açıklama</label><input id="categoryNotes"/></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kategoriyi Kaydet</button><button class="btn btn-light" onclick="resetCategoryForm()" type="button">Temizle</button></div></form></div>
@@ -683,6 +691,151 @@ function signedQty(m){const minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type);re
 
 function productTotalStock(productId){return db.warehouses.reduce((sum,w)=>sum+getStock(w.id,productId),0)}
 function updateCartonPrice(){const pack=Math.max(1,whole(el('productPackQty')?.value||1)),item=num(el('productItemPrice')?.value);if(el('productCartonPrice'))el('productCartonPrice').value=(item*pack).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})}
+
+const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Koli İçi Adet','Adet Alış Fiyatı','Koli Satış Fiyatı','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
+function exportProductsExcel(empty=false){
+ if(!requirePermission('products'))return;
+ loadFirmExcelLibrary().then(xlsx=>{
+  const rows=empty?[]:db.products.map(p=>[String(p.code||''),String(p.barcode||''),String(p.name||''),String(p.category||''),
+   Number(p.packQty||1),Number(p.itemPrice??(Number(p.purchasePrice||0)/Math.max(1,Number(p.packQty||1)))),
+   Number(p.salePrice||0),Number(p.minStock||0),p.active!==false?'Aktif':'Pasif',String(p.notes||''),
+   formatStockAmount(p.id,productTotalStock(p.id))]);
+  const ws=xlsx.utils.aoa_to_sheet([PRODUCT_EXCEL_HEADERS,...rows]);
+  ws['!cols']=[{wch:18},{wch:20},{wch:45},{wch:24},{wch:17},{wch:21},{wch:21},{wch:24},{wch:12},{wch:40},{wch:22}];
+  // Kimlik alanları Excel'de baştaki sıfırları koruyacak şekilde metin olarak saklanır.
+  for(let i=2;i<=rows.length+1;i++){
+   for(const col of ['A','B']){
+    const cell=ws[col+i];if(cell){cell.t='s';cell.v=String(cell.v??'');cell.z='@';}
+   }
+  }
+  const wb=xlsx.utils.book_new();xlsx.utils.book_append_sheet(wb,ws,'Urunler');
+  xlsx.writeFile(wb,empty?'Tatsan_Urun_Excel_Sablonu.xlsx':'Tatsan_Urun_Listesi.xlsx');
+ }).catch(err=>notify(err.message||'Excel indirilemedi.',true));
+}
+function excelProductField(row,keys,oldValue=''){
+ return firmExcelColumn(row,keys,oldValue);
+}
+function excelProductNumber(value,label,rowNumber,{integer=false,min=0,max=10000000}={}){
+ const cleaned=String(value??'').trim().replace(/\s/g,'').replace(/₺|TL|TRY/gi,'');
+ if(!cleaned)throw new Error(rowNumber+'. satırda '+label+' boş bırakılamaz.');
+ if(!/^[\d.,]+$/.test(cleaned))throw new Error(rowNumber+'. satırda '+label+' sayı olmalıdır.');
+ let normalized=cleaned;
+ if(cleaned.includes(',')&&cleaned.includes('.')){
+  if(cleaned.lastIndexOf(',')>cleaned.lastIndexOf('.'))
+   normalized=cleaned.replace(/\./g,'').replace(',','.');
+  else normalized=cleaned.replace(/,/g,'');
+ }else if(cleaned.includes(',')){
+  normalized=cleaned.replace(',','.');
+ }else if(/^\d{1,3}(?:\.\d{3})+$/.test(cleaned)){
+  normalized=cleaned.replace(/\./g,'');
+ }
+ if(!/^\d+(?:\.\d+)?$/.test(normalized))throw new Error(rowNumber+'. satırda '+label+' sayı biçimi hatalı.');
+ const n=Number(normalized);
+ if(!Number.isFinite(n)||n<min||n>max||(integer&&!Number.isSafeInteger(n))||
+   (!integer&&Math.abs(n*100-Math.round(n*100))>0.00001)){
+  throw new Error(rowNumber+'. satırda '+label+' '+(integer?'tam sayı':'en fazla iki ondalıklı tutar')+' olmalıdır.');
+ }
+ return n;
+}
+function prepareProductExcelImport(rows){
+ if(!Array.isArray(rows)||!rows.length)throw new Error('Excel dosyasında ürün satırı bulunamadı.');
+ if(rows.length>1000)throw new Error('Tek dosyada en fazla 1000 ürün yükleyebilirsiniz.');
+ if(!rows.some(row=>firmExcelHasColumn(row,['Ürün Kodu','Kod','Stok Kodu'])||
+   firmExcelHasColumn(row,['Barkod','Barcode'])))
+  throw new Error('Excel şablonunda Ürün Kodu veya Barkod sütunu bulunamadı.');
+ const next=db.products.map(p=>({...p}));
+ const touched=new Set();let added=0,updated=0;
+ for(let i=0;i<rows.length;i++){
+  const row=rows[i],rowNum=i+2;
+  if(!Object.values(row).some(v=>String(v??'').trim()))continue;
+  const incomingCode=firmExcelValue(row,['Ürün Kodu','Kod','Stok Kodu']);
+  const incomingBarcode=firmExcelValue(row,['Barkod','Barcode']);
+  const byCode=incomingCode?next.find(p=>firmKey(p.code)===firmKey(incomingCode)):null;
+  const byBarcode=incomingBarcode?next.find(p=>String(p.barcode||'').trim()===incomingBarcode):null;
+  if(byCode&&byBarcode&&byCode.id!==byBarcode.id)
+   throw new Error(rowNum+'. satırda kod ve barkod iki farklı ürünü gösteriyor.');
+  const previous=byCode||byBarcode||null;
+  if(previous&&touched.has(previous.id))throw new Error(rowNum+'. satırda aynı ürün dosyada tekrarlanıyor.');
+  const code=incomingCode||(previous?.code||'');
+  if(!code)throw new Error(rowNum+'. satırda yeni ürün için Ürün Kodu zorunlu.');
+  const name=excelProductField(row,['Ürün Adı','Ürün','Adı','Urun Adi'],previous?.name||'').trim();
+  if(!name)throw new Error(rowNum+'. satırda Ürün Adı eksik.');
+  if(name.length>250||code.length>90)throw new Error(rowNum+'. satırda ürün kodu veya adı çok uzun.');
+  const barcode=firmExcelHasColumn(row,['Barkod','Barcode'])?incomingBarcode:(previous?.barcode||'');
+  if(barcode.length>80)throw new Error(rowNum+'. satırda barkod çok uzun.');
+  if(next.some(p=>p.id!==previous?.id&&firmKey(p.code)===firmKey(code)))
+   throw new Error(rowNum+'. satırda ürün kodu başka ürüne ait: '+code);
+  if(barcode&&next.some(p=>p.id!==previous?.id&&String(p.barcode||'').trim()===barcode))
+   throw new Error(rowNum+'. satırda barkod başka ürüne ait: '+barcode);
+  const packText=excelProductField(row,['Koli İçi Adet','Koli Ici Adet','Paket İçi','Koli içi'],previous?.packQty??1);
+  const packQty=excelProductNumber(packText,'Koli İçi Adet',rowNum,{integer:true,min:1,max:1000000});
+  // Alış fiyatı adet cinsinden; purchasePrice otomatik olarak adet fiyatı × koli içi miktardır.
+  const baseItemPrice=previous?.itemPrice??(Number(previous?.purchasePrice||0)/Math.max(1,Number(previous?.packQty||1)));
+  const itemPrice=excelProductNumber(excelProductField(row,['Adet Alış Fiyatı','Adet Fiyatı','Birim Alış Fiyatı'],baseItemPrice),
+   'Adet Alış Fiyatı',rowNum,{min:0,max:10000000});
+  const salePrice=excelProductNumber(excelProductField(row,['Koli Satış Fiyatı','Satış Fiyatı'],previous?.salePrice??0),
+   'Koli Satış Fiyatı',rowNum,{min:0,max:10000000});
+  const minStock=excelProductNumber(excelProductField(row,['Minimum Stok (Koli)','Minimum Stok','Min Stok'],previous?.minStock??0),
+   'Minimum Stok',rowNum,{integer:true,min:0,max:100000000});
+  const statusRaw=excelProductField(row,['Durum','Aktif'],previous?.active===false?'Pasif':'Aktif').trim().toLocaleLowerCase('tr-TR');
+  const activeStates={'aktif':true,'evet':true,'true':true,'1':true,'pasif':false,'hayır':false,'hayir':false,'false':false,'0':false};
+  if(!Object.prototype.hasOwnProperty.call(activeStates,statusRaw))
+   throw new Error(rowNum+'. satırda Durum Aktif veya Pasif olmalıdır.');
+  const category=excelProductField(row,['Kategori','Ürün Kategorisi'],previous?.category||'').trim();
+  if(category.length>120)throw new Error(rowNum+'. satırda kategori çok uzun.');
+  const item={...(previous||{}),id:previous?.id||uid('prd'),code,barcode,name,category,
+   unit:'Koli',packQty,itemPrice,purchasePrice:Math.round(itemPrice*packQty*100)/100,
+   salePrice,minStock,active:activeStates[statusRaw],
+   notes:excelProductField(row,['Açıklama','Not'],previous?.notes||'')};
+  if(item.purchasePrice>1e12||!Number.isFinite(item.purchasePrice))
+   throw new Error(rowNum+'. satırda koli alış fiyatı çok yüksek.');
+  if(previous){next[next.findIndex(p=>p.id===previous.id)]=item;updated++;}
+  else{next.push(item);added++;}
+  touched.add(item.id);
+ }
+ if(!added&&!updated)throw new Error('Excel dosyasında işlenecek ürün bulunamadı.');
+ return {products:next,added,updated};
+}
+async function importProductsExcel(e){
+ const input=e.target,file=input.files?.[0];
+ if(!file)return;
+ try{
+  if(!isAdmin()||!requirePermission('products'))throw new Error('Ürünleri Excel ile yalnızca yönetici güncelleyebilir.');
+  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
+   throw new Error('Önce Drive kaydı tamamlanmalı. Bekleyen stok hareketi varken Excel yüklenemez.');
+  if(file.size>5000000)throw new Error('Excel dosyası 5 MB sınırını aştı.');
+  if(!/\.(xlsx|xls|csv)$/i.test(file.name))throw new Error('Lütfen Excel (.xlsx/.xls) veya CSV dosyası seçin.');
+  const xlsx=await loadFirmExcelLibrary();
+  const buffer=await file.arrayBuffer(),workbook=xlsx.read(buffer,{type:'array',cellText:true});
+  const sheet=workbook.Sheets[workbook.SheetNames[0]];
+  if(!sheet)throw new Error('Excel sayfası bulunamadı.');
+  const rows=xlsx.utils.sheet_to_json(sheet,{defval:'',raw:false});
+  const plan=prepareProductExcelImport(rows);
+  // Güncel sunucu revizyonu doğrulanır; aktarım sırasında değişen stokların üzerine yazılmaz.
+  const read=await rpc('cloudRead');
+  if(!read?.ok||!Number.isInteger(read.revision)||read.revision!==cloudState.revision)
+   throw new Error('Başka kullanıcı verileri değiştirdi. Önce sayfayı yenileyip Excel işlemini tekrar deneyin.');
+  if(!confirm(plan.added+' yeni ürün eklenecek, '+plan.updated+
+    ' mevcut ürün güncellenecek. Stok miktarları ve hareketler KORUNACAK. Devam edilsin mi?'))return;
+  const oldStocks=db.stocks,oldMoves=db.movements,oldOrders=db.orders;
+  db.products=plan.products;
+  const known=new Set(db.categories.map(c=>firmKey(c.name)));
+  for(const p of db.products){
+   if(p.category&&!known.has(firmKey(p.category))){
+    db.categories.push({id:uid('cat'),name:p.category,notes:''});known.add(firmKey(p.category));
+   }
+  }
+  if(db.stocks!==oldStocks||db.movements!==oldMoves||db.orders!==oldOrders)
+   throw new Error('Beklenmeyen kayıt değişikliği; işlem iptal edildi.');
+  audit('Excel ürün aktarımı','Ürünler',plan.added+' yeni ürün, '+plan.updated+' güncellendi | '+file.name);
+  saveDB();resetProductForm();
+  notify(plan.added+' ürün eklendi, '+plan.updated+' ürün güncellendi. Drive kaydı kuyruğa alındı.');
+ }catch(err){
+  notify(err.message||'Ürün Excel aktarımı başarısız.',true);
+  alert('Ürün Excel aktarımı yapılamadı: '+(err.message||'Bilinmeyen hata'));
+ }finally{input.value=''}
+}
+
 function renderProducts(){const q=el('productSearch').value.toLowerCase();const data=db.products.filter(p=>[p.code,p.barcode,p.name,p.category].join(' ').toLowerCase().includes(q));el('productTable').innerHTML=data.length?data.map(p=>{const current=productTotalStock(p.id),item=num(p.itemPrice!==undefined?p.itemPrice:(num(p.purchasePrice)/Math.max(1,num(p.packQty)))),actions=isAdmin()?`<button class="btn btn-light btn-sm" onclick="editProduct('${p.id}')">Düzenle</button> <button class="btn btn-danger btn-sm" onclick="deleteProduct('${p.id}')">Sil</button>`:'<span class="muted">Yönetici yetkisi gerekli</span>';return `<tr><td>${esc(p.code)}</td><td>${esc(p.barcode)}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.category)}</td><td class="num"><b>${formatStockAmount(p.id,current)}</b>${stockIsVisiblyEmpty(p.id,current)?'<div class="muted" style="font-size:11px">Stokta yok</div>':''}</td><td>Koli / Adet</td><td class="num">${qty(p.packQty)}</td><td class="num">${money(item)}</td><td class="num">${money(p.purchasePrice)}</td><td class="num">${qty(p.minStock)}</td><td>${p.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>'}</td><td>${actions}</td></tr>`}).join(''):`<tr><td colspan="12" class="empty">Ürün bulunamadı.</td></tr>`}
 function saveProduct(e){e.preventDefault();if(!requirePermission('products'))return;const id=el('productId').value;if(id&&!requireAdminAction())return;const code=el('productCode').value.trim(),name=el('productName').value.trim();if(db.products.some(p=>p.code.toLowerCase()===code.toLowerCase()&&p.id!==id))return notify('Bu ürün kodu zaten kullanılıyor.',true);if(!requireWhole(el('productPackQty').value,'Koli içi adet')||!requireWhole(el('productMin').value,'Minimum stok'))return;const packQty=Math.max(1,whole(el('productPackQty').value)),itemPrice=num(el('productItemPrice').value),existing=id?productById(id):null;const obj={id:id||uid('prd'),code,barcode:el('productBarcode').value.trim(),name,category:el('productCategory').value.trim(),unit:'Koli',packQty,itemPrice,purchasePrice:itemPrice*packQty,salePrice:num(el('productSale').value),minStock:whole(el('productMin').value),rack:existing?.rack||'',active:el('productActive').value==='true',notes:el('productNotes').value.trim()};if(id)db.products[db.products.findIndex(x=>x.id===id)]=obj;else db.products.push(obj);audit(id?'Ürün güncellendi':'Ürün oluşturuldu','Ürünler',`${obj.code} - ${obj.name} | Koli içi: ${obj.packQty} | Koli fiyatı: ${obj.purchasePrice}`);saveDB();resetProductForm();notify('Ürün kartı kaydedildi.')}
 function editProduct(id){if(!requirePermission('products')||!requireAdminAction())return;const p=productById(id);if(!p)return;el('productId').value=p.id;el('productCode').value=p.code;el('productBarcode').value=p.barcode||'';el('productName').value=p.name;el('productCategory').value=p.category||'';el('productUnit').value='Koli';el('productPackQty').value=Math.max(1,whole(p.packQty||1));el('productItemPrice').value=num(p.itemPrice!==undefined?p.itemPrice:(num(p.purchasePrice)/Math.max(1,num(p.packQty))));el('productSale').value=p.salePrice;el('productMin').value=p.minStock;el('productActive').value=String(p.active!==false);el('productNotes').value=p.notes||'';updateCartonPrice();window.scrollTo({top:0,behavior:'smooth'})}
@@ -1801,7 +1954,7 @@ function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermi
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
 el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
-el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productPackQty').addEventListener('input',updateCartonPrice);el('productItemPrice').addEventListener('input',updateCartonPrice);el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
+el('productExcelInput').addEventListener('change',importProductsExcel);el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productPackQty').addEventListener('input',updateCartonPrice);el('productItemPrice').addEventListener('input',updateCartonPrice);el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
 el('orderDiscount').addEventListener('input',updateOrderTotals);
 el('orderSearch').addEventListener('input',renderOrders);
