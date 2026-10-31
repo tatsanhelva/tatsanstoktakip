@@ -171,6 +171,7 @@
   <div class="field"><label>Telefon</label><input id="firmPhone" type="tel" maxlength="50"></div>
   <div class="field"><label>E-posta</label><input id="firmEmail" type="email" maxlength="200"></div>
   <div class="field"><label>Vergi No / TC Kimlik No</label><input id="firmTaxNo" maxlength="11" inputmode="numeric" placeholder="10 veya 11 hane"></div>
+  <div class="field"><label>Varsayılan İskonto (%)</label><input id="firmDiscount" type="text" maxlength="60" inputmode="decimal" autocomplete="off" placeholder="Örn. 20+5"><small class="muted">Sipariş Formu'nda cari seçilince otomatik gelir; sipariş sırasında değiştirilebilir.</small></div>
   <div class="field"><label>Durum</label><select id="firmActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></div>
   <div class="field full"><label>Adres</label><textarea id="firmAddress" rows="2" maxlength="1000"></textarea></div>
   <div class="field full"><label>Açıklama</label><textarea id="firmNotes" rows="2" maxlength="1000"></textarea></div>
@@ -185,7 +186,7 @@
   <input id="firmExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
  </div>
  <p class="muted" style="font-size:12px;margin:0 0 12px">Excel dosyasında kod, vergi/TC veya firma adı eşleşirse mevcut kart güncellenir. Borç bakiyeleri Excel ile değiştirilmez.</p>
- <div class="table-wrap"><table style="min-width:1100px"><thead><tr><th>Kod</th><th>Firma Adı / Adres</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Vergi / TC</th><th>Borç Durumu</th><th class="num">Bakiye (₺)</th><th>Durum</th><th>İşlemler</th></tr></thead><tbody id="firmTable"></tbody></table></div>
+ <div class="table-wrap"><table style="min-width:1100px"><thead><tr><th>Kod</th><th>Firma Adı / Adres</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Vergi / TC</th><th>Varsayılan İskonto</th><th>Borç Durumu</th><th class="num">Bakiye (₺)</th><th>Durum</th><th>İşlemler</th></tr></thead><tbody id="firmTable"></tbody></table></div>
 </div>
 <div class="card" data-admin-only>
  <div class="card-head"><h3>Cari Borç / Tahsilat Kaydı</h3><span class="muted">Borç ve ödemeler ayrı takip edilir.</span></div>
@@ -222,7 +223,8 @@
  </table></div>
  <div class="order-calculations">
   <div class="field"><label>Genel İskonto (%)</label><input id="orderDiscount" type="text" value="0" maxlength="60" inputmode="decimal" autocomplete="off" placeholder="Örn. 20+5">
-  <small class="muted">20+5 = önce %20, sonra kalan tutara %5 (etkili %24)</small>
+  <small class="muted">20+5 = önce %20, sonra kalan tutara %5 (etkili %24). Firma iskontosu otomatik gelir; burada değiştirebilirsin.</small>
+  <small id="orderFirmDiscountHint" class="muted" role="status" aria-live="polite"></small>
   <small id="orderDiscountFeedback" role="status" aria-live="polite"></small></div>
   <div class="field"><label>KDV Oranı (%)</label><input id="orderVatRate" type="number" min="0" max="100" step="0.01" value="1" inputmode="decimal" required>
   <small class="muted">Varsayılan %1; iskonto sonrası tutara uygulanır.</small>
@@ -1133,7 +1135,7 @@ function firmKey(value){return String(value||'').trim().toLocaleLowerCase('tr-TR
 function firmTax(value){return String(value||'').replace(/\s/g,'').trim()}
 function validFirmTax(value){return !value||/^\d{10,11}$/.test(value)}
 
-const FIRM_EXCEL_HEADERS=['Firma Kodu','Firma Adı','Yetkili Kişi','Telefon','E-posta','Vergi No / TC Kimlik No','Adres','Durum','Açıklama','Borç Durumu (Bilgi)','Bakiye TRY (Bilgi)'];
+const FIRM_EXCEL_HEADERS=['Firma Kodu','Firma Adı','Yetkili Kişi','Telefon','E-posta','Vergi No / TC Kimlik No','Adres','Varsayılan İskonto (%)','Durum','Açıklama','Borç Durumu (Bilgi)','Bakiye TRY (Bilgi)'];
 let firmExcelLoader=null;
 function loadFirmExcelLibrary(){
  if(window.XLSX)return Promise.resolve(window.XLSX);
@@ -1155,10 +1157,10 @@ async function exportFirmsExcel(empty=false){
   const rows=empty?[]:db.firms.map(f=>{
    const b=firmBalanceStatus(f.id);
    return [f.code||'',f.name||'',f.contact||'',f.phone||'',f.email||'',f.taxNo||'',f.address||'',
-     f.active!==false?'Aktif':'Pasif',f.notes||'',b.label,b.amount/100];
+     f.discountExpression||'',f.active!==false?'Aktif':'Pasif',f.notes||'',b.label,b.amount/100];
   });
   const ws=xlsx.utils.aoa_to_sheet([FIRM_EXCEL_HEADERS,...rows]);
-  ws['!cols']=[{wch:17},{wch:35},{wch:23},{wch:19},{wch:30},{wch:24},{wch:43},{wch:12},{wch:35},{wch:24},{wch:18}];
+  ws['!cols']=[{wch:17},{wch:35},{wch:23},{wch:19},{wch:30},{wch:24},{wch:43},{wch:24},{wch:12},{wch:35},{wch:24},{wch:18}];
   const wb=xlsx.utils.book_new();xlsx.utils.book_append_sheet(wb,ws,'Firmalar');
   xlsx.writeFile(wb,empty?'Tatsan_Firma_Excel_Sablonu.xlsx':'Tatsan_Firma_Listesi.xlsx');
  }catch(err){notify(err.message||'Excel oluşturulamadı.',true)}
@@ -1206,7 +1208,9 @@ function previewFirmExcelUpdate(rows){
     email:firmExcelColumn(row,['E-posta','Email','Eposta','Mail'],prior?.email),
     taxNo:firmExcelColumn(row,['Vergi No / TC Kimlik No','Vergi No','TC Kimlik No','Vergi / TC'],prior?.taxNo),
     address:firmExcelColumn(row,['Adres'],prior?.address),
+    discountExpression:normalizeFirmDiscount(firmExcelColumn(row,['Varsayılan İskonto (%)','Varsayılan İskonto','İskonto Oranı','İskonto'],prior?.discountExpression||'')),
     active:isActive,notes:firmExcelColumn(row,['Açıklama','Not'],prior?.notes)};
+  if(item.discountExpression===null)throw new Error((i+2)+'. satırda iskonto hatalı. Örneğin 20+5 veya 20+6 yazın.');
   if(item.email&&(!item.email.includes('@')||item.email.length>200))throw new Error((i+2)+'. satırda e-posta geçersiz.');
   if(item.taxNo&&proposed.some(f=>f.id!==item.id&&firmTax(f.taxNo)===item.taxNo))
    throw new Error((i+2)+'. satırda vergi / TC numarası başka firmaya ait.');
@@ -1442,6 +1446,7 @@ function resetOrderForm(){
  el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
  el('orderDate').value=localDateTimeValue().slice(0,10);
  el('orderDiscount').value='0';
+ el('orderFirmDiscountHint').textContent='Cari seçildiğinde varsayılan iskonto otomatik gelecektir.';
  el('orderVatRate').value='1';
  el('orderNumber').value=nextOrderNumber();
  updateOrderTotals();
@@ -1561,15 +1566,33 @@ function renderFirms(){
     '<button class="btn btn-light btn-sm" data-firm-action="statement" data-firm-id="'+esc(f.id)+'">Ekstre</button>';
    return '<tr><td><b>'+esc(f.code||'—')+'</b></td><td><b>'+esc(f.name)+'</b><div class="muted" style="max-width:250px;white-space:normal">'+esc(f.address||'')+'</div></td>'+
     '<td>'+esc(f.contact||'—')+'</td><td>'+esc(f.phone||'—')+'</td><td>'+esc(f.email||'—')+'</td><td>'+esc(f.taxNo||'—')+'</td>'+
-    '<td><span class="badge '+bal.css+'">'+bal.label+'</span></td><td class="num"><b>'+esc(firmMoney(bal.amount))+'</b></td>'+
+    '<td>'+esc(f.discountExpression||'—')+'</td><td><span class="badge '+bal.css+'">'+bal.label+'</span></td><td class="num"><b>'+esc(firmMoney(bal.amount))+'</b></td>'+
     '<td>'+(f.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td><td>'+actions+'</td></tr>';
- }).join(''):'<tr><td colspan="10" class="empty">Firma bulunamadı.</td></tr>';
+ }).join(''):'<tr><td colspan="11" class="empty">Firma bulunamadı.</td></tr>';
  if(isAdmin()){
   const select=el('firmLedgerFirm'),old=select.value;
   select.innerHTML='<option value="">Cari seçiniz</option>'+db.firms.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.code||'')+' - '+esc(f.name)+'</option>').join('');
   if(db.firms.some(x=>x.id===old))select.value=old;
   if(!el('firmLedgerDate').value)el('firmLedgerDate').value=new Date().toISOString().slice(0,10);
  }
+}
+function normalizeFirmDiscount(value){
+ const input=String(value??'').trim();
+ if(!input)return '';
+ const parsed=parseOrderDiscountExpression(input);
+ return parsed?parsed.expression:null;
+}
+function applySelectedFirmDiscount(){
+ const firm=firmById(el('orderFirm').value);
+ const discount=firm?normalizeFirmDiscount(firm.discountExpression):'';
+ const expression=discount===null||!discount?'0':discount;
+ el('orderDiscount').value=expression;
+ const hint=el('orderFirmDiscountHint');
+ hint.textContent=firm?(discount&&discount!=='0'?
+   'Cari kartındaki iskonto: '+discount+' — sadece bu sipariş için değiştirebilirsiniz.':
+   'Bu caride kayıtlı iskonto yok. Bu sipariş için elle yazabilirsiniz.'):
+  'Cari seçildiğinde varsayılan iskonto otomatik gelecektir.';
+ updateOrderTotals();
 }
 function saveFirm(e){
  e.preventDefault();if(!requirePermission('firms'))return;
@@ -1578,14 +1601,17 @@ function saveFirm(e){
  const previous=id?firmById(id):null;
  if(id&&!previous)return notify('Firma bulunamadı.',true);
  const code=previous?(previous.code||nextFirmCode()):nextFirmCode();
- const name=el('firmName').value.trim(),taxNo=firmTax(el('firmTaxNo').value);
+ const name=el('firmName').value.trim(),taxNo=firmTax(el('firmTaxNo').value),
+  discountExpression=normalizeFirmDiscount(el('firmDiscount').value);
  if(!name)return notify('Firma adı zorunludur.',true);
+ if(discountExpression===null)return notify('İskonto geçersiz. 20+5, 20+6 veya 15 gibi yazabilirsiniz.',true);
  if(!validFirmTax(taxNo))return notify('Vergi No 10, TC Kimlik No 11 rakam olmalıdır.',true);
  if(db.firms.some(f=>firmKey(f.code)===firmKey(code)&&f.id!==id))return notify('Firma kodu kullanılıyor.',true);
  if(taxNo&&db.firms.some(f=>firmTax(f.taxNo)===taxNo&&f.id!==id))return notify('Vergi / TC numarası başka firmaya ait.',true);
  const obj={...(previous||{}),id:id||uid('frm'),code,name,contact:el('firmContact').value.trim(),
   phone:el('firmPhone').value.trim(),email:el('firmEmail').value.trim(),taxNo,
-  address:el('firmAddress').value.trim(),active:el('firmActive').value==='true',notes:el('firmNotes').value.trim()};
+  address:el('firmAddress').value.trim(),active:el('firmActive').value==='true',notes:el('firmNotes').value.trim(),
+  discountExpression};
  if(id)db.firms[db.firms.findIndex(x=>x.id===id)]=obj;else db.firms.push(obj);
  audit(id?'Firma güncellendi':'Firma oluşturuldu','Firmalar',obj.code+' - '+obj.name);
  saveDB();resetFirmForm();notify('Firma kaydedildi: '+obj.code);
@@ -1597,11 +1623,13 @@ function editFirm(id){
  el('firmName').value=f.name||'';el('firmContact').value=f.contact||'';
  el('firmPhone').value=f.phone||'';el('firmEmail').value=f.email||'';
  el('firmTaxNo').value=f.taxNo||'';el('firmAddress').value=f.address||'';
+ el('firmDiscount').value=f.discountExpression||'';
  el('firmActive').value=String(f.active!==false);el('firmNotes').value=f.notes||'';
  el('page-firms').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function resetFirmForm(){
  el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmCode').value=nextFirmCode();
+ el('firmDiscount').value='';
 }
 function deleteFirm(id){
  if(!requirePermission('firms')||!requireAdminAction())return;
@@ -2309,6 +2337,7 @@ el('productExcelInput').addEventListener('change',importProductsExcel);el('produ
 el('productPackQty').addEventListener('input',updateCartonPrice);
 el('productKgSale').addEventListener('input',updateCartonPrice);el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
+el('orderFirm').addEventListener('change',applySelectedFirmDiscount);
 el('orderDiscount').addEventListener('input',updateOrderTotals);
 el('orderVatRate').addEventListener('input',updateOrderTotals);
 el('orderSearch').addEventListener('input',renderOrders);
