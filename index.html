@@ -1754,7 +1754,7 @@ function renderBatchRows(prefix,reset=false){
       <td>${esc(p.code||'-')}</td>
       <td class="batch-name">${esc(p.name)}</td>
       <td class="batch-stock">${esc(formatStockAmount(p.id,getStock(warehouse,p.id)))}</td>
-      <td><input class="batch-qty" type="number" min="${prefix==='count'?'0':'0.001'}" step="${unit==='Kg'?'0.001':'1'}" inputmode="decimal" placeholder="${prefix==='count'?'Sayılan':'0'}" value="${esc(draft.quantity??'')}" aria-label="${esc(p.name)} ${prefix==='count'?'sayılan stok':'miktarı'}"></td>
+      <td><input class="batch-qty" type="number" min="${prefix==='count'?'0':unit==='Kg'?'0.001':'1'}" step="${unit==='Kg'?'0.001':'1'}" inputmode="decimal" placeholder="${prefix==='count'?'Sayılan':'0'}" value="${esc(draft.quantity??'')}" aria-label="${esc(p.name)} ${prefix==='count'?'sayılan stok':'miktarı'}"></td>
       <td><select class="batch-unit" aria-label="${esc(p.name)} birimi">${stockUnitOptions(p.id).map(u=>`<option value="${u}" ${u===unit?'selected':''}>${u}</option>`).join('')}</select></td>
       <td class="batch-after">—</td></tr>`;
   }).join('');
@@ -1859,6 +1859,7 @@ function resetBatchForm(prefix,warehouse,firmId=''){
     row.querySelector('.batch-qty').value='';
     row.querySelector('.batch-unit').value=defaultStockUnit(row.dataset.productId);
     row.querySelector('.batch-qty').step='1';
+    row.querySelector('.batch-qty').min=prefix==='count'?'0':'1';
     updateBatchPreview(prefix,row);
   });
   filterBatchRows(prefix);
