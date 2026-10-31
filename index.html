@@ -1741,7 +1741,8 @@ function renderBatchRows(prefix,reset=false){
     body.innerHTML='<tr><td colspan="7" class="empty">Önce depo seçin.</td></tr>';
     updateBatchSummary(prefix);return;
   }
-  const products=db.products.filter(p=>p.active!==false).sort((a,b)=>String(a.name).localeCompare(String(b.name),'tr'));
+  // Ürünler sekmesindeki kayıt sırasını koru; yalnızca pasif ürünleri stok işlemlerinden çıkar.
+  const products=db.products.filter(p=>p.active!==false);
   if(!products.length){
     body.innerHTML='<tr><td colspan="7" class="empty">Aktif ürün bulunamadı. Ürünler bölümünden ürün ekleyin.</td></tr>';
     updateBatchSummary(prefix);return;
