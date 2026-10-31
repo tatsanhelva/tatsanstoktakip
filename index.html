@@ -1021,8 +1021,8 @@ function renderProducts(){
    '<td>'+esc(p.category)+'</td><td class="num"><b>'+formatStockAmount(p.id,current)+'</b>'+
    (stockIsVisiblyEmpty(p.id,current)?'<div class="muted" style="font-size:11px">Stokta yok</div>':'')+'</td>'+
    '<td>'+(kg?'Koli / KG':'Koli / Adet')+'</td><td class="num">'+qty(p.packQty)+'</td>'+
-      '<td class="num">'+money(kg?(p.kgSalePrice??num(p.salePrice)/packQtyFor(p.id)):p.salePrice)+
-    '<div class="muted">'+(kg?'KG Satış':'Koli Satış')+'</div></td>'+
+   '<td class="num"><b>'+money(p.salePrice)+'</b><div class="muted">Koli Satış</div>'+
+   '<div class="muted">'+money(orderDefaultPrice(p,kg?'Kg':'Adet'))+' / '+(kg?'KG':'Adet')+'</div></td>'+
    '<td class="num">'+qty(p.minStock)+'</td><td>'+(p.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td>'+
    '<td>'+actions+'</td></tr>';
  }).join(''):'<tr><td colspan="11" class="empty">Ürün bulunamadı.</td></tr>';
@@ -1431,7 +1431,7 @@ function handleOrderLineEvent(e){
    // fiyatını kaynak al, böylece KG ve Adet seçimi her zaman doğru fiyatı getirir.
    const price=orderDefaultPrice(product,next);
    row.querySelector('.order-price').value=price.toFixed(2);
-   row.querySelector('.order-quantity').step=next==='Kg'?'0.001':'1';
+   row.querySelector('.order-quantity').step='1';
    row.dataset.previousUnit=next;
   }
  }
@@ -1514,7 +1514,7 @@ function showOrderDetails(id){
   (order.note?'<p><b>Not:</b> '+esc(order.note)+'</p>':'');
  el('orderDetailsLines').innerHTML=(order.lines||[]).map(l=>
   '<tr><td><b>'+esc(l.productName)+'</b> '+esc(l.productCode||'')+'</td>'+
-  '<td class="num">'+Number(l.quantity).toLocaleString('tr-TR')+'</td><td>'+esc(l.displayUnit||l.unit)+'</td>'+
+  '<td class="num">'+Number(l.quantity).toLocaleString('tr-TR')+'</td><td>'+esc(l.displayUnit==='Paket'?'Koli':(l.displayUnit||l.unit))+'</td>'+
   '<td class="num">'+orderMoney(l.unitPriceCents)+'</td><td class="num">'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
  const vat=storedOrderVat(order);
  el('orderDetailsTotals').innerHTML='<div>Ara toplam (KDV hariç): <b>'+orderMoney(order.subtotalCents)+
@@ -1531,7 +1531,7 @@ function printCurrentOrder(){
  const win=window.open('','_blank','width=920,height=740');
  if(!win)return notify('Yazdırma penceresi engellendi. Tarayıcıdan açılır pencereye izin verin.',true);
  const rows=(order.lines||[]).map(l=>'<tr><td>'+esc(l.productCode)+'</td><td>'+esc(l.productName)+
-  '</td><td>'+esc(l.quantity)+'</td><td>'+esc(l.displayUnit||l.unit)+'</td><td>'+orderMoney(l.unitPriceCents)+
+  '</td><td>'+esc(l.quantity)+'</td><td>'+esc(l.displayUnit==='Paket'?'Koli':(l.displayUnit||l.unit))+'</td><td>'+orderMoney(l.unitPriceCents)+
   '</td><td>'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
  const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>'+esc(order.number)+
   '</title><style>body{font-family:Arial,sans-serif;margin:30px;color:#1f2937}h1{margin-bottom:6px}'+
