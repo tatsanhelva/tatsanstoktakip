@@ -811,6 +811,7 @@ function updateProductUnitUI(){
  const kg=el('productUnit').value==='Kg';
  el('productPackLabel').textContent=kg?'Paket Ağırlığı (KG) *':'Koli İçi Adet (İsteğe Bağlı)';
  el('productPackQty').step=kg?'0.001':'1';
+ el('productPackQty').min=kg?'0.001':'1';
  el('productPackQty').placeholder=kg?'Örn. 10':'Boşsa 1 adet';
  el('productPackQty').required=kg;
  el('productItemPriceLabel').textContent=kg?'KG Alış Fiyatı (₺)':'Adet Alış Fiyatı (₺)';
