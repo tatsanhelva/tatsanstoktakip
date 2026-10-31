@@ -830,16 +830,18 @@ function updateCartonPrice(){
  if(kg)el('productSale').value=(Math.round(num(el('productKgSale').value)*pack*100)/100).toFixed(2);
 }
 
-const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Koli İçi Adet','Adet Alış Fiyatı','Koli Satış Fiyatı','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
+const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Stok Birimi','Paket KG / Koli İçi Adet','Birim Alış Fiyatı','KG Satış Fiyatı','Paket/Koli Satış Fiyatı','Minimum Stok (Paket/Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
 function exportProductsExcel(empty=false){
  if(!requirePermission('products'))return;
  loadFirmExcelLibrary().then(xlsx=>{
   const rows=empty?[]:db.products.map(p=>[String(p.code||''),String(p.barcode||''),String(p.name||''),String(p.category||''),
-   Number(p.packQty||1),Number(p.itemPrice??(Number(p.purchasePrice||0)/Math.max(1,Number(p.packQty||1)))),
+   p.unit==='Kg'?'KG':'Koli',Number(p.packQty||1),
+   Number(p.itemPrice??(Number(p.purchasePrice||0)/Math.max(.001,Number(p.packQty||1)))),
+   p.unit==='Kg'?Number(p.kgSalePrice??(Number(p.salePrice||0)/Math.max(.001,Number(p.packQty||1)))):'',
    Number(p.salePrice||0),Number(p.minStock||0),p.active!==false?'Aktif':'Pasif',String(p.notes||''),
    formatStockAmount(p.id,productTotalStock(p.id))]);
   const ws=xlsx.utils.aoa_to_sheet([PRODUCT_EXCEL_HEADERS,...rows]);
-  ws['!cols']=[{wch:18},{wch:20},{wch:45},{wch:24},{wch:17},{wch:21},{wch:21},{wch:24},{wch:12},{wch:40},{wch:22}];
+  ws['!cols']=[{wch:18},{wch:20},{wch:45},{wch:24},{wch:15},{wch:24},{wch:22},{wch:20},{wch:23},{wch:24},{wch:12},{wch:40},{wch:23}];
   // Kimlik alanları Excel'de baştaki sıfırları koruyacak şekilde metin olarak saklanır.
   for(let i=2;i<=rows.length+1;i++){
    for(const col of ['A','B']){
