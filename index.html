@@ -586,6 +586,7 @@ async function initializeApplication(){
     const probe=await rpc('authProbe',null,{url:DEFAULT_SERVER_URL,key:''});
     if(probe?.mode==='secure'){
       secureMode=true;
+      ordersBackendEnabled=probe?.features?.orders===true;
       if(cloudState.dirty&&localStorage.getItem(DB_KEY))localStorage.setItem('tatsanPreSecureMigrationBackup',localStorage.getItem(DB_KEY));
       localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url:DEFAULT_SERVER_URL}));
       sessionStorage.removeItem('tatsanCloudKey');
@@ -830,6 +831,218 @@ async function importFirmsExcel(e){
  }catch(err){notify(err.message||'Excel okunamadı.',true);alert('Excel içe aktarılamadı: '+(err.message||'Bilinmeyen hata'))}
  finally{input.value=''}
 }
+
+function orderMoney(cents){
+ return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(Number(cents||0)/100);
+}
+function nextOrderNumber(orders=db.orders){
+ const used=new Set((orders||[]).map(x=>String(x.number||'')));
+ const ns=(orders||[]).map(x=>/^SIP-0*(\d+)$/i.exec(String(x.number||''))).filter(Boolean).map(m=>Number(m[1]));
+ let n=Math.max(0,...ns)+1;
+ while(used.has('SIP-'+String(n).padStart(6,'0')))n++;
+ return 'SIP-'+String(n).padStart(6,'0');
+}
+function orderDefaultPrice(product,unit){
+ const carton=Math.max(0,Number(product.salePrice)||0);
+ return Math.round((unit==='Adet'?carton/Math.max(1,Math.round(Number(product.packQty)||1)):carton)*100)/100;
+}
+function orderEditableRows(){
+ return [...el('orderLineRows').querySelectorAll('tr[data-order-product-id]')];
+}
+function addOrderProduct(){
+ if(!requirePermission('orders'))return;
+ const id=el('orderProductPicker').value,product=productById(id);
+ if(!product||product.active===false)return notify('Önce eklemek istediğiniz ürünü seçin.',true);
+ const rows=orderEditableRows();
+ if(rows.some(row=>row.dataset.orderProductId===id)){
+  const existing=rows.find(row=>row.dataset.orderProductId===id);
+  existing.querySelector('.order-quantity').focus();
+  return notify('Bu ürün siparişte zaten var. Mevcut satırın miktarını değiştirin.',true);
+ }
+ if(rows.length>=50)return notify('Tek siparişte en fazla 50 farklı ürün olabilir.',true);
+ if(!rows.length)el('orderLineRows').innerHTML='';
+ const row=document.createElement('tr');
+ row.dataset.orderProductId=id;row.dataset.previousUnit='Koli';
+ row.innerHTML='<td><b>'+esc(product.name)+'</b><div class="muted">'+esc(product.code||'')+
+   ' · Koli içi: '+qty(product.packQty||1)+' Adet</div></td>'+
+  '<td><input class="order-quantity" type="number" min="1" max="100000" step="1" value="1" inputmode="numeric" aria-label="Sipariş miktarı"></td>'+
+  '<td><select class="order-unit" aria-label="Sipariş birimi"><option value="Koli">Koli</option><option value="Adet">Adet</option></select></td>'+
+  '<td><input class="order-price" type="number" min="0" max="1000000" step="0.01" value="'+orderDefaultPrice(product,'Koli').toFixed(2)+'" aria-label="Birim satış fiyatı"></td>'+
+  '<td class="num"><b class="order-line-total">'+orderMoney(Math.round(orderDefaultPrice(product,'Koli')*100))+'</b></td>'+
+  '<td><button type="button" class="btn btn-danger btn-sm" data-order-action="remove" aria-label="Satırı sil">Kaldır</button></td>';
+ el('orderLineRows').appendChild(row);
+ updateOrderTotals();
+}
+function getOrderQuote(shouldNotify=false){
+ const rows=orderEditableRows(),out=[];
+ if(shouldNotify&&!rows.length){notify('Siparişe en az bir ürün ekleyin.',true);return null}
+ let subtotalCents=0;
+ for(const row of rows){
+  const product=productById(row.dataset.orderProductId),
+   qtyText=row.querySelector('.order-quantity').value.trim(),
+   priceText=row.querySelector('.order-price').value.trim(),
+   quantity=Number(qtyText),unit=row.querySelector('.order-unit').value,
+   price=Number(priceText);
+  if(!product||product.active===false){if(shouldNotify)notify('Sipariş ürünlerinden biri artık aktif değil.',true);return null}
+  if(!/^\d+$/.test(qtyText)||!Number.isSafeInteger(quantity)||quantity<1||quantity>100000){
+   if(shouldNotify)notify(product.name+' için miktar 1-100.000 arasında tam sayı olmalı.',true);return null;
+  }
+  if(priceText===''||!Number.isFinite(price)||price<0||price>1000000||Math.abs(price*100-Math.round(price*100))>0.00001){
+   if(shouldNotify)notify(product.name+' için en fazla iki ondalıklı geçerli fiyat girin.',true);return null;
+  }
+  if(!['Koli','Adet'].includes(unit)){if(shouldNotify)notify('Geçersiz birim.',true);return null}
+  const unitPriceCents=Math.round(price*100),lineTotalCents=unitPriceCents*quantity;
+  subtotalCents+=lineTotalCents;
+  if(!Number.isSafeInteger(subtotalCents)){if(shouldNotify)notify('Sipariş toplamı çok yüksek.',true);return null}
+  out.push({productId:product.id,productCode:product.code||'',productName:product.name,
+   unit,quantity,unitPriceCents,lineTotalCents});
+ }
+ const percentText=el('orderDiscount').value.trim(),discountPercent=percentText===''?0:Number(percentText);
+ if(!Number.isFinite(discountPercent)||discountPercent<0||discountPercent>100||
+    Math.abs(discountPercent*100-Math.round(discountPercent*100))>0.000001){
+  if(shouldNotify)notify('İskonto oranı 0-100 arasında ve en fazla iki ondalıklı olmalıdır.',true);return null;
+ }
+ const discountBasisPoints=Math.round(discountPercent*100);
+ const discountCents=Math.round(subtotalCents*discountBasisPoints/10000);
+ return {lines:out,subtotalCents,discountBasisPoints,discountCents,totalCents:subtotalCents-discountCents};
+}
+function updateOrderTotals(){
+ let subtotal=0;
+ for(const row of orderEditableRows()){
+  const quantity=Number(row.querySelector('.order-quantity').value),price=Number(row.querySelector('.order-price').value);
+  const valid=Number.isSafeInteger(quantity)&&quantity>0&&quantity<=100000&&Number.isFinite(price)&&price>=0&&price<=1000000;
+  const total=valid?Math.round(price*100)*quantity:null;
+  row.querySelector('.order-line-total').textContent=total===null?'—':orderMoney(total);
+  if(total!==null)subtotal+=total;
+ }
+ const percent=Number(el('orderDiscount').value)||0;
+ const discountCents=Math.round(subtotal*Math.max(0,Math.min(100,percent))/100);
+ el('orderSubtotal').textContent=orderMoney(subtotal);
+ el('orderDiscountAmount').textContent='−'+orderMoney(discountCents);
+ el('orderGrandTotal').textContent=orderMoney(subtotal-discountCents);
+}
+function handleOrderLineEvent(e){
+ const row=e.target.closest('tr[data-order-product-id]');if(!row)return;
+ if(e.type==='click'&&e.target.closest('[data-order-action="remove"]')){
+  row.remove();
+  if(!orderEditableRows().length)el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
+  updateOrderTotals();return;
+ }
+ if(e.type==='change'&&e.target.classList.contains('order-unit')){
+  const next=e.target.value,previous=row.dataset.previousUnit||'Koli';
+  if(next!==previous){
+   const product=productById(row.dataset.orderProductId),priceInput=row.querySelector('.order-price'),
+    current=Number(priceInput.value),pack=Math.max(1,Math.round(Number(product?.packQty)||1));
+   if(Number.isFinite(current)&&current>=0){
+    priceInput.value=(Math.round((previous==='Koli'?current/pack:current*pack)*100)/100).toFixed(2);
+   }
+   row.dataset.previousUnit=next;
+  }
+ }
+ updateOrderTotals();
+}
+function resetOrderForm(){
+ el('orderForm').reset();
+ el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
+ el('orderDate').value=localDateTimeValue().slice(0,10);
+ el('orderDiscount').value='0';
+ el('orderNumber').value=nextOrderNumber();
+ updateOrderTotals();
+}
+function renderOrders(){
+ if(!currentUser||!hasPermission('orders'))return;
+ const beforeFirm=el('orderFirm').value,beforeProduct=el('orderProductPicker').value;
+ const firms=db.firms.filter(f=>f.active!==false).map(f=>({id:f.id,label:(f.code?f.code+' - ':'')+f.name}));
+ const products=db.products.filter(p=>p.active!==false).map(p=>({id:p.id,label:(p.code?p.code+' - ':'')+p.name}));
+ fillSelect('orderFirm',firms,'Cari / firma seçiniz');
+ fillSelect('orderProductPicker',products,'Ürün seçiniz');
+ if(firms.some(x=>x.id===beforeFirm))el('orderFirm').value=beforeFirm;
+ if(products.some(x=>x.id===beforeProduct))el('orderProductPicker').value=beforeProduct;
+ if(!el('orderDate').value)el('orderDate').value=localDateTimeValue().slice(0,10);
+ el('orderNumber').value=nextOrderNumber();
+ const allowedSave=isAdmin()||!secureMode||ordersBackendEnabled;
+ el('orderSaveBtn').disabled=!allowedSave;
+ el('orderSaveBtn').title=allowedSave?'Siparişi Drive sistemine kaydet':
+  'Çalışan sipariş kayıtları için merkezi sunucu güncellemesi gerekiyor.';
+ const q=(el('orderSearch').value||'').trim().toLocaleLowerCase('tr-TR');
+ const items=[...db.orders].filter(o=>
+  [o.number,o.firmName,o.note,...(o.lines||[]).map(l=>l.productName)].join(' ').toLocaleLowerCase('tr-TR').includes(q))
+ .sort((a,b)=>String(b.createdAt||b.date).localeCompare(String(a.createdAt||a.date)));
+ el('orderListRows').innerHTML=items.length?items.slice(0,200).map(o=>
+  '<tr><td><b>'+esc(o.number)+'</b></td><td>'+esc(o.date||'')+'</td><td>'+esc(o.firmName||'')+
+  '</td><td>'+Number(o.lines?.length||0)+'</td><td>'+((Number(o.discountBasisPoints||0)/100).toLocaleString('tr-TR'))+
+  '%</td><td class="num"><b>'+orderMoney(o.totalCents)+'</b></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
+  '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button></td></tr>'
+ ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
+ updateOrderTotals();
+}
+function saveOrder(e){
+ e.preventDefault();if(!requirePermission('orders'))return;
+ if(secureMode&&!isAdmin()&&!ordersBackendEnabled)
+  return notify('Çalışan hesabıyla sipariş kaydı için Google Apps Script sunucu güncellemesi gerekiyor.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
+  return notify('Sipariş kaydetmeden önce bekleyen Drive kayıtları tamamlanmalı.',true);
+ const firm=firmById(el('orderFirm').value);
+ if(!firm||firm.active===false)return notify('Sipariş için geçerli bir cari seçin.',true);
+ const quote=getOrderQuote(true);if(!quote)return;
+ const date=el('orderDate').value;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))
+  return notify('Geçerli sipariş tarihi girin.',true);
+ const number=nextOrderNumber(),order={id:uid('ord'),number,date,firmId:firm.id,
+  firmCode:firm.code||'',firmName:firm.name,lines:quote.lines,
+  subtotalCents:quote.subtotalCents,discountBasisPoints:quote.discountBasisPoints,
+  discountCents:quote.discountCents,totalCents:quote.totalCents,
+  note:el('orderNotes').value.trim(),status:'Yeni',
+  userId:currentUser.id,userName:currentUser.fullName||currentUser.username,
+  createdAt:new Date().toISOString()};
+ db.orders.push(order);
+ audit('Sipariş oluşturuldu','Sipariş Formu',
+   number+' | '+firm.name+' | '+quote.lines.length+' ürün | '+orderMoney(quote.totalCents));
+ saveDB();resetOrderForm();
+ notify(number+' siparişi oluşturuldu. Drive kayıt kuyruğuna alındı.');
+}
+let orderCurrentlyViewed=null;
+function showOrderDetails(id){
+ if(!requirePermission('orders'))return;
+ const order=db.orders.find(o=>o.id===id);if(!order)return notify('Sipariş bulunamadı.',true);
+ orderCurrentlyViewed=id;
+ el('orderDetailsTitle').textContent=order.number+' - Sipariş Formu';
+ el('orderDetailsHeader').innerHTML='<p><b>Cari:</b> '+esc(order.firmName||'')+
+  ' &nbsp; <b>Tarih:</b> '+esc(order.date||'')+
+  ' &nbsp; <b>Oluşturan:</b> '+esc(order.userName||'')+'</p>'+
+  (order.note?'<p><b>Not:</b> '+esc(order.note)+'</p>':'');
+ el('orderDetailsLines').innerHTML=(order.lines||[]).map(l=>
+  '<tr><td><b>'+esc(l.productName)+'</b> '+esc(l.productCode||'')+'</td>'+
+  '<td class="num">'+Number(l.quantity).toLocaleString('tr-TR')+'</td><td>'+esc(l.unit)+'</td>'+
+  '<td class="num">'+orderMoney(l.unitPriceCents)+'</td><td class="num">'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
+ el('orderDetailsTotals').innerHTML='<div>Ara toplam: <b>'+orderMoney(order.subtotalCents)+
+  '</b></div><div>İskonto: <b>%'+Number(order.discountBasisPoints/100).toLocaleString('tr-TR')+
+  ' / '+orderMoney(order.discountCents)+'</b></div><div style="font-size:18px">Net Toplam: <b>'+
+  orderMoney(order.totalCents)+'</b></div>';
+ el('orderDetailsDialog').showModal();
+}
+function printCurrentOrder(){
+ const order=db.orders.find(o=>o.id===orderCurrentlyViewed);if(!order)return;
+ const win=window.open('','_blank','width=920,height=740');
+ if(!win)return notify('Yazdırma penceresi engellendi. Tarayıcıdan açılır pencereye izin verin.',true);
+ const rows=(order.lines||[]).map(l=>'<tr><td>'+esc(l.productCode)+'</td><td>'+esc(l.productName)+
+  '</td><td>'+esc(l.quantity)+'</td><td>'+esc(l.unit)+'</td><td>'+orderMoney(l.unitPriceCents)+
+  '</td><td>'+orderMoney(l.lineTotalCents)+'</td></tr>').join('');
+ const html='<!doctype html><html lang="tr"><head><meta charset="utf-8"><title>'+esc(order.number)+
+  '</title><style>body{font-family:Arial,sans-serif;margin:30px;color:#1f2937}h1{margin-bottom:6px}'+
+  'table{width:100%;border-collapse:collapse;margin:20px 0}td,th{border-bottom:1px solid #d1d5db;padding:10px;text-align:left}'+
+  '.total{text-align:right;font-size:18px;font-weight:bold;margin-top:12px}</style></head><body>'+
+  '<h1>Sipariş Formu</h1><p><b>Sipariş:</b> '+esc(order.number)+' &nbsp; <b>Tarih:</b> '+esc(order.date)+'</p>'+
+  '<p><b>Cari:</b> '+esc(order.firmName)+'</p>'+
+  '<table><thead><tr><th>Kod</th><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Birim Fiyat</th><th>Tutar</th></tr></thead><tbody>'+
+  rows+'</tbody></table><p class="total">Ara Toplam: '+orderMoney(order.subtotalCents)+
+  '</p><p class="total">İskonto: %'+(order.discountBasisPoints/100)+' ('+orderMoney(order.discountCents)+
+  ')</p><p class="total">Toplam: '+orderMoney(order.totalCents)+'</p>'+
+  (order.note?'<p><b>Not:</b> '+esc(order.note)+'</p>':'')+
+  '<p style="font-size:11px;color:#555">KDV hesaplanmamıştır. Sipariş stok ve cari bakiyesini değiştirmez.</p></body></html>';
+ win.document.open();win.document.write(html);win.document.close();win.focus();win.print();
+}
+
 function renderFirms(){
  const q=firmKey(el('firmSearch').value);
  const found=db.firms.filter(f=>firmKey([f.code,f.name,f.contact,f.phone,f.email,f.taxNo,f.address].join(' ')).includes(q));
@@ -1504,13 +1717,22 @@ function clearAllAuditLogs(){
 }
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderStock();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderOrders();renderStock();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
 el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
 el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productPackQty').addEventListener('input',updateCartonPrice);el('productItemPrice').addEventListener('input',updateCartonPrice);el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
-el('warehouseForm').addEventListener('submit',saveWarehouse);el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
+el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
+el('orderDiscount').addEventListener('input',updateOrderTotals);
+el('orderSearch').addEventListener('input',renderOrders);
+el('orderLineRows').addEventListener('input',handleOrderLineEvent);
+el('orderLineRows').addEventListener('change',handleOrderLineEvent);
+el('orderLineRows').addEventListener('click',handleOrderLineEvent);
+el('orderListRows').addEventListener('click',e=>{
+ const b=e.target.closest('button[data-order-view]');if(b)showOrderDetails(b.dataset.orderView);
+});
+el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
 el('firmExcelInput').addEventListener('change',importFirmsExcel);
 el('firmTable').addEventListener('click',e=>{
