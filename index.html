@@ -132,7 +132,7 @@
 <div class="field"><label>Barkod</label><input id="productBarcode"/></div>
 <div class="field"><label>Ürün Adı *</label><input id="productName" required=""/></div>
 <div class="field"><label>Kategori</label><select id="productCategory"><option value="">Kategori seçiniz</option></select><small class="muted">Kategorileri Kategoriler menüsünden ekleyip silebilirsiniz.</small></div>
-<div class="field"><label>Stok Takip Birimi *</label><select id="productUnit"><option value="Koli">Koli / Adet</option><option value="Kg">KG / Paket</option></select></div>
+<div class="field"><label>Stok Takip Birimi *</label><select id="productUnit"><option value="Koli">Koli / Adet</option><option value="Kg">KG / Koli</option></select></div>
 <div class="field"><label id="productPackLabel">Koli İçi Adet (İsteğe Bağlı)</label><input id="productPackQty" min="1" step="1" inputmode="decimal" type="number" placeholder="Boşsa 1 adet"/></div>
 <div class="field"><label id="productSaleLabel">Koli Satış Fiyatı (₺)</label><input id="productSale" min="0" step="0.01" type="number" value="0"/></div>
 <div class="field" id="productKgSaleField" style="display:none"><label>KG Satış Fiyatı (₺)</label><input id="productKgSale" min="0" step="0.01" type="number" value="0"/></div>
@@ -152,7 +152,7 @@
  <input id="productExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
 <p class="muted" style="font-size:12px;margin:0 0 12px">Ürün kodu veya barkod eşleştirilir. Excel sadece ürün kartlarını günceller; mevcut stok miktarları, hareketler ve siparişler değişmez.</p>
-<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Paket İçi Adet / KG</th><th class="num">Satış Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
+<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Koli İçi Adet / KG</th><th class="num">Satış Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
 </div>
 <div class="page" id="page-categories">
 <div class="card"><h3>Kategori Kartı</h3><form id="categoryForm"><input id="categoryId" type="hidden"/><div class="form-grid cols-2"><div class="field"><label>Kategori Adı *</label><input id="categoryName" required="" placeholder="Örn. Gıda, Ambalaj, Hammadde"/></div><div class="field"><label>Açıklama</label><input id="categoryNotes"/></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kategoriyi Kaydet</button><button class="btn btn-light" onclick="resetCategoryForm()" type="button">Temizle</button></div></form></div>
@@ -386,7 +386,7 @@ function normalizeDB(x){
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
   d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true)},createdAt:u.createdAt||new Date().toISOString()}});
   if(!d._restricted&&!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
-  d.movements=d.movements.map(m=>{const inputUnit=['Koli','Adet','Kg','Paket'].includes(m.inputUnit)?m.inputUnit:(d.products.find(p=>p.id===m.productId)?.unit==='Kg'?'Paket':'Koli');const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
+  d.movements=d.movements.map(m=>{const inputUnit=['Koli','Adet','Kg','Paket'].includes(m.inputUnit)?m.inputUnit:'Koli';const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
   return d;
 }
 function loadDB(){try{const x=JSON.parse(localStorage.getItem(DB_KEY));return normalizeDB(x)}catch(e){return defaultDB()}}
@@ -419,8 +419,8 @@ function packQtyFor(productId){
  if(isKgProduct(p))return Number.isFinite(raw)&&raw>0?Math.round(raw*1000)/1000:1;
  return Math.max(1,whole(raw||1));
 }
-function stockUnitOptions(productId){return isKgProduct(productId)?['Paket','Kg']:['Koli','Adet']}
-function defaultStockUnit(productId){return isKgProduct(productId)?'Paket':'Koli'}
+function stockUnitOptions(productId){return isKgProduct(productId)?['Koli','Kg']:['Koli','Adet']}
+function defaultStockUnit(productId){return 'Koli'}
 function isValidStockInput(text,productId,unit,allowZero=false){
  const value=String(text??'').trim(),n=Number(value);
  if(!stockUnitOptions(productId).includes(unit))return false;
@@ -450,8 +450,8 @@ function formatStockAmount(productId,cartons){
   if(amount===0)return '0 Kg';
   const pack=packQtyFor(productId),packs=Math.trunc(Math.abs(amount)/pack+1e-9);
   const rest=Math.round((Math.abs(amount)-packs*pack)*1000)/1000,sign=amount<0?'-':'';
-  if(packs&&rest>0)return sign+qty(packs)+' Paket '+qty(rest)+' Kg';
-  if(packs)return sign+qty(packs)+' Paket ('+qty(Math.abs(amount))+' Kg)';
+  if(packs&&rest>0)return sign+qty(packs)+' Koli '+qty(rest)+' Kg';
+  if(packs)return sign+qty(packs)+' Koli ('+qty(Math.abs(amount))+' Kg)';
   return sign+qty(rest)+' Kg';
  }
  const pack=packQtyFor(productId),pieces=totalPieces(productId,cartons),sign=pieces<0?'-':'',abs=Math.abs(pieces),
@@ -461,7 +461,8 @@ function formatStockAmount(productId,cartons){
  return sign+loose+' Adet';
 }
 function formatMovementQuantity(m,signed=false){
- const unit=stockUnitOptions(m.productId).includes(m.inputUnit)?m.inputUnit:defaultStockUnit(m.productId);
+ const unit=m.inputUnit==='Paket'&&isKgProduct(m.productId)?'Koli':
+   (stockUnitOptions(m.productId).includes(m.inputUnit)?m.inputUnit:defaultStockUnit(m.productId));
  const stored=Math.abs(num(m.quantity)),input=num(m.inputQuantity??fromCartons(m.productId,stored,unit));
  const minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type),prefix=signed?(minus?'-':'+'):'';
  return prefix+qty(input)+' '+unit;
@@ -708,7 +709,7 @@ function fillMovementEditorSelects(){const wh=db.warehouses.map(x=>({id:x.id,lab
 function openMovementEditor(id){
   if(!requireAdminAction())return;const m=db.movements.find(x=>x.id===id);if(!m)return notify('Hareket bulunamadı.',true);fillMovementEditorSelects();const transfer=['TRANSFER_CIKIS','TRANSFER_GIRIS'].includes(m.type);let source=m,target=null;
   if(transfer){const pair=db.movements.filter(x=>x.groupId&&x.groupId===m.groupId);source=pair.find(x=>x.type==='TRANSFER_CIKIS')||m;target=pair.find(x=>x.type==='TRANSFER_GIRIS');if(!target)return notify('Transferin hedef kaydı bulunamadı.',true)}
-  const unit=stockUnitOptions(source.productId).includes(source.inputUnit)?source.inputUnit:defaultStockUnit(source.productId),stored=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(source.quantity)),shown=num(source.inputQuantity??fromCartons(source.productId,stored,unit));
+  const unit=source.inputUnit==='Paket'&&isKgProduct(source.productId)?'Koli':(stockUnitOptions(source.productId).includes(source.inputUnit)?source.inputUnit:defaultStockUnit(source.productId)),stored=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(source.quantity)),shown=num(source.inputQuantity??fromCartons(source.productId,stored,unit));
   el('movementEditId').value=m.id;el('movementEditType').value=movementTypeLabel(m.type);el('movementEditDate').value=localDateTimeValue(new Date(source.date));el('movementEditDoc').value=source.doc||'';el('movementEditWarehouse').value=source.warehouseId||'';el('movementEditProduct').value=source.productId||'';setUnitOptions('movementEditUnit',source.productId,unit);el('movementEditQty').value=shown;
   el('movementEditQty').step=unit==='Kg'?'0.001':'1';el('movementEditDetail').value=transfer?stripTransferDetail(source.detail):(m.detail||'');
   el('movementEditTargetWrap').style.display=transfer?'':'none';el('movementEditFirmWrap').style.display=m.type==='CIKIS'?'':'none';el('movementEditReasonWrap').style.display=m.type==='CIKIS'?'':'none';el('movementEditLotWrap').style.display=m.type==='GIRIS'?'':'none';el('movementEditExpiryWrap').style.display=m.type==='GIRIS'?'':'none';el('movementEditWarehouseLabel').textContent=transfer?'Kaynak Depo *':'Depo *';el('movementEditQtyLabel').textContent=(m.type==='SAYIM'?'Sayılan Gerçek Stok':'Miktar')+` (${unit}) *`;
@@ -813,15 +814,15 @@ function signedQty(m){const minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type);re
 function productTotalStock(productId){return db.warehouses.reduce((sum,w)=>sum+getStock(w.id,productId),0)}
 function updateProductUnitUI(){
  const kg=el('productUnit').value==='Kg';
- el('productPackLabel').textContent=kg?'Paket Ağırlığı (KG) *':'Koli İçi Adet (İsteğe Bağlı)';
+ el('productPackLabel').textContent=kg?'Koli Ağırlığı (KG) *':'Koli İçi Adet (İsteğe Bağlı)';
  el('productPackQty').step=kg?'0.001':'1';
  el('productPackQty').min=kg?'0.001':'1';
- el('productPackQty').placeholder=kg?'Örn. 10':'Boşsa 1 adet';
+ el('productPackQty').placeholder=kg?'Örn. Koli başına 10 KG':'Boşsa 1 adet';
  el('productPackQty').required=kg;
- el('productSaleLabel').textContent=kg?'Paket Satış Fiyatı (₺) - Otomatik':'Koli Satış Fiyatı (₺)';
+ el('productSaleLabel').textContent=kg?'Koli Satış Fiyatı (₺) - Otomatik':'Koli Satış Fiyatı (₺)';
  el('productSale').readOnly=kg;
  el('productKgSaleField').style.display=kg?'':'none';
- el('productMinLabel').textContent=kg?'Minimum Stok (Paket)':'Minimum Stok (Koli)';
+ el('productMinLabel').textContent='Minimum Stok (Koli)';
  updateCartonPrice();
 }
 function updateCartonPrice(){
@@ -1019,7 +1020,7 @@ function renderProducts(){
   return '<tr><td>'+esc(p.code)+'</td><td>'+esc(p.barcode)+'</td><td><b>'+esc(p.name)+'</b></td>'+
    '<td>'+esc(p.category)+'</td><td class="num"><b>'+formatStockAmount(p.id,current)+'</b>'+
    (stockIsVisiblyEmpty(p.id,current)?'<div class="muted" style="font-size:11px">Stokta yok</div>':'')+'</td>'+
-   '<td>'+(kg?'Paket / KG':'Koli / Adet')+'</td><td class="num">'+qty(p.packQty)+'</td>'+
+   '<td>'+(kg?'Koli / KG':'Koli / Adet')+'</td><td class="num">'+qty(p.packQty)+'</td>'+
       '<td class="num">'+money(kg?(p.kgSalePrice??num(p.salePrice)/packQtyFor(p.id)):p.salePrice)+
     '<div class="muted">'+(kg?'KG Satış':'Koli Satış')+'</div></td>'+
    '<td class="num">'+qty(p.minStock)+'</td><td>'+(p.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td>'+
@@ -1043,7 +1044,7 @@ function saveProduct(e){
  if(kg){
   packQty=Number(raw);
   if(!/^\d+(?:\.\d{1,3})?$/.test(raw)||!Number.isFinite(packQty)||packQty<=0||packQty>1000000)
-   return notify('KG ürünlerinde paket ağırlığı zorunlu. Örneğin 10 veya 2.5 KG girin.',true);
+   return notify('KG ürünlerinde koli ağırlığı zorunludur. Örneğin 10 veya 2.5 KG girin.',true);
  }else{
   packQty=raw===''?1:Number(raw);
   if(!Number.isSafeInteger(packQty)||packQty<1||packQty>1000000)
@@ -1057,7 +1058,7 @@ function saveProduct(e){
  const kgSalePrice=kg?Math.round(saleUnit*100)/100:undefined;
  const salePrice=kg?Math.round(kgSalePrice*packQty*100)/100:Math.round(saleUnit*100)/100;
  if(!Number.isFinite(salePrice)||salePrice>1000000000000)
-  return notify('Paket satış fiyatı hesaplanamayacak kadar büyük.',true);
+  return notify('Koli satış fiyatı hesaplanamayacak kadar büyük.',true);
  const itemPrice=existing?.itemPrice??0,purchasePrice=existing?.purchasePrice??0;
  if(existing&&(existing.unit||'Koli')!==unit||existing&&Math.abs(Number(existing.packQty||1)-packQty)>0.00000001){
   const hasStock=Object.keys(db.stocks).some(k=>k.endsWith('::'+id)&&Math.abs(num(db.stocks[k]))>0.000000001);
@@ -1069,7 +1070,7 @@ function saveProduct(e){
   minStock,rack:existing?.rack||'',active:el('productActive').value==='true',notes:el('productNotes').value.trim()};
  if(id)db.products[db.products.findIndex(p=>p.id===id)]=obj;else db.products.push(obj);
  audit(id?'Ürün güncellendi':'Ürün oluşturuldu','Ürünler',
-   obj.code+' - '+obj.name+' | '+(kg?'Paket ağırlığı':'Koli içi')+': '+qty(obj.packQty)+' '+(kg?'KG':'Adet'));
+   obj.code+' - '+obj.name+' | '+(kg?'Koli ağırlığı':'Koli içi')+': '+qty(obj.packQty)+' '+(kg?'KG':'Adet'));
  saveDB();resetProductForm();notify('Ürün kartı kaydedildi.');
 }
 function editProduct(id){
@@ -1885,7 +1886,7 @@ function renderStock(){if(!hasPermission('stock')&&!isAdmin())return;const wf=el
  return sf==='all'||(sf==='positive'&&stocked)||
   (sf==='critical'&&stocked&&x.current<=num(x.product.minStock))||
   (sf==='zero'&&!stocked);
-});el('stockTable').innerHTML=rows.length?rows.map(x=>{const status=stockIsVisiblyEmpty(x.product.id,x.current)?'<span class="badge b-red">Bitti</span>':x.current<=num(x.product.minStock)?'<span class="badge b-orange">Kritik</span>':'<span class="badge b-green">Normal</span>';return `<tr><td>${esc(x.warehouse.name)}</td><td>${esc(x.product.code)}</td><td>${esc(x.product.barcode)}</td><td><b>${esc(x.product.name)}</b></td><td>${isKgProduct(x.product)?'Paket / KG':'Koli / Adet'}</td><td class="num"><b>${formatStockAmount(x.product.id,x.current)}</b></td><td class="num">${qty(x.product.minStock)} ${isKgProduct(x.product)?'Paket':'Koli'}</td><td class="num">${money(x.value)}</td><td>${status}</td></tr>`}).join(''):`<tr><td colspan="9" class="empty">Kayıt bulunamadı.</td></tr>`}
+});el('stockTable').innerHTML=rows.length?rows.map(x=>{const status=stockIsVisiblyEmpty(x.product.id,x.current)?'<span class="badge b-red">Bitti</span>':x.current<=num(x.product.minStock)?'<span class="badge b-orange">Kritik</span>':'<span class="badge b-green">Normal</span>';return `<tr><td>${esc(x.warehouse.name)}</td><td>${esc(x.product.code)}</td><td>${esc(x.product.barcode)}</td><td><b>${esc(x.product.name)}</b></td><td>${isKgProduct(x.product)?'Koli / KG':'Koli / Adet'}</td><td class="num"><b>${formatStockAmount(x.product.id,x.current)}</b></td><td class="num">${qty(x.product.minStock)} ${'Koli'}</td><td class="num">${money(x.value)}</td><td>${status}</td></tr>`}).join(''):`<tr><td colspan="9" class="empty">Kayıt bulunamadı.</td></tr>`}
 function movementTypeMatch(m,f){if(f==='all')return true;if(f==='TRANSFER')return m.type.startsWith('TRANSFER');return m.type===f}
 function filteredMovements(){const type=el('movementType').value||'all',w=el('movementWarehouse').value||'all',p=el('movementProduct').value||'all',firm=el('movementFirm').value||'all',user=el('movementUser').value||'all',from=el('movementFrom').value,to=el('movementTo').value;return [...db.movements].filter(m=>movementTypeMatch(m,type)&&(w==='all'||m.warehouseId===w)&&(p==='all'||m.productId===p)&&(firm==='all'||m.firmId===firm)&&(user==='all'||m.userId===user)&&(!from||new Date(m.date)>=new Date(from+'T00:00:00'))&&(!to||new Date(m.date)<=new Date(to+'T23:59:59'))).sort((a,b)=>new Date(b.date)-new Date(a.date))}
 function renderMovements(){const btn=el('clearAllMovementsBtn');if(btn)btn.disabled=!isAdmin()||!db.movements.length;const rows=filteredMovements();el('movementTable').innerHTML=rows.length?rows.map(m=>`<tr><td>${dt(m.date)}</td><td>${movementBadge(m.type)}</td><td>${esc(warehouseById(m.warehouseId)?.name||'-')}</td><td>${esc(productById(m.productId)?.name||'-')}</td><td>${esc(m.firmName||firmById(m.firmId)?.name||'-')}</td><td class="num">${formatMovementQuantity(m,true)}</td><td class="num">${formatStockAmount(m.productId,m.before)}</td><td class="num">${formatStockAmount(m.productId,m.after)}</td><td>${esc(m.userName||userById(m.userId)?.fullName||'-')}</td><td>${esc(m.doc)}</td><td title="${esc(m.detail)}">${esc((m.detail||'').slice(0,80))}</td>${isAdmin()?`<td>${movementAdminButtons(m)}</td>`:''}</tr>`).join(''):`<tr><td colspan="${isAdmin()?12:11}" class="empty">Hareket bulunamadı.</td></tr>`}
