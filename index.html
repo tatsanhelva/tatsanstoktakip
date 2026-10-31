@@ -241,7 +241,7 @@
 </div>
 <div class="card">
  <div class="card-head"><h3>Kaydedilen Siparişler</h3><input id="orderSearch" placeholder="Sipariş no, cari, ürün ara..." style="max-width:300px"></div>
- <div class="table-wrap"><table style="min-width:800px"><thead><tr><th>Sipariş No</th><th>Tarih</th><th>Cari / Firma</th><th>Ürün Sayısı</th><th>İskonto</th><th class="num">KDV Dahil Sipariş Toplamı</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="orderListRows"></tbody></table></div>
+ <div class="table-wrap"><table style="min-width:800px"><thead><tr><th>Sipariş No</th><th>Tarih</th><th>Cari / Firma</th><th>Ürün Sayısı</th><th>İskonto</th><th class="num">Sipariş Toplamı</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="orderListRows"></tbody></table></div>
 </div>
 </div>
 <div class="page" id="page-entry"><div class="card">
@@ -1329,6 +1329,7 @@ function calculateOrderVat(netCents,vatRateBasisPoints){
     vatRateBasisPoints<0||vatRateBasisPoints>10000)return null;
  const vatCents=Math.round(netCents*vatRateBasisPoints/10000);
  const grandTotalCents=netCents+vatCents;
+ if(!Number.isSafeInteger(vatCents))return null;
  return Number.isSafeInteger(grandTotalCents)?{vatRateBasisPoints,vatCents,grandTotalCents}:null;
 }
 function storedOrderVat(order){
@@ -1465,7 +1466,8 @@ function renderOrders(){
  el('orderListRows').innerHTML=items.length?items.slice(0,200).map(o=>
   '<tr><td><b>'+esc(o.number)+'</b></td><td>'+esc(o.date||'')+'</td><td>'+esc(o.firmName||'')+
   '</td><td>'+Number(o.lines?.length||0)+'</td><td>'+esc(orderDiscountText(o))+
-  '</td><td class="num"><b>'+orderMoney(orderPayableCents(o))+'</b></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
+  '</td><td class="num"><b>'+orderMoney(orderPayableCents(o))+'</b><div class="muted" style="font-size:11px">'+
+   (storedOrderVat(o).hasVat?'KDV dahil':'Eski kayıt · KDV hesaplanmamış')+'</div></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
   '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button></td></tr>'
  ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
  updateOrderTotals();
@@ -1518,7 +1520,7 @@ function showOrderDetails(id){
   ' / '+orderMoney(order.discountCents)+'</b></div><div>İskontolu tutar: <b>'+orderMoney(order.totalCents)+
   '</b></div><div>'+(vat.hasVat?'KDV (%'+(vat.vatRateBasisPoints/100).toLocaleString('tr-TR',{maximumFractionDigits:2})+')':
   'KDV (eski siparişte hesaplanmamış)')+': <b>'+(vat.hasVat?orderMoney(vat.vatCents):'—')+
-  '</b></div><div style="font-size:18px">KDV dahil toplam: <b>'+
+  '</b></div><div style="font-size:18px">'+(vat.hasVat?'KDV Dahil Genel Toplam':'KDV Hariç Toplam (Eski Sipariş)')+': <b>'+
   orderMoney(vat.grandTotalCents)+'</b></div>';
  el('orderDetailsDialog').showModal();
 }
@@ -1541,7 +1543,8 @@ function printCurrentOrder(){
   ')</p><p class="total">İskontolu Tutar (KDV Hariç): '+orderMoney(order.totalCents)+'</p>'+
   '<p class="total">'+(storedOrderVat(order).hasVat?'KDV (%'+(storedOrderVat(order).vatRateBasisPoints/100)+'): '+orderMoney(storedOrderVat(order).vatCents):
   'KDV: Eski siparişte hesaplanmamış')+'</p>'+
-  '<p class="total">KDV Dahil Genel Toplam: '+orderMoney(orderPayableCents(order))+'</p>'+
+  '<p class="total">'+(storedOrderVat(order).hasVat?'KDV Dahil Genel Toplam':'KDV Hariç Toplam (Eski Sipariş)')+
+  ': '+orderMoney(orderPayableCents(order))+'</p>'+
   (order.note?'<p><b>Not:</b> '+esc(order.note)+'</p>':'')+
   '<p style="font-size:11px;color:#555">Sipariş stok ve cari bakiyesini değiştirmez. Bu belge fatura yerine geçmez.</p></body></html>';
  win.document.open();win.document.write(html);win.document.close();win.focus();win.print();
@@ -2102,6 +2105,10 @@ function rebaseQueuedStockMovements(latest){
     !Number.isInteger(o.discountBasisPoints)||o.discountBasisPoints<0||o.discountBasisPoints>10000||
     o.discountCents!==Math.round(sum*o.discountBasisPoints/10000)||
     o.totalCents!==sum-o.discountCents)return false;
+  if(o.vatRateBasisPoints!==undefined){
+   const vat=calculateOrderVat(o.totalCents,o.vatRateBasisPoints);
+   if(!vat||vat.vatCents!==o.vatCents||vat.grandTotalCents!==o.grandTotalCents)return false;
+  }
   const newOrder={...o,number:nextOrderNumber(remote.orders)};
   remote.orders.push(newOrder);
  }
