@@ -677,7 +677,7 @@ async function initializeApplication(){
 }
 
 function addMovement({type,warehouseId,productId,quantity,before,after,date,doc='',detail='',lot='',expiry='',unitCost=0,groupId='',firmId='',firmName='',reason='',inputUnit='Koli',inputQuantity=null}){
-  const normalizedUnit=inputUnit==='Adet'?'Adet':'Koli';db.movements.push({id:uid('mv'),groupId,type,warehouseId,productId,quantity:num(quantity),inputUnit:normalizedUnit,inputQuantity:num(inputQuantity??fromCartons(productId,quantity,normalizedUnit)),before:num(before),after:num(after),date:date||new Date().toISOString(),doc,detail,lot,expiry,unitCost:num(unitCost),firmId,firmName,userId:currentUser?.id||'',userName:currentUser?.fullName||currentUser?.username||'',reason});
+  const normalizedUnit=stockUnitOptions(productId).includes(inputUnit)?inputUnit:defaultStockUnit(productId);db.movements.push({id:uid('mv'),groupId,type,warehouseId,productId,quantity:num(quantity),inputUnit:normalizedUnit,inputQuantity:num(inputQuantity??fromCartons(productId,quantity,normalizedUnit)),before:num(before),after:num(after),date:date||new Date().toISOString(),doc,detail,lot,expiry,unitCost:num(unitCost),firmId,firmName,userId:currentUser?.id||'',userName:currentUser?.fullName||currentUser?.username||'',reason});
 }
 function deriveOpeningStocks(){
   const opening={...db.stocks};
@@ -704,8 +704,9 @@ function fillMovementEditorSelects(){const wh=db.warehouses.map(x=>({id:x.id,lab
 function openMovementEditor(id){
   if(!requireAdminAction())return;const m=db.movements.find(x=>x.id===id);if(!m)return notify('Hareket bulunamadı.',true);fillMovementEditorSelects();const transfer=['TRANSFER_CIKIS','TRANSFER_GIRIS'].includes(m.type);let source=m,target=null;
   if(transfer){const pair=db.movements.filter(x=>x.groupId&&x.groupId===m.groupId);source=pair.find(x=>x.type==='TRANSFER_CIKIS')||m;target=pair.find(x=>x.type==='TRANSFER_GIRIS');if(!target)return notify('Transferin hedef kaydı bulunamadı.',true)}
-  const unit=source.inputUnit==='Adet'?'Adet':'Koli',stored=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(source.quantity)),shown=num(source.inputQuantity??fromCartons(source.productId,stored,unit));
-  el('movementEditId').value=m.id;el('movementEditType').value=movementTypeLabel(m.type);el('movementEditDate').value=localDateTimeValue(new Date(source.date));el('movementEditDoc').value=source.doc||'';el('movementEditWarehouse').value=source.warehouseId||'';el('movementEditProduct').value=source.productId||'';el('movementEditUnit').value=unit;el('movementEditQty').value=shown;el('movementEditDetail').value=transfer?stripTransferDetail(source.detail):(m.detail||'');
+  const unit=stockUnitOptions(source.productId).includes(source.inputUnit)?source.inputUnit:defaultStockUnit(source.productId),stored=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(source.quantity)),shown=num(source.inputQuantity??fromCartons(source.productId,stored,unit));
+  el('movementEditId').value=m.id;el('movementEditType').value=movementTypeLabel(m.type);el('movementEditDate').value=localDateTimeValue(new Date(source.date));el('movementEditDoc').value=source.doc||'';el('movementEditWarehouse').value=source.warehouseId||'';el('movementEditProduct').value=source.productId||'';setUnitOptions('movementEditUnit',source.productId,unit);el('movementEditQty').value=shown;
+  el('movementEditQty').step=unit==='Kg'?'0.001':'1';el('movementEditDetail').value=transfer?stripTransferDetail(source.detail):(m.detail||'');
   el('movementEditTargetWrap').style.display=transfer?'':'none';el('movementEditFirmWrap').style.display=m.type==='CIKIS'?'':'none';el('movementEditReasonWrap').style.display=m.type==='CIKIS'?'':'none';el('movementEditLotWrap').style.display=m.type==='GIRIS'?'':'none';el('movementEditExpiryWrap').style.display=m.type==='GIRIS'?'':'none';el('movementEditWarehouseLabel').textContent=transfer?'Kaynak Depo *':'Depo *';el('movementEditQtyLabel').textContent=(m.type==='SAYIM'?'Sayılan Gerçek Stok':'Miktar')+` (${unit}) *`;
   if(transfer)el('movementEditTargetWarehouse').value=target.warehouseId||'';if(m.type==='CIKIS'){el('movementEditFirm').value=m.firmId||'';el('movementEditReason').value=m.reason||'Satış'}if(m.type==='GIRIS'){el('movementEditLot').value=m.lot||'';el('movementEditExpiry').value=m.expiry||''}
   el('movementEditSubtitle').textContent=`${dt(source.date)} • ${productById(source.productId)?.name||'-'} • ${source.userName||'-'}`;el('movementEditModal').classList.add('show');el('movementEditModal').setAttribute('aria-hidden','false');
@@ -713,7 +714,8 @@ function openMovementEditor(id){
 function closeMovementEditor(){el('movementEditModal').classList.remove('show');el('movementEditModal').setAttribute('aria-hidden','true');el('movementEditForm').reset();el('movementEditId').value=''}
 function saveMovementEdit(e){
   e.preventDefault();if(!requireAdminAction())return;const id=el('movementEditId').value,m=db.movements.find(x=>x.id===id);if(!m)return notify('Hareket bulunamadı.',true);const opening=deriveOpeningStocks(),backupMovements=JSON.parse(JSON.stringify(db.movements)),backupStocks={...db.stocks};
-  try{const date=el('movementEditDate').value||new Date().toISOString(),doc=el('movementEditDoc').value.trim(),warehouseId=el('movementEditWarehouse').value,productId=el('movementEditProduct').value,inputUnit=el('movementEditUnit').value||'Koli',inputQuantity=num(el('movementEditQty').value),q=toCartons(productId,inputQuantity,inputUnit),detail=el('movementEditDetail').value.trim();if(!warehouseId||!productId)return notify('Depo ve ürün zorunludur.',true);if(!requireWhole(el('movementEditQty').value,m.type==='SAYIM'?'Sayılan stok':'Miktar'))return;if(m.type!=='SAYIM'&&inputQuantity<=0)return notify('Miktar sıfırdan büyük olmalıdır.',true);if(m.type==='SAYIM'&&inputQuantity<0)return notify('Sayılan stok negatif olamaz.',true);
+  try{const date=el('movementEditDate').value||new Date().toISOString(),doc=el('movementEditDoc').value.trim(),warehouseId=el('movementEditWarehouse').value,productId=el('movementEditProduct').value,inputUnit=el('movementEditUnit').value||'Koli',inputQuantity=num(el('movementEditQty').value),q=toCartons(productId,inputQuantity,inputUnit),detail=el('movementEditDetail').value.trim();if(!warehouseId||!productId)return notify('Depo ve ürün zorunludur.',true);if(!isValidStockInput(el('movementEditQty').value,productId,inputUnit,m.type==='SAYIM'))
+  return notify('Miktarı seçilen stok birimine uygun girin.',true);if(m.type!=='SAYIM'&&inputQuantity<=0)return notify('Miktar sıfırdan büyük olmalıdır.',true);if(m.type==='SAYIM'&&inputQuantity<0)return notify('Sayılan stok negatif olamaz.',true);
     if(['TRANSFER_CIKIS','TRANSFER_GIRIS'].includes(m.type)){const targetWarehouse=el('movementEditTargetWarehouse').value;if(!targetWarehouse)return notify('Hedef depo zorunludur.',true);if(targetWarehouse===warehouseId)return notify('Kaynak ve hedef depo aynı olamaz.',true);const pair=db.movements.filter(x=>x.groupId&&x.groupId===m.groupId),out=pair.find(x=>x.type==='TRANSFER_CIKIS'),inn=pair.find(x=>x.type==='TRANSFER_GIRIS');if(!out||!inn)throw new Error('Transfer çift kaydı eksik.');Object.assign(out,{warehouseId,productId,quantity:q,inputUnit,inputQuantity,date,doc,detail:`Hedef: ${warehouseById(targetWarehouse)?.name||''}${detail?' | '+detail:''}`});Object.assign(inn,{warehouseId:targetWarehouse,productId,quantity:q,inputUnit,inputQuantity,date,doc,detail:`Kaynak: ${warehouseById(warehouseId)?.name||''}${detail?' | '+detail:''}`});
     }else if(m.type==='GIRIS'){Object.assign(m,{warehouseId,productId,quantity:q,inputUnit,inputQuantity,date,doc,detail,unitCost:num(productById(productId)?.purchasePrice),lot:el('movementEditLot').value.trim(),expiry:el('movementEditExpiry').value});
     }else if(m.type==='CIKIS'){const firm=firmById(el('movementEditFirm').value);Object.assign(m,{warehouseId,productId,quantity:q,inputUnit,inputQuantity,date,doc,detail,firmId:firm?.id||'',firmName:firm?.name||'',reason:el('movementEditReason').value});
@@ -1741,8 +1743,36 @@ function saveExit(e){
   saveDB();
   notify(items.length+' ürünün stok çıkışı kayda alındı. Drive senkronizasyonu başlatıldı.');
 }
-function updateTransferCurrent(){const p=el('transferProduct').value;el('transferCurrent').value=p?formatStockAmount(p,getStock(el('transferFrom').value,p)):'0 Koli'}
-function saveTransfer(e){e.preventDefault();if(!requirePermission('transfer'))return;const from=el('transferFrom').value,to=el('transferTo').value,p=el('transferProduct').value,inputUnit=el('transferUnit').value||'Koli',inputQuantity=num(el('transferQty').value);if(!requireWhole(el('transferQty').value))return;if(!from||!to||!p||inputQuantity<=0)return notify('Kaynak, hedef, ürün ve miktar zorunludur.',true);if(from===to)return notify('Kaynak ve hedef depo aynı olamaz.',true);const q=toCartons(p,inputQuantity,inputUnit),b1=getStock(from,p),a1=b1-q;if(a1<-0.000000001&&!db.settings.allowNegative)return notify(`Kaynak depoda yeterli stok yok. Mevcut: ${formatStockAmount(p,b1)}`,true);const b2=getStock(to,p),a2=b2+q,g=uid('tr');setStock(from,p,a1);setStock(to,p,a2);const date=el('transferDate').value||new Date().toISOString(),doc=el('transferDoc').value.trim(),notes=el('transferNotes').value.trim();addMovement({type:'TRANSFER_CIKIS',warehouseId:from,productId:p,quantity:q,inputUnit,inputQuantity,before:b1,after:a1,date,doc,detail:`Hedef: ${warehouseById(to)?.name||''}${notes?' | '+notes:''}`,groupId:g});addMovement({type:'TRANSFER_GIRIS',warehouseId:to,productId:p,quantity:q,inputUnit,inputQuantity,before:b2,after:a2,date,doc,detail:`Kaynak: ${warehouseById(from)?.name||''}${notes?' | '+notes:''}`,groupId:g});audit('Depo transferi','Stok Hareketi',`${productById(p)?.name||''} | ${warehouseById(from)?.name||''} → ${warehouseById(to)?.name||''} | ${qty(inputQuantity)} ${inputUnit}`);saveDB();e.target.reset();el('transferUnit').value='Koli';updateUnitLabel('transfer');setDefaultDates();updateTransferCurrent();notify('Depo transferi kaydedildi.')}
+function updateTransferCurrent(){
+ const p=el('transferProduct').value;
+ setUnitOptions('transferUnit',p);
+ el('transferCurrent').value=p?formatStockAmount(p,getStock(el('transferFrom').value,p)):'—';
+ el('transferQty').step=el('transferUnit').value==='Kg'?'0.001':'1';
+ el('transferQty').min=el('transferUnit').value==='Kg'?'0.001':'1';
+ updateUnitLabel('transfer');
+}
+function saveTransfer(e){
+ e.preventDefault();if(!requirePermission('transfer'))return;
+ const from=el('transferFrom').value,to=el('transferTo').value,p=el('transferProduct').value;
+ const unit=el('transferUnit').value||defaultStockUnit(p),text=el('transferQty').value.trim(),amount=Number(text);
+ if(!from||!to||!p||!warehouseById(from)||!warehouseById(to)||!productById(p))
+  return notify('Kaynak depo, hedef depo ve ürün zorunludur.',true);
+ if(from===to)return notify('Kaynak ve hedef depo aynı olamaz.',true);
+ if(!isValidStockInput(text,p,unit))return notify('Miktarı '+unit+' cinsinden doğru girin.',true);
+ const q=toCartons(p,amount,unit),b1=getStock(from,p),a1=b1-q;
+ if(a1<-0.000000001&&!db.settings.allowNegative)
+  return notify('Kaynak depoda yeterli stok yok. Mevcut: '+formatStockAmount(p,b1),true);
+ const b2=getStock(to,p),a2=b2+q,g=uid('tr');
+ setStock(from,p,a1);setStock(to,p,a2);
+ const date=el('transferDate').value||new Date().toISOString(),doc=el('transferDoc').value.trim(),notes=el('transferNotes').value.trim();
+ addMovement({type:'TRANSFER_CIKIS',warehouseId:from,productId:p,quantity:q,inputUnit:unit,
+   inputQuantity:amount,before:b1,after:a1,date,doc,detail:'Hedef: '+(warehouseById(to)?.name||'')+(notes?' | '+notes:''),groupId:g});
+ addMovement({type:'TRANSFER_GIRIS',warehouseId:to,productId:p,quantity:q,inputUnit:unit,
+   inputQuantity:amount,before:b2,after:a2,date,doc,detail:'Kaynak: '+(warehouseById(from)?.name||'')+(notes?' | '+notes:''),groupId:g});
+ audit('Depo transferi','Stok Hareketi',productById(p).name+' | '+warehouseById(from).name+' → '+warehouseById(to).name+' | '+qty(amount)+' '+unit);
+ saveDB();e.target.reset();setUnitOptions('transferUnit',el('transferProduct').value);
+ setDefaultDates();updateTransferCurrent();notify('Depo transferi kaydedildi.');
+}
 function saveCount(e){
  e.preventDefault();if(!requirePermission('count'))return;
  const items=selectedBatchItems('count');if(!items)return;
@@ -2211,7 +2241,19 @@ el('entryForm').addEventListener('submit',saveEntry);el('exitForm').addEventList
   el(prefix+'Warehouse').addEventListener('change',()=>renderBatchRows(prefix,true));
   el(prefix+'ProductSearch').addEventListener('input',()=>filterBatchRows(prefix));
   ['input','change'].forEach(event=>el(prefix+'BatchRows').addEventListener(event,e=>handleBatchInput(prefix,e)));
-});el('transferFrom').addEventListener('change',updateTransferCurrent);el('transferProduct').addEventListener('change',updateTransferCurrent);el('transferUnit').addEventListener('change',()=>{updateUnitLabel('transfer');updateTransferCurrent()});el('movementEditUnit').addEventListener('change',()=>{const type=el('movementEditType').value,unit=el('movementEditUnit').value;el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+` (${unit}) *`});
+});el('transferFrom').addEventListener('change',updateTransferCurrent);el('transferProduct').addEventListener('change',updateTransferCurrent);
+el('transferUnit').addEventListener('change',()=>{el('transferQty').step=el('transferUnit').value==='Kg'?'0.001':'1';updateUnitLabel('transfer')});el('movementEditProduct').addEventListener('change',()=>{
+ const id=el('movementEditProduct').value;
+ setUnitOptions('movementEditUnit',id);
+ el('movementEditQty').step=el('movementEditUnit').value==='Kg'?'0.001':'1';
+ const type=el('movementEditType').value;
+ el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+' ('+el('movementEditUnit').value+') *';
+});
+el('movementEditUnit').addEventListener('change',()=>{
+ const type=el('movementEditType').value,unit=el('movementEditUnit').value;
+ el('movementEditQty').step=unit==='Kg'?'0.001':'1';
+ el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+' ('+unit+') *';
+});
 el('dashboardWarehouseFilter').addEventListener('change',renderDashboard);['reportFrom','reportTo','reportWarehouse'].forEach(id=>el(id).addEventListener('change',renderReports));['stockWarehouseFilter','stockStatusFilter'].forEach(id=>el(id).addEventListener('change',renderStock));el('stockSearch').addEventListener('input',renderStock);
 ['movementType','movementWarehouse','movementProduct','movementFirm','movementUser','movementFrom','movementTo'].forEach(id=>el(id).addEventListener('change',renderMovements));
 ['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id).addEventListener('change',renderAudit));el('auditSearch').addEventListener('input',renderAudit);
