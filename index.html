@@ -132,11 +132,14 @@
 <div class="field"><label>Barkod</label><input id="productBarcode"/></div>
 <div class="field"><label>Ürün Adı *</label><input id="productName" required=""/></div>
 <div class="field"><label>Kategori</label><select id="productCategory"><option value="">Kategori seçiniz</option></select><small class="muted">Kategorileri Kategoriler menüsünden ekleyip silebilirsiniz.</small></div>
-<div class="field"><label>Stok Takip Birimi *</label><select id="productUnit"><option value="Koli">Koli / Adet</option><option value="Kg">KG / Koli</option></select></div>
+<div class="field"><label>Ürün Birimi *</label><select id="productUnit"><option value="Koli">Koli / Adet</option><option value="Kg">Koli / KG</option></select></div>
 <div class="field"><label id="productPackLabel">Koli İçi Adet (İsteğe Bağlı)</label><input id="productPackQty" min="1" step="1" inputmode="decimal" type="number" placeholder="Boşsa 1 adet"/></div>
 <div class="field"><label id="productSaleLabel">Koli Satış Fiyatı (₺)</label><input id="productSale" min="0" step="0.01" type="number" value="0"/></div>
 <div class="field" id="productKgSaleField" style="display:none"><label>KG Satış Fiyatı (₺)</label><input id="productKgSale" min="0" step="0.01" type="number" value="0"/></div>
-<div class="field full"><small class="muted">Satış fiyatları KDV hariçtir. Sipariş Formu'nda iskonto sonrası %1 KDV hesaplanır.</small></div>
+<div class="field"><label>Satış Fiyatını Göster</label>
+<select id="productPriceUnit" aria-label="Satış fiyatı görüntüleme birimi"><option value="Koli">Koli</option><option value="Adet">Adet</option></select></div>
+<div class="field"><label>Seçilen Birim Satış Fiyatı (₺)</label><input id="productUnitPricePreview" type="text" readonly aria-label="Hesaplanan seçili birim fiyatı" value="0,00"/><small id="productPriceFormula" class="muted">Koli fiyatı / koli içi adet</small></div>
+<div class="field full"><small class="muted">Satış fiyatları KDV hariçtir. KG ürününde: Koli = KG fiyatı × koli ağırlığı. Adetli üründe: Adet = Koli fiyatı ÷ koli içi adet.</small></div>
 <div class="field"><label id="productMinLabel">Minimum Stok (Koli)</label><input id="productMin" min="0" step="1" inputmode="numeric" type="number" value="0"/></div>
 <div class="field"><label>Durum</label><select id="productActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></div>
 <div class="field full"><label>Açıklama</label><textarea id="productNotes"></textarea></div>
@@ -152,7 +155,7 @@
  <input id="productExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
 </div>
 <p class="muted" style="font-size:12px;margin:0 0 12px">Ürün kodu veya barkod eşleştirilir. Excel sadece ürün kartlarını günceller; mevcut stok miktarları, hareketler ve siparişler değişmez.</p>
-<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Koli İçi Adet / KG</th><th class="num">Satış Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
+<div class="table-wrap"><table><thead><tr><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Kategori</th><th class="num">Mevcut Stok</th><th>Stok Birimi</th><th class="num">Koli İçi Adet / KG</th><th>Fiyat Birimi</th><th class="num">Seçilen Satış Fiyatı</th><th class="num">Min. Stok</th><th>Durum</th><th>İşlem</th></tr></thead><tbody id="productTable"></tbody></table></div></div>
 </div>
 <div class="page" id="page-categories">
 <div class="card"><h3>Kategori Kartı</h3><form id="categoryForm"><input id="categoryId" type="hidden"/><div class="form-grid cols-2"><div class="field"><label>Kategori Adı *</label><input id="categoryName" required="" placeholder="Örn. Gıda, Ambalaj, Hammadde"/></div><div class="field"><label>Açıklama</label><input id="categoryNotes"/></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kategoriyi Kaydet</button><button class="btn btn-light" onclick="resetCategoryForm()" type="button">Temizle</button></div></form></div>
@@ -814,6 +817,38 @@ function movementBadge(t){const map={GIRIS:['Stok Girişi','b-green'],CIKIS:['St
 function signedQty(m){const minus=['CIKIS','TRANSFER_CIKIS'].includes(m.type);return (minus?'-':'+')+qty(Math.abs(m.quantity))}
 
 function productTotalStock(productId){return db.warehouses.reduce((sum,w)=>sum+getStock(w.id,productId),0)}
+function productPriceUnits(productOrId){
+ const p=typeof productOrId==='string'?productById(productOrId):productOrId;
+ return isKgProduct(p)?['Koli','Kg']:['Koli','Adet'];
+}
+function productSalesPrice(product,unit){
+ const content=Math.max(0.001,Number(product?.packQty)||1);
+ const carton=Math.max(0,Number(product?.salePrice)||0);
+ if(unit==='Koli')return Math.round(carton*100)/100;
+ if(isKgProduct(product)&&unit==='Kg'){
+  const kg=product.kgSalePrice==null?carton/content:Number(product.kgSalePrice);
+  return Math.round(Math.max(0,kg)*100)/100;
+ }
+ if(!isKgProduct(product)&&unit==='Adet')return Math.round(carton/content*100)/100;
+ return null;
+}
+function currentProductPriceInput(){
+ const kg=el('productUnit').value==='Kg',raw=Number(el('productPackQty').value);
+ const content=kg?(Number.isFinite(raw)&&raw>0?raw:0):Math.max(1,whole(raw||1));
+ const unitPrice=Number(kg?el('productKgSale').value:el('productSale').value);
+ const price=Number.isFinite(unitPrice)&&unitPrice>=0?unitPrice:0;
+ return {unit:kg?'Kg':'Koli',packQty:content,salePrice:kg?Math.round(price*content*100)/100:price,
+  kgSalePrice:kg?price:undefined};
+}
+function updateProductPricePreview(){
+ const fields=currentProductPriceInput();
+ const selected=el('productPriceUnit').value;
+ const price=fields.packQty>0?productSalesPrice(fields,selected):null;
+ el('productUnitPricePreview').value=price===null?'Koli ağırlığını girin':price.toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2});
+ el('productPriceFormula').textContent=fields.unit==='Kg'?
+  (selected==='Kg'?'Ürün kartındaki KG satış fiyatı':'KG satış fiyatı × koli ağırlığı'):
+  (selected==='Adet'?'Koli satış fiyatı ÷ koli içi adet':'Ürün kartındaki koli satış fiyatı');
+}
 function updateProductUnitUI(){
  const kg=el('productUnit').value==='Kg';
  el('productPackLabel').textContent=kg?'Koli Ağırlığı (KG) *':'Koli İçi Adet (İsteğe Bağlı)';
@@ -825,13 +860,16 @@ function updateProductUnitUI(){
  el('productSale').readOnly=kg;
  el('productKgSaleField').style.display=kg?'':'none';
  el('productMinLabel').textContent='Minimum Stok (Koli)';
+ const select=el('productPriceUnit'),choices=kg?['Koli','Kg']:['Koli','Adet'];
+ const wanted=choices.includes(select.value)?select.value:(kg?'Kg':'Adet');
+ select.innerHTML=choices.map(u=>'<option value="'+u+'">'+(u==='Kg'?'KG':u)+'</option>').join('');
+ select.value=wanted;
  updateCartonPrice();
 }
 function updateCartonPrice(){
- const kg=el('productUnit').value==='Kg';
- const raw=Number(el('productPackQty').value);
- const pack=kg?(Number.isFinite(raw)&&raw>0?raw:0):Math.max(1,whole(raw||1));
- if(kg)el('productSale').value=(Math.round(num(el('productKgSale').value)*pack*100)/100).toFixed(2);
+ const fields=currentProductPriceInput();
+ if(fields.unit==='Kg')el('productSale').value=fields.packQty>0?fields.salePrice.toFixed(2):'';
+ updateProductPricePreview();
 }
 
 const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Stok Birimi','Koli Ağırlığı (KG) / Koli İçi Adet','KG Satış Fiyatı','Koli Satış Fiyatı','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
