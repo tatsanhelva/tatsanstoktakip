@@ -861,9 +861,11 @@ function updateProductUnitUI(){
  el('productKgSaleField').style.display=kg?'':'none';
  el('productMinLabel').textContent='Minimum Stok (Koli)';
  const select=el('productPriceUnit'),choices=kg?['Koli','Kg']:['Koli','Adet'];
- const wanted=choices.includes(select.value)?select.value:(kg?'Kg':'Adet');
+ const wanted=select.dataset.productKind!==el('productUnit').value?(kg?'Kg':'Adet'):
+   (choices.includes(select.value)?select.value:(kg?'Kg':'Adet'));
  select.innerHTML=choices.map(u=>'<option value="'+u+'">'+(u==='Kg'?'KG':u)+'</option>').join('');
  select.value=wanted;
+ select.dataset.productKind=el('productUnit').value;
  updateCartonPrice();
 }
 function updateCartonPrice(){
@@ -1050,22 +1052,37 @@ async function importProductsExcel(e){
  }finally{input.value=''}
 }
 
+const productListPriceUnits={};
+function updateProductListPrice(row){
+ if(!row)return;
+ const product=productById(row.dataset.productId);
+ if(!product)return;
+ const select=row.querySelector('.product-price-unit-select');
+ const label=row.querySelector('.product-price-amount');
+ if(!select||!label)return;
+ const price=productSalesPrice(product,select.value);
+ label.textContent=price===null?'—':money(price);
+ productListPriceUnits[product.id]=select.value;
+}
 function renderProducts(){
  const q=el('productSearch').value.toLocaleLowerCase('tr-TR');
  const data=db.products.filter(p=>[p.code,p.barcode,p.name,p.category].join(' ').toLocaleLowerCase('tr-TR').includes(q));
  el('productTable').innerHTML=data.length?data.map(p=>{
   const current=productTotalStock(p.id);
   const actions=isAdmin()?'<button class="btn btn-light btn-sm" onclick="editProduct(\''+esc(p.id)+'\')">Düzenle</button> <button class="btn btn-danger btn-sm" onclick="deleteProduct(\''+esc(p.id)+'\')">Sil</button>':'<span class="muted">Yönetici yetkisi gerekli</span>';
-  const kg=isKgProduct(p);
-  return '<tr><td>'+esc(p.code)+'</td><td>'+esc(p.barcode)+'</td><td><b>'+esc(p.name)+'</b></td>'+
+  const kg=isKgProduct(p),choices=productPriceUnits(p),saved=productListPriceUnits[p.id];
+  const selected=choices.includes(saved)?saved:(kg?'Kg':'Adet');
+  return '<tr data-product-id="'+esc(p.id)+'"><td>'+esc(p.code)+'</td><td>'+esc(p.barcode)+'</td><td><b>'+esc(p.name)+'</b></td>'+
    '<td>'+esc(p.category)+'</td><td class="num"><b>'+formatStockAmount(p.id,current)+'</b>'+
    (stockIsVisiblyEmpty(p.id,current)?'<div class="muted" style="font-size:11px">Stokta yok</div>':'')+'</td>'+
    '<td>'+(kg?'Koli / KG':'Koli / Adet')+'</td><td class="num">'+qty(p.packQty)+'</td>'+
-   '<td class="num"><b>'+money(p.salePrice)+'</b><div class="muted">Koli Satış</div>'+
-   '<div class="muted">'+money(orderDefaultPrice(p,kg?'Kg':'Adet'))+' / '+(kg?'KG':'Adet')+'</div></td>'+
+   '<td><select class="product-price-unit-select" aria-label="'+esc(p.name)+' satış fiyatı birimi">'+
+    choices.map(u=>'<option value="'+u+'"'+(selected===u?' selected':'')+'>'+(u==='Kg'?'KG':u)+'</option>').join('')+'</select></td>'+
+   '<td class="num"><b class="product-price-amount">'+money(productSalesPrice(p,selected))+'</b>'+
+    '<div class="muted">'+(selected==='Koli'?'Koli':selected==='Kg'?'KG':'Adet')+' satış fiyatı</div></td>'+
    '<td class="num">'+qty(p.minStock)+'</td><td>'+(p.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td>'+
    '<td>'+actions+'</td></tr>';
- }).join(''):'<tr><td colspan="11" class="empty">Ürün bulunamadı.</td></tr>';
+ }).join(''):'<tr><td colspan="12" class="empty">Ürün bulunamadı.</td></tr>';
 }
 function saveProduct(e){
  e.preventDefault();if(!requirePermission('products'))return;
@@ -2373,7 +2390,13 @@ el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay'
 el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
 el('productExcelInput').addEventListener('change',importProductsExcel);el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productUnit').addEventListener('change',updateProductUnitUI);
 el('productPackQty').addEventListener('input',updateCartonPrice);
-el('productKgSale').addEventListener('input',updateCartonPrice);el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
+el('productKgSale').addEventListener('input',updateCartonPrice);
+el('productSale').addEventListener('input',updateCartonPrice);
+el('productPriceUnit').addEventListener('change',updateProductPricePreview);
+el('productTable').addEventListener('change',e=>{
+ if(e.target.classList.contains('product-price-unit-select'))updateProductListPrice(e.target.closest('tr[data-product-id]'));
+});
+el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
 el('orderFirm').addEventListener('change',applySelectedFirmDiscount);
 el('orderDiscount').addEventListener('input',updateOrderTotals);
