@@ -368,7 +368,7 @@ function persistDB(){db.updatedAt=new Date().toISOString();localStorage.setItem(
 function saveDB(options={}){const {render=true,sync=true}=options;persistDB();if(render&&currentUser)renderAll();if(sync)scheduleAutoSync()}
 function hasOperationalData(data=db){
   const stockValues=Object.values(data?.stocks||{});
-  return !!((data?.products||[]).length||(data?.categories||[]).length||(data?.firms||[]).length||(data?.movements||[]).length||(data?.warehouses||[]).length>1||(data?.users||[]).length>1||stockValues.some(v=>Math.abs(num(v))>0));
+  return !!((data?.products||[]).length||(data?.categories||[]).length||(data?.firms||[]).length||(data?.movements||[]).length||(data?.warehouses||[]).length>1||(data?.users||[]).length>1||stockValues.some(v=>Math.abs(num(v))>0)||(data?.orders||[]).length);
 }
 function setLoginBusy(busy,message=''){
   const form=el('loginForm');if(!form)return;
@@ -556,7 +556,7 @@ function loadSecureCloudView(response){
   currentUser=userById(response.user.id);
   if(!currentUser)throw new Error('Kullanıcı yetkileri yüklenemedi.');
   cloudState={revision:response.revision,dirty:false,pending:null,
-   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,ownerId:currentUser.id};
+   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,baseOrderCount:db.orders.length,ownerId:currentUser.id};
   cloudConflict=false;rememberCloud();syncBootstrapComplete=true;
   el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+response.revision;
  }
@@ -1410,7 +1410,7 @@ async function connectCloud(e){
   localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url}));
   sessionStorage.setItem('tatsanCloudKey',key);
   syncBootstrapComplete=true;cloudConflict=false;
-  if(changed){cloudState={revision:r.revision,dirty:!r.data&&hasOperationalData(db),pending:null,baseMovementCount:r.data?.movements?.length??0,baseAuditCount:r.data?.auditLogs?.length??0,ownerId:currentUser?.id||null};}
+  if(changed){cloudState={revision:r.revision,dirty:!r.data&&hasOperationalData(db),pending:null,baseMovementCount:r.data?.movements?.length??0,baseAuditCount:r.data?.auditLogs?.length??0,baseOrderCount:r.data?.orders?.length??0,ownerId:currentUser?.id||null};}
   if(r.data&&!cloudState.dirty){db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db));cloudState.revision=r.revision;cloudState.pending=null;}
   else if(cloudState.dirty&&cloudState.revision!==r.revision){cloudConflict=true;}
   else cloudState.revision=r.revision;
@@ -1449,12 +1449,13 @@ function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
  try{form.submit()}catch(err){cleanup();reject(err)}
 })}
 function readCloudState(){
- const empty={revision:0,dirty:false,pending:null,baseMovementCount:null,baseAuditCount:null,ownerId:null};
+ const empty={revision:0,dirty:false,pending:null,baseMovementCount:null,baseAuditCount:null,baseOrderCount:0,ownerId:null};
  try{
   const x=JSON.parse(localStorage.getItem(CLOUD_STATE_KEY)||'{}');
   return {revision:Number.isInteger(x.revision)?x.revision:0,dirty:!!x.dirty,pending:x.pending||null,
    baseMovementCount:Number.isInteger(x.baseMovementCount)?x.baseMovementCount:null,
    baseAuditCount:Number.isInteger(x.baseAuditCount)?x.baseAuditCount:null,
+   baseOrderCount:Number.isInteger(x.baseOrderCount)?x.baseOrderCount:0,
    ownerId:x.ownerId||null};
  }catch(e){return empty}
 }
@@ -1465,6 +1466,7 @@ function markSyncedBase(data,revision){
  cloudState.revision=revision;
  cloudState.baseMovementCount=Array.isArray(data?.movements)?data.movements.length:0;
  cloudState.baseAuditCount=Array.isArray(data?.auditLogs)?data.auditLogs.length:0;
+ cloudState.baseOrderCount=Array.isArray(data?.orders)?data.orders.length:0;
  cloudState.ownerId=currentUser?.id||null;
 }
 function sameStockStructure(a,b){
@@ -1476,14 +1478,16 @@ function sameStockStructure(a,b){
 function rebaseQueuedStockMovements(latest){
  if(!latest?.data||!Number.isInteger(latest.revision)||!currentUser)return false;
  if(latest.user&&(latest.user.id!==currentUser.id||latest.user.active===false))return false;
- const baseMoves=cloudState.baseMovementCount,baseAudit=cloudState.baseAuditCount;
- if(!Number.isInteger(baseMoves)||!Number.isInteger(baseAudit)||cloudState.ownerId!==currentUser.id)return false;
+ const baseMoves=cloudState.baseMovementCount,baseAudit=cloudState.baseAuditCount,baseOrders=cloudState.baseOrderCount;
+ if(!Number.isInteger(baseMoves)||!Number.isInteger(baseAudit)||!Number.isInteger(baseOrders)||cloudState.ownerId!==currentUser.id)return false;
  const local=db,remote=normalizeDB(JSON.parse(JSON.stringify(latest.data)));
  if(!sameStockStructure(local,remote))return false;
  if(local.movements.length<baseMoves||remote.movements.length<baseMoves||
-    local.auditLogs.length<baseAudit||remote.auditLogs.length<baseAudit)return false;
+    local.auditLogs.length<baseAudit||remote.auditLogs.length<baseAudit||
+    local.orders.length<baseOrders||remote.orders.length<baseOrders)return false;
  if(JSON.stringify(local.movements.slice(0,baseMoves))!==JSON.stringify(remote.movements.slice(0,baseMoves)))return false;
  if(JSON.stringify(local.auditLogs.slice(0,baseAudit))!==JSON.stringify(remote.auditLogs.slice(0,baseAudit)))return false;
+ if(JSON.stringify(local.orders.slice(0,baseOrders))!==JSON.stringify(remote.orders.slice(0,baseOrders)))return false;
  const known=new Map(remote.movements.map(m=>[m.id,m]));
  const queued=local.movements.slice(baseMoves).filter(m=>!known.has(m.id));
  if(queued.length>100)return false;
@@ -1536,6 +1540,29 @@ function rebaseQueuedStockMovements(latest){
  for(const item of localLogs)if(!logs.has(item.id)){remote.auditLogs.push(item);logs.set(item.id,item)}
  remote.stocks=stocks;
  remote.movements.push(...shifted);
+ const knownOrders=new Map(remote.orders.map(o=>[o.id,o]));
+ const queuedOrders=local.orders.slice(baseOrders).filter(o=>!knownOrders.has(o.id));
+ if(queuedOrders.length>50)return false;
+ for(const o of queuedOrders){
+  if(o.userId!==currentUser.id||o.status!=='Yeni'||!Array.isArray(o.lines)||!o.lines.length||o.lines.length>50)return false;
+  if(latest.user&&latest.user.role!=='admin'&&
+    latest.user.permissions?.orders!==true&&latest.user.permissions?.exit!==true)return false;
+  const firm=remote.firms.find(f=>f.id===o.firmId);
+  if(!firm||firm.active===false)return false;
+  let sum=0;
+  for(const l of o.lines){
+   if(!remote.products.some(p=>p.id===l.productId&&p.active!==false)||!Number.isSafeInteger(l.quantity)||l.quantity<1||
+      !Number.isSafeInteger(l.unitPriceCents)||l.unitPriceCents<0||
+      l.lineTotalCents!==l.quantity*l.unitPriceCents)return false;
+   sum+=l.lineTotalCents;
+  }
+  if(!Number.isSafeInteger(sum)||sum!==o.subtotalCents||
+    !Number.isInteger(o.discountBasisPoints)||o.discountBasisPoints<0||o.discountBasisPoints>10000||
+    o.discountCents!==Math.round(sum*o.discountBasisPoints/10000)||
+    o.totalCents!==sum-o.discountCents)return false;
+  const newOrder={...o,number:nextOrderNumber(remote.orders)};
+  remote.orders.push(newOrder);
+ }
  const owner=userById(currentUser.id);
  const newOwner=remote.users.find(u=>u.id===currentUser.id&&u.active!==false);
  if(!newOwner)return false;
@@ -1551,8 +1578,13 @@ function rebaseQueuedStockMovements(latest){
 function queuedMovementCount(){
  return Number.isInteger(cloudState.baseMovementCount)?Math.max(0,db.movements.length-cloudState.baseMovementCount):0;
 }
+function queuedOrderCount(){
+ return Number.isInteger(cloudState.baseOrderCount)?Math.max(0,db.orders.length-cloudState.baseOrderCount):0;
+}
 function queueStatusLabel(){
- const n=queuedMovementCount();return n?'Drive: kuyruğa alındı · '+n+' stok hareketi':'Drive: değişiklik gönderim kuyruğunda';
+ const n=queuedMovementCount(),orders=queuedOrderCount();
+ if(n||orders)return 'Drive: kuyrukta'+(n?' · '+n+' stok hareketi':'')+(orders?' · '+orders+' sipariş':'');
+ return 'Drive: değişiklik gönderim kuyruğunda';
 }
 function scheduleAutoSync(){
  cloudState.dirty=true;
@@ -1632,7 +1664,7 @@ async function pullFromSheets(){
  try{const r=cloudResultCheck(await rpc('cloudRead'));if(!r.data)throw new Error('Drive henüz boş.');
   db=normalizeDB(r.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
   cloudState={revision:r.revision,dirty:false,pending:null,baseMovementCount:r.data.movements?.length||0,
-    baseAuditCount:r.data.auditLogs?.length||0,ownerId:currentUser?.id||null};
+    baseAuditCount:r.data.auditLogs?.length||0,baseOrderCount:r.data.orders?.length||0,ownerId:currentUser?.id||null};
   rememberCloud();cloudConflict=false;syncBootstrapComplete=true;
   const u=currentUser?userById(currentUser.id):null;
   if(u&&u.active!==false){currentUser=u;showApp();notify('Drive verileri güncellendi.')}else{currentUser=null;sessionStorage.removeItem('stokDepoCurrentUser');showLogin();notify('Kullanıcı kaydı silinmiş veya pasifleştirilmiş. Yeniden giriş yapın.',true)}
