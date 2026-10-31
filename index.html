@@ -832,7 +832,7 @@ function updateCartonPrice(){
  if(kg)el('productSale').value=(Math.round(num(el('productKgSale').value)*pack*100)/100).toFixed(2);
 }
 
-const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Stok Birimi','Paket KG / Koli İçi Adet','KG Satış Fiyatı','Paket/Koli Satış Fiyatı','Minimum Stok (Paket/Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
+const PRODUCT_EXCEL_HEADERS=['Ürün Kodu','Barkod','Ürün Adı','Kategori','Stok Birimi','Koli Ağırlığı (KG) / Koli İçi Adet','KG Satış Fiyatı','Koli Satış Fiyatı','Minimum Stok (Koli)','Durum','Açıklama','Mevcut Stok (Bilgi)'];
 function exportProductsExcel(empty=false){
  if(!requirePermission('products'))return;
  loadFirmExcelLibrary().then(xlsx=>{
@@ -910,7 +910,7 @@ function prepareProductExcelImport(rows){
     ['koli','koli / adet','adet'].includes(unitRaw)?'Koli':null;
   if(!unit)throw new Error(line+'. satırda Stok Birimi Koli veya KG olmalıdır.');
   const kg=unit==='Kg';
-  const rawPack=excelProductField(row,['Paket KG / Koli İçi Adet','Paket Ağırlığı (KG)','Paket Ağırlığı','Koli İçi Adet','Koli Ici Adet','Paket İçi'],previous?.packQty??(kg?'':1)).trim();
+  const rawPack=excelProductField(row,['Koli Ağırlığı (KG) / Koli İçi Adet','Koli Ağırlığı (KG)','Paket KG / Koli İçi Adet','Paket Ağırlığı (KG)','Paket Ağırlığı','Koli İçi Adet','Koli Ici Adet','Paket İçi'],previous?.packQty??(kg?'':1)).trim();
   let packQty;
   if(kg){
    if(!/^\d+(?:[.,]\d{1,3})?$/.test(rawPack))
@@ -929,7 +929,7 @@ function prepareProductExcelImport(rows){
       db.orders.some(o=>(o.lines||[]).some(l=>l.productId===previous.id)))
     throw new Error(line+'. satırda '+name+' ürününün stok/hareket/sipariş geçmişi var. Birimi veya paket miktarı değiştirilemez.');
   }
-  const packSaleField=['Paket/Koli Satış Fiyatı','Paket Satış Fiyatı','Koli Satış Fiyatı','Satış Fiyatı'];
+  const packSaleField=['Koli Satış Fiyatı','Paket/Koli Satış Fiyatı','Paket Satış Fiyatı','Satış Fiyatı'];
   const kgSaleField=['KG Satış Fiyatı','Kilogram Satış Fiyatı'];
   const hasKgSale=kg&&firmExcelHasColumn(row,kgSaleField)&&firmExcelValue(row,kgSaleField)!=='';
   const hasPackSale=firmExcelHasColumn(row,packSaleField)&&firmExcelValue(row,packSaleField)!=='';
@@ -939,7 +939,7 @@ function prepareProductExcelImport(rows){
     kgSalePrice=excelProductNumber(firmExcelValue(row,kgSaleField),'KG Satış Fiyatı',line,{min:0,max:10000000});
     salePrice=Math.round(kgSalePrice*packQty*100)/100;
    }else if(hasPackSale){
-    salePrice=excelProductNumber(firmExcelValue(row,packSaleField),'Paket Satış Fiyatı',line,{min:0,max:10000000});
+    salePrice=excelProductNumber(firmExcelValue(row,packSaleField),'Koli Satış Fiyatı',line,{min:0,max:10000000});
     kgSalePrice=Math.round(salePrice/packQty*100)/100;
    }else{
     kgSalePrice=Number(previous?.kgSalePrice??0);
@@ -950,7 +950,7 @@ function prepareProductExcelImport(rows){
     'Koli Satış Fiyatı',line,{min:0,max:10000000});
    kgSalePrice=undefined;
   }
-  const minStock=excelProductNumber(excelProductField(row,['Minimum Stok (Paket/Koli)','Minimum Stok (Koli)','Minimum Stok','Min Stok'],previous?.minStock??0),
+  const minStock=excelProductNumber(excelProductField(row,['Minimum Stok (Koli)','Minimum Stok (Paket/Koli)','Minimum Stok','Min Stok'],previous?.minStock??0),
    'Minimum Stok',line,{integer:true,min:0,max:100000000});
   const status=excelProductField(row,['Durum','Aktif'],previous?.active===false?'Pasif':'Aktif').trim().toLocaleLowerCase('tr-TR');
   const activeStates={'aktif':true,'evet':true,'true':true,'1':true,'pasif':false,'hayır':false,'hayir':false,'false':false,'0':false};
@@ -2267,8 +2267,8 @@ function loadDemoData(){if(db.products.length||db.movements.length){if(!confirm(
 
 function csvCell(v){return `"${String(v??'').replace(/"/g,'""')}"`}
 function exportCSV(name,headers,rows){const text='\ufeff'+[headers,...rows].map(r=>r.map(csvCell).join(';')).join('\n');downloadFile(name,text,'text/csv;charset=utf-8')}
-function exportStockCSV(){const rows=allStockRows().map(x=>[x.warehouse.name,x.product.code,x.product.barcode,x.product.name,formatStockAmount(x.product.id,x.current),totalPieces(x.product.id,x.current),x.product.minStock,x.value]);exportCSV(`Stok_Durumu_${new Date().toISOString().slice(0,10)}.csv`,['Depo','Ürün Kodu','Barkod','Ürün','Mevcut Stok','Toplam Adet / KG','Minimum Stok (Paket/Koli)','Stok Satış Değeri (KDV Hariç)'],rows)}
-function exportMovementsCSV(){const rows=filteredMovements().map(m=>[dt(m.date),m.type,warehouseById(m.warehouseId)?.name||'',productById(m.productId)?.name||'',m.firmName||'',num(m.inputQuantity??fromCartons(m.productId,m.quantity,m.inputUnit)),m.inputUnit||'Koli',m.quantity,totalPieces(m.productId,m.quantity),formatStockAmount(m.productId,m.before),formatStockAmount(m.productId,m.after),m.userName||'',m.doc,m.detail,m.lot,m.expiry]);exportCSV(`Stok_Hareketleri_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','İşlem','Depo','Ürün','Firma','Girilen Miktar','Birim','Paket/Koli Eşdeğeri','Toplam Adet / KG','Önceki Stok','Sonraki Stok','Kullanıcı','Belge','Detay','Lot','SKT'],rows)}
+function exportStockCSV(){const rows=allStockRows().map(x=>[x.warehouse.name,x.product.code,x.product.barcode,x.product.name,formatStockAmount(x.product.id,x.current),totalPieces(x.product.id,x.current),x.product.minStock,x.value]);exportCSV(`Stok_Durumu_${new Date().toISOString().slice(0,10)}.csv`,['Depo','Ürün Kodu','Barkod','Ürün','Mevcut Stok','Toplam Adet / KG','Minimum Stok (Koli)','Stok Satış Değeri (KDV Hariç)'],rows)}
+function exportMovementsCSV(){const rows=filteredMovements().map(m=>[dt(m.date),m.type,warehouseById(m.warehouseId)?.name||'',productById(m.productId)?.name||'',m.firmName||'',num(m.inputQuantity??fromCartons(m.productId,m.quantity,m.inputUnit)),m.inputUnit||'Koli',m.quantity,totalPieces(m.productId,m.quantity),formatStockAmount(m.productId,m.before),formatStockAmount(m.productId,m.after),m.userName||'',m.doc,m.detail,m.lot,m.expiry]);exportCSV(`Stok_Hareketleri_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','İşlem','Depo','Ürün','Firma','Girilen Miktar','Birim','Koli Eşdeğeri','Toplam Adet / KG','Önceki Stok','Sonraki Stok','Kullanıcı','Belge','Detay','Lot','SKT'],rows)}
 function clearAuditByDateRange(){
   if(!isAdmin())return notify('Bu işlem yalnızca yöneticiye açıktır.',true);
   const from=el('auditFrom').value,to=el('auditTo').value;
