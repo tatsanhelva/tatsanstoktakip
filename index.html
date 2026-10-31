@@ -213,7 +213,9 @@
   <tbody id="orderLineRows"><tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr></tbody>
  </table></div>
  <div class="order-calculations">
-  <div class="field"><label>Genel İskonto (%)</label><input id="orderDiscount" type="number" min="0" max="100" step="0.01" value="0" inputmode="decimal"></div>
+  <div class="field"><label>Genel İskonto (%)</label><input id="orderDiscount" type="text" value="0" maxlength="60" inputmode="decimal" autocomplete="off" placeholder="Örn. 20+5">
+  <small class="muted">20+5 = önce %20, sonra kalan tutara %5 (etkili %24)</small>
+  <small id="orderDiscountFeedback" role="status" aria-live="polite"></small></div>
   <div class="order-totals">
    <div><span>Ara Toplam</span><b id="orderSubtotal">₺0,00</b></div>
    <div><span>İskonto Tutarı</span><b id="orderDiscountAmount">₺0,00</b></div>
@@ -875,6 +877,36 @@ function addOrderProduct(){
  el('orderLineRows').appendChild(row);
  updateOrderTotals();
 }
+function parseOrderDiscountExpression(value){
+ const source=String(value??'').replace(/\s/g,'').replace(/%/g,'').trim();
+ if(!source)return {expression:'0',basisPoints:0,parts:[0]};
+ const parts=source.split('+');
+ if(parts.length>10||parts.some(s=>!/^\d{1,3}(?:[.,]\d{1,2})?$/.test(s)))return null;
+ const bps=[];
+ for(const part of parts){
+  const amount=Number(part.replace(',','.')),bp=Math.round(amount*100);
+  if(!Number.isFinite(amount)||amount<0||amount>100||bp<0||bp>10000)return null;
+  bps.push(bp);
+ }
+ let multiplier=1;
+ for(const bp of bps)multiplier*=1-bp/10000;
+ const basisPoints=Math.max(0,Math.min(10000,Math.round(10000*(1-multiplier))));
+ return {expression:parts.join('+').replace(/,/g,'.'),basisPoints,parts:bps};
+}
+function orderDiscountText(order){
+ const raw=String(order.discountExpression||'').trim();
+ const percent=(Number(order.discountBasisPoints||0)/100).toLocaleString('tr-TR',{maximumFractionDigits:2});
+ if(!raw)return '%'+percent;
+ const parsed=parseOrderDiscountExpression(raw);
+ if(!parsed||parsed.basisPoints!==Number(order.discountBasisPoints))return '%'+percent;
+ return '%'+raw.replace(/\./g,',')+(parsed.parts.length>1?' (etkili %'+percent+')':'');
+}
+function calculateOrderDiscount(subtotalCents,expression){
+ const discount=parseOrderDiscountExpression(expression);
+ if(!discount)return null;
+ const discountCents=Math.round(subtotalCents*discount.basisPoints/10000);
+ return {...discount,discountCents,totalCents:subtotalCents-discountCents};
+}
 function getOrderQuote(shouldNotify=false){
  const rows=orderEditableRows(),out=[];
  if(shouldNotify&&!rows.length){notify('Siparişe en az bir ürün ekleyin.',true);return null}
@@ -899,14 +931,13 @@ function getOrderQuote(shouldNotify=false){
   out.push({productId:product.id,productCode:product.code||'',productName:product.name,
    unit,quantity,unitPriceCents,lineTotalCents});
  }
- const percentText=el('orderDiscount').value.trim(),discountPercent=percentText===''?0:Number(percentText);
- if(!Number.isFinite(discountPercent)||discountPercent<0||discountPercent>100||
-    Math.abs(discountPercent*100-Math.round(discountPercent*100))>0.000001){
-  if(shouldNotify)notify('İskonto oranı 0-100 arasında ve en fazla iki ondalıklı olmalıdır.',true);return null;
+ const discount=calculateOrderDiscount(subtotalCents,el('orderDiscount').value);
+ if(!discount){
+  if(shouldNotify)notify('İskonto 20+5 veya 10+5+2 gibi yazılmalıdır. Her oran 0-100 arasında olabilir.',true);
+  return null;
  }
- const discountBasisPoints=Math.round(discountPercent*100);
- const discountCents=Math.round(subtotalCents*discountBasisPoints/10000);
- return {lines:out,subtotalCents,discountBasisPoints,discountCents,totalCents:subtotalCents-discountCents};
+ return {lines:out,subtotalCents,discountBasisPoints:discount.basisPoints,
+  discountExpression:discount.expression,discountCents:discount.discountCents,totalCents:discount.totalCents};
 }
 function updateOrderTotals(){
  let subtotal=0;
@@ -917,11 +948,19 @@ function updateOrderTotals(){
   row.querySelector('.order-line-total').textContent=total===null?'—':orderMoney(total);
   if(total!==null)subtotal+=total;
  }
- const percent=Number(el('orderDiscount').value)||0;
- const discountCents=Math.round(subtotal*Math.max(0,Math.min(100,percent))/100);
+ const discount=calculateOrderDiscount(subtotal,el('orderDiscount').value);
+ const feedback=el('orderDiscountFeedback');
+ if(discount){
+  feedback.textContent=discount.parts.length>1?
+   'Etkili iskonto: %'+(discount.basisPoints/100).toLocaleString('tr-TR',{maximumFractionDigits:2}):'';
+  feedback.style.color='';
+ }else{
+  feedback.textContent='Geçersiz iskonto. Örnek: 20+5 veya 10+5+2';
+  feedback.style.color='#b42318';
+ }
  el('orderSubtotal').textContent=orderMoney(subtotal);
- el('orderDiscountAmount').textContent='−'+orderMoney(discountCents);
- el('orderGrandTotal').textContent=orderMoney(subtotal-discountCents);
+ el('orderDiscountAmount').textContent=discount?'−'+orderMoney(discount.discountCents):'—';
+ el('orderGrandTotal').textContent=discount?orderMoney(discount.totalCents):'—';
 }
 function handleOrderLineEvent(e){
  const row=e.target.closest('tr[data-order-product-id]');if(!row)return;
@@ -973,7 +1012,7 @@ function renderOrders(){
  el('orderListRows').innerHTML=items.length?items.slice(0,200).map(o=>
   '<tr><td><b>'+esc(o.number)+'</b></td><td>'+esc(o.date||'')+'</td><td>'+esc(o.firmName||'')+
   '</td><td>'+Number(o.lines?.length||0)+'</td><td>'+((Number(o.discountBasisPoints||0)/100).toLocaleString('tr-TR'))+
-  '%</td><td class="num"><b>'+orderMoney(o.totalCents)+'</b></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
+  '</td><td class="num"><b>'+orderMoney(o.totalCents)+'</b></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
   '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button></td></tr>'
  ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
  updateOrderTotals();
@@ -993,6 +1032,7 @@ function saveOrder(e){
  const number=nextOrderNumber(),order={id:uid('ord'),number,date,firmId:firm.id,
   firmCode:firm.code||'',firmName:firm.name,lines:quote.lines,
   subtotalCents:quote.subtotalCents,discountBasisPoints:quote.discountBasisPoints,
+  discountExpression:quote.discountExpression,
   discountCents:quote.discountCents,totalCents:quote.totalCents,
   note:el('orderNotes').value.trim(),status:'Yeni',
   userId:currentUser.id,userName:currentUser.fullName||currentUser.username,
