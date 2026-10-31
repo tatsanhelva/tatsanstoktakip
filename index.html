@@ -713,7 +713,7 @@ function exportProductsExcel(empty=false){
  }).catch(err=>notify(err.message||'Excel indirilemedi.',true));
 }
 function excelProductField(row,keys,oldValue=''){
- return firmExcelColumn(row,keys,oldValue);
+ return firmExcelHasColumn(row,keys)?firmExcelValue(row,keys):String(oldValue??'');
 }
 function excelProductNumber(value,label,rowNumber,{integer=false,min=0,max=10000000}={}){
  const cleaned=String(value??'').trim().replace(/\s/g,'').replace(/₺|TL|TRY/gi,'');
@@ -769,8 +769,13 @@ function prepareProductExcelImport(rows){
    throw new Error(rowNum+'. satırda barkod başka ürüne ait: '+barcode);
   const packText=excelProductField(row,['Koli İçi Adet','Koli Ici Adet','Paket İçi','Koli içi'],previous?.packQty??1);
   const packQty=excelProductNumber(packText,'Koli İçi Adet',rowNum,{integer:true,min:1,max:1000000});
+  if(previous&&packQty!==Math.max(1,Math.round(Number(previous.packQty)||1))&&
+     (db.movements.some(m=>m.productId===previous.id)||
+      Object.keys(db.stocks).some(k=>k.endsWith('::'+previous.id)&&Math.abs(Number(db.stocks[k]||0))>0.000001))){
+    throw new Error(rowNum+'. satırdaki '+name+' ürününün stok hareketi var. Koli içi adet değişikliği mevcut stok adetlerini bozabileceği için Excel aktarımında engellendi.');
+  }
   // Alış fiyatı adet cinsinden; purchasePrice otomatik olarak adet fiyatı × koli içi miktardır.
-  const baseItemPrice=previous?.itemPrice??(Number(previous?.purchasePrice||0)/Math.max(1,Number(previous?.packQty||1)));
+  const baseItemPrice=Math.round(Number(previous?.itemPrice??(Number(previous?.purchasePrice||0)/Math.max(1,Number(previous?.packQty||1))))*100)/100;
   const itemPrice=excelProductNumber(excelProductField(row,['Adet Alış Fiyatı','Adet Fiyatı','Birim Alış Fiyatı'],baseItemPrice),
    'Adet Alış Fiyatı',rowNum,{min:0,max:10000000});
   const salePrice=excelProductNumber(excelProductField(row,['Koli Satış Fiyatı','Satış Fiyatı'],previous?.salePrice??0),
