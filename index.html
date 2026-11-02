@@ -3382,13 +3382,13 @@ function resetPurchaseEdit(){
 }
 function editPurchase(id){
  if(!requirePermission('editPurchases'))return;
- if(secureMode&&!isAdmin())return notify('Güvenli sunucuda satın alma düzenleme işlemi için yönetici oturumu gerekiyor.',true);
+ 
  const p=(db.purchases||[]).find(x=>x.id===id);if(!p)return notify('Kayıt bulunamadı.',true);
  const firm=firmById(p.firmId);
  el('purchaseEditId').value=p.id;el('purchaseFirmId').value=p.firmId;el('purchaseFirmSearch').value=(firm?.code||'')+' - '+p.firmName;
  el('purchaseProduct').value=p.productName;el('purchaseKg').value=p.kg;el('purchaseAmount').value=(p.netCents/100).toFixed(2);
  el('purchaseVat').value=p.vatRate;el('purchaseDate').value=p.date;el('purchaseDoc').value=p.doc||'';el('purchaseNote').value=p.note||'';
- el('purchaseInvoiceFile').value='';el('purchaseInvoiceFile').disabled=true;
+ el('purchaseInvoiceFile').value='';el('purchaseInvoiceFile').disabled=false;
  el('purchaseSubmitBtn').textContent='Satın Almayı Güncelle';el('purchaseCancelEdit').hidden=false;renderPurchaseFirms();purchaseTotals();
  el('purchaseForm').scrollIntoView({behavior:'smooth',block:'start'});
 }
