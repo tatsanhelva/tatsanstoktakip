@@ -206,7 +206,7 @@
   <div class="field" id="ledgerGuestField" hidden><label>Misafir Müşteri Adı (İsteğe bağlı)</label><input id="ledgerGuestName" maxlength="120" placeholder="Perakende Müşteri"></div>
   <div class="field" id="ledgerTransactionField"><label>İşlem *</label><select id="firmLedgerType"><option value="DEBT">Borç Ekle (+)</option><option value="PAYMENT">Tahsilat (-)</option></select></div>
   <div class="field full" id="ledgerGuestProducts" hidden><label>Peşin Satış Ürünleri (Fiyat gerekmez)</label>
- <div class="form-grid cols-3"><div class="field"><label>Çıkış Deposu *</label><select id="guestWarehouse"></select></div><div class="field"><label>Ürün Ara</label><input type="search" id="guestProductSearch" placeholder="Ürün adı veya kodu"></div><div class="field"><label>Ürün Ekle</label><select id="guestProductSelect"></select><button type="button" class="btn btn-light btn-sm" id="guestAddProduct">+ Ürün Ekle</button></div></div>
+ <div class="form-grid cols-3"><div class="field"><label>Çıkış Deposu *</label><select id="guestWarehouse"></select></div><div class="field"><label>Ürün Ara</label><input type="search" id="guestProductSearch" placeholder="Ürün adı, kodu veya barkod"><div id="guestProductMatches" style="max-height:200px;overflow:auto;margin-top:5px"></div></div><div class="field"><label>Ürün Ekle</label><select id="guestProductSelect"></select><button type="button" class="btn btn-light btn-sm" id="guestAddProduct">+ Ürün Ekle</button></div></div>
  <div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Mevcut</th><th>İşlem</th></tr></thead><tbody id="guestProductRows"></tbody></table></div><small class="muted">Ürün fiyatı istenmez. Girilen toplam tutar yalnızca tahsilat kaydıdır. Seçilen ürünler depodan düşer.</small></div>
   <div class="field"><label>Ödeme Yöntemi</label><select id="ledgerPaymentMethod"><option value="CASH">Nakit</option><option value="POS">Kredi Kartı / POS</option><option value="TRANSFER">Havale / EFT</option></select></div>
   <div class="field"><label>Tutar (₺) *</label><input id="firmLedgerAmount" type="number" min="0.01" max="999999999999" step="0.01" required placeholder="0,00"></div>
@@ -2420,10 +2420,18 @@ function renderGuestProductPicker(){
  const w=el('guestWarehouse'),old=w.value;
  w.innerHTML='<option value="">Depo seçiniz</option>'+db.warehouses.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('');
  if(db.warehouses.some(x=>x.id===old))w.value=old;
- const search=firmKey(el('guestProductSearch').value),select=el('guestProductSelect'),prior=select.value;
- const products=db.products.filter(p=>p.active!==false&&firmKey((p.code||'')+' '+p.name).includes(search)).slice(0,100);
+ const query=firmKey(el('guestProductSearch').value),select=el('guestProductSelect'),prior=select.value;
+ const digits=v=>/^0*\\d+$/.test(v)?String(Number(v)):'';
+ const matches=p=>{
+  if(!query)return true;
+  const fields=[p.code,p.barcode,p.name,p.category].map(firmKey);
+  return fields.some(x=>x.includes(query)||(digits(query)&&digits(x)===digits(query)));
+ };
+ const products=db.products.filter(p=>p.active!==false&&matches(p)).slice(0,100);
  select.innerHTML='<option value="">Ürün seçiniz</option>'+products.map(p=>'<option value="'+esc(p.id)+'">'+esc((p.code||'')+' - '+p.name)+'</option>').join('');
  if(products.some(p=>p.id===prior))select.value=prior;
+ const list=el('guestProductMatches');
+ list.innerHTML=query?(products.length?products.slice(0,30).map(p=>'<button type="button" class="btn btn-light btn-sm" data-guest-pick="'+esc(p.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((p.code||'')+' - '+p.name)+'</button>').join(''):'<span class="muted">Ürün bulunamadı. Ad, stok kodu veya barkod deneyin.</span>'):'';
  refreshGuestStocks();
 }
 function refreshGuestStocks(){
@@ -3293,6 +3301,7 @@ el('guestSaleEditForm').addEventListener('submit',saveGuestSaleEdit);
 el('guestSalesRows').addEventListener('click',e=>{const b=e.target.closest('[data-guest-action]');if(!b)return;const id=b.dataset.guestId;switch(b.dataset.guestAction){case 'view':openGuestSale(id);break;case 'edit':openGuestSale(id,true);break;case 'delete':deleteGuestSale(id);break;}});
 el('guestAddProduct').addEventListener('click',addGuestProduct);
 el('guestProductSearch').addEventListener('input',renderGuestProductPicker);
+el('guestProductMatches').addEventListener('click',e=>{const b=e.target.closest('[data-guest-pick]');if(!b)return;el('guestProductSelect').value=b.dataset.guestPick;addGuestProduct();el('guestProductSearch').value='';renderGuestProductPicker()});
 el('guestWarehouse').addEventListener('change',refreshGuestStocks);
 el('guestProductRows').addEventListener('click',e=>{const b=e.target.closest('[data-remove-guest]');if(b)b.closest('tr').remove()});
 el('ledgerCustomerType').addEventListener('change',toggleLedgerCustomerType);
