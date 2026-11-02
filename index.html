@@ -103,7 +103,8 @@
 <div class="sep"></div>
 <button data-page="stock">📋 Stok Durumu</button>
 <button data-page="movements">🕒 Hareketler</button>
-<button data-page="reports">📈 Raporlar</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
+<button data-page="reports">📈 Raporlar</button>
+<button data-page="history">📅 Tarihsel İşlem Özeti</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
 <button data-admin-only="" data-page="settings">⚙️ Ayarlar</button>
 <button type="button" data-admin-only="" onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
 </nav>
@@ -363,7 +364,7 @@
 <button class="btn btn-danger btn-sm" type="button" id="clearAllMovementsBtn" data-admin-only onclick="clearAllStockMovements()">Tüm Hareketleri Sil</button>
 </div></div>
 <div class="movement-warning" data-admin-only style="margin-bottom:12px"><b>Önemli:</b> Tüm Hareketleri Sil işlemi geçmiş giriş, çıkış, transfer ve sayım kayıtlarını temizler; mevcut depo stok miktarlarına, ürünlere, carilere, siparişlere ve işlem denetim kayıtlarına dokunmaz. Geçmişe dayalı raporlar sıfırlanır. Önce JSON yedeği indirilir.</div><div class="filter-row wide"><div class="field"><label>İşlem</label><select id="movementType"><option value="all">Tümü</option><option value="GIRIS">Stok Girişi</option><option value="CIKIS">Stok Çıkışı</option><option value="TRANSFER">Transfer</option><option value="SAYIM">Sayım</option></select></div><div class="field"><label>Depo</label><select id="movementWarehouse"></select></div><div class="field"><label>Ürün</label><select id="movementProduct"></select></div><div class="field"><label>Firma</label><select id="movementFirm"></select></div><div class="field"><label>Kullanıcı</label><select id="movementUser"></select></div><div class="field"><label>Başlangıç</label><input id="movementFrom" type="date"/></div><div class="field"><label>Bitiş</label><input id="movementTo" type="date"/></div></div><div class="movement-warning" data-admin-only><b>Yönetici düzeltme alanı:</b> Hatalı giriş, çıkış, transfer veya sayım kaydını düzenlediğinizde stok bakiyeleri ve sonraki hareketlerin önceki/sonraki değerleri otomatik yeniden hesaplanır.</div><div class="table-wrap wide-table"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Depo</th><th>Ürün</th><th>Firma</th><th class="num">Miktar</th><th class="num">Önceki</th><th class="num">Sonraki</th><th>Kullanıcı</th><th>Belge</th><th>Detay</th><th data-admin-column>Yönetici İşlemi</th></tr></thead><tbody id="movementTable"></tbody></table></div></div></div>
-<div class="page" id="page-reports"> 
+<div class="page" id="page-history">
 <div class="card" id="historicalOverview">
 <div class="card-head"><h3>Tarihsel İşlem Özeti</h3><span class="muted">Satış, alış, borç, tahsilat ve sevkiyatlar tek ekranda</span></div>
 <div class="report-filter-grid">
@@ -392,6 +393,8 @@
 <div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Firma / Cari</th><th>Ürün / Açıklama</th><th>Miktar</th><th>Giriş / Alacak (₺)</th><th>Çıkış / Borç (₺)</th></tr></thead><tbody id="historyRows"></tbody></table></div>
 <p class="muted" id="historyCount"></p>
 </div>
+</div>
+<div class="page" id="page-reports"> 
 <div class="card"><div class="card-head"><h3>İşletme Rapor Merkezi</h3><span class="muted">İlk aşama • Tüm tutarlar kayıtlı işlem verilerinden hesaplanır.</span></div>
 <div class="report-filter-grid">
 <div class="field"><label>Başlangıç</label><input id="bizFrom" type="date"></div><div class="field"><label>Bitiş</label><input id="bizTo" type="date"></div>
@@ -465,7 +468,7 @@ const APP_VERSION='3.0';
 const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu781xw2F9Wy1Ru0oKxiKWQvalu_gJFga3DDVdCe01o5tp_ISlVPwDx/exec';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
-const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Hesap / Tahsilat / Peşin Satış / Gider',orders:'Sipariş Formu',purchasing:'Tedarik ve Satın Alma',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
+const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Hesap / Tahsilat / Peşin Satış / Gider',orders:'Sipariş Formu',purchasing:'Tedarik ve Satın Alma',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',history:'Tarihsel İşlem Özeti',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
 const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['purchasing','Tedarik ve Satın Alma'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
 const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme'],['deleteOrders','Kayıtlı Sipariş Silme'],['editPurchases','Satın Alma Düzenleme'],['deletePurchases','Satın Alma Silme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
@@ -615,7 +618,7 @@ function isAdmin(){return currentUser?.role==='admin'}
 function requireAdminAction(){if(isAdmin())return true;notify('Düzenleme ve silme işlemleri yalnızca yöneticiye açıktır.',true);return false}
 function hasPermission(permission){return !!currentUser&&(isAdmin()||currentUser.permissions?.[permission]===true)}
 function requirePermission(permission){if(hasPermission(permission))return true;notify('Bu işlem için kullanıcı yetkiniz bulunmuyor.',true);return false}
-function canAccessPage(name){if(['users','audit','settings','ledger'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
+function canAccessPage(name){if(name==='history')return hasPermission('reports');if(['users','audit','settings','ledger'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
 function firstAllowedPage(){return PERMISSION_DEFS.find(([key])=>hasPermission(key))?.[0]||'dashboard'}
 function applyPermissionUI(){document.querySelectorAll('#nav button[data-page]').forEach(btn=>{btn.style.display=canAccessPage(btn.dataset.page)?'':'none'});document.querySelectorAll('[data-admin-only],[data-admin-column]').forEach(x=>x.style.display=isAdmin()?'':'none')}
 function notify(msg,error=false){const t=el('toast');t.textContent=msg;t.className='toast show'+(error?' error':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='toast',3000)}
