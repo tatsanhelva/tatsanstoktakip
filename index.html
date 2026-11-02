@@ -93,6 +93,7 @@
 <button data-page="categories">🗂️ Kategoriler</button>
 <button data-page="warehouses">🏭 Depolar</button><button data-page="firms">🏢 Firmalar</button>
 <button data-page="orders">🧾 Sipariş Formu</button>
+<button data-admin-only="" data-page="ledger">💳 Cari Borç / Tahsilat</button>
 <div class="sep"></div>
 <button data-page="entry">➕ Stok Girişi</button>
 <button data-page="exit">➖ Stok Çıkışı</button>
@@ -196,10 +197,11 @@
  <p class="muted" style="font-size:12px;margin:0 0 12px">Excel dosyasında kod, vergi/TC veya firma adı eşleşirse mevcut kart güncellenir. Borç bakiyeleri Excel ile değiştirilmez.</p>
  <div class="table-wrap"><table style="min-width:1100px"><thead><tr><th>Kod</th><th>Firma Adı / Adres</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Vergi / TC</th><th>Varsayılan İskonto</th><th>Borç Durumu</th><th class="num">Bakiye (₺)</th><th>Durum</th><th>İşlemler</th></tr></thead><tbody id="firmTable"></tbody></table></div>
 </div>
-<div class="card" data-admin-only>
+</div>
+<div class="page" id="page-ledger"><div class="card">
  <div class="card-head"><h3>Cari Borç / Tahsilat Kaydı</h3><span class="muted">Borç ve ödemeler ayrı takip edilir.</span></div>
  <form id="firmLedgerForm"><div class="form-grid cols-3">
-  <div class="field"><label>Cari / Firma *</label><select id="firmLedgerFirm" required></select></div>
+  <div class="field"><label>Cari / Firma *</label><input id="firmLedgerSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu yazın..." aria-controls="firmLedgerMatches"><input id="firmLedgerFirm" type="hidden"><div id="firmLedgerMatches" class="table-wrap" style="max-height:170px;overflow:auto;margin-top:5px"></div><small id="firmLedgerSelected" class="muted">Henüz cari seçilmedi.</small></div>
   <div class="field"><label>İşlem *</label><select id="firmLedgerType"><option value="DEBT">Borç Ekle (+)</option><option value="PAYMENT">Tahsilat (-)</option></select></div>
   <div class="field"><label>Tutar (₺) *</label><input id="firmLedgerAmount" type="number" min="0.01" max="999999999999" step="0.01" required placeholder="0,00"></div>
   <div class="field"><label>Tarih</label><input id="firmLedgerDate" type="date"></div>
@@ -209,8 +211,7 @@
  <p class="muted" style="font-size:12px;margin-top:12px">Stok çıkışı otomatik borç oluşturmaz; satış tutarı kayıtlı olmadığı için borcu burada ayrıca kaydedin. Hatalı finansal hareketi ters kayıtla düzeltin.</p>
  <div class="actions"><button class="btn btn-primary" type="submit">Cari Hareketi Kaydet</button></div>
  </form>
-</div>
-</div>
+</div></div>
 <div class="page" id="page-orders">
 <div class="card">
  <div class="card-head"><h3 id="orderFormTitle">Sipariş Formu</h3><span class="muted">Cari seçin, ürün ekleyin ve iskonto hesaplayın.</span></div>
@@ -381,7 +382,7 @@ const APP_VERSION='3.0';
 const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu781xw2F9Wy1Ru0oKxiKWQvalu_gJFga3DDVdCe01o5tp_ISlVPwDx/exec';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
-const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',orders:'Sipariş Formu',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
+const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Borç / Tahsilat Kaydı',orders:'Sipariş Formu',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
 const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
 const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme'],['deleteOrders','Kayıtlı Sipariş Silme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
@@ -528,7 +529,7 @@ function isAdmin(){return currentUser?.role==='admin'}
 function requireAdminAction(){if(isAdmin())return true;notify('Düzenleme ve silme işlemleri yalnızca yöneticiye açıktır.',true);return false}
 function hasPermission(permission){return !!currentUser&&(isAdmin()||currentUser.permissions?.[permission]===true)}
 function requirePermission(permission){if(hasPermission(permission))return true;notify('Bu işlem için kullanıcı yetkiniz bulunmuyor.',true);return false}
-function canAccessPage(name){if(['users','audit','settings'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
+function canAccessPage(name){if(['users','audit','settings','ledger'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
 function firstAllowedPage(){return PERMISSION_DEFS.find(([key])=>hasPermission(key))?.[0]||'dashboard'}
 function applyPermissionUI(){document.querySelectorAll('#nav button[data-page]').forEach(btn=>{btn.style.display=canAccessPage(btn.dataset.page)?'':'none'});document.querySelectorAll('[data-admin-only],[data-admin-column]').forEach(x=>x.style.display=isAdmin()?'':'none')}
 function notify(msg,error=false){const t=el('toast');t.textContent=msg;t.className='toast show'+(error?' error':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='toast',3000)}
@@ -2314,10 +2315,8 @@ function renderFirms(){
     '<td>'+(f.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td><td>'+actions+'</td></tr>';
  }).join(''):'<tr><td colspan="11" class="empty">Firma bulunamadı.</td></tr>';
  if(isAdmin()){
-  const select=el('firmLedgerFirm'),old=select.value;
-  select.innerHTML='<option value="">Cari seçiniz</option>'+db.firms.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.code||'')+' - '+esc(f.name)+'</option>').join('');
-  if(db.firms.some(x=>x.id===old))select.value=old;
-  if(!el('firmLedgerDate').value)el('firmLedgerDate').value=new Date().toISOString().slice(0,10);
+  renderLedgerFirmMatches();
+  if(!el('firmLedgerDate').value)el('firmLedgerDate').value=localDateTimeValue().slice(0,10);
  }
 }
 function normalizeFirmDiscount(value){
@@ -2385,6 +2384,14 @@ function deleteFirm(id){
  db.firms=db.firms.filter(x=>x.id!==id);
  audit('Firma silindi','Firmalar',f.name);saveDB();resetFirmForm();notify('Firma silindi.');
 }
+function renderLedgerFirmMatches(){
+ const input=el('firmLedgerSearch'),list=el('firmLedgerMatches'),selected=el('firmLedgerFirm').value;
+ const query=firmKey(input.value);
+ const matches=query?db.firms.filter(f=>firmKey(f.code+' '+f.name).includes(query)).slice(0,20):[];
+ list.innerHTML=matches.map(f=>'<button type="button" class="btn btn-light btn-sm" data-ledger-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(query?'<span class="muted">Eşleşen firma bulunamadı.</span>':'');
+ const firm=firmById(selected);
+ el('firmLedgerSelected').textContent=firm?'Seçilen cari: '+(firm.code||'')+' - '+firm.name:'Henüz cari seçilmedi.';
+}
 function saveFirmLedger(e){
  e.preventDefault();if(!isAdmin())return notify('Cari borçlarını yalnızca yönetici kaydedebilir.',true);
  if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce bekleyen Drive kaydı tamamlanmalı.',true);
@@ -2400,7 +2407,7 @@ function saveFirmLedger(e){
   userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()};
  db.firmLedger.push(movement);
  audit(type==='DEBT'?'Cari borç eklendi':'Cari tahsilat kaydedildi','Firmalar',firm.name+' | '+firmMoney(cents));
- saveDB();el('firmLedgerForm').reset();el('firmLedgerFirm').value=firm.id;
+ saveDB();el('firmLedgerForm').reset();el('firmLedgerFirm').value=firm.id;el('firmLedgerSearch').value=(firm.code||'')+' - '+firm.name;renderLedgerFirmMatches();
  notify('Cari hareketi kaydedildi: '+firm.name+' - '+firmMoney(cents));
 }
 function showFirmStatement(id){
@@ -3155,6 +3162,8 @@ el('orderListRows').addEventListener('click',e=>{
 });
 el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
+el('firmLedgerSearch').addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
+el('firmLedgerMatches').addEventListener('click',e=>{const b=e.target.closest('[data-ledger-firm]');if(!b)return;const f=firmById(b.dataset.ledgerFirm);if(!f)return;el('firmLedgerFirm').value=f.id;el('firmLedgerSearch').value=(f.code||'')+' - '+f.name;renderLedgerFirmMatches()});
 el('firmExcelInput').addEventListener('change',importFirmsExcel);
 el('firmTable').addEventListener('click',e=>{
  const btn=e.target.closest('button[data-firm-action]');if(!btn)return;
