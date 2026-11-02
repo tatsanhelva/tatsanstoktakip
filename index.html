@@ -386,6 +386,7 @@ let ordersBackendEnabled=false;
 let orderApprovalBackendEnabled=false;
 let orderEditBackendEnabled=false;
 let orderEditingId=null;
+let orderEditingRevision=null;
 let orderEditBusy=false;
 let orderApprovalBusy=false;
 let syncPullInProgress=false;
@@ -1533,6 +1534,9 @@ function handleOrderLineEvent(e){
  updateOrderTotals();
 }
 function resetOrderForm(){
+ orderEditingId=null;orderEditingRevision=null;
+ el('orderFormTitle').textContent='Sipariş Formu';
+ el('orderEditingNotice').hidden=true;el('orderSaveBtn').textContent='Siparişi Kaydet';
  el('orderForm').reset();
  el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
  el('orderDate').value=localDateTimeValue().slice(0,10);
@@ -1540,10 +1544,16 @@ function resetOrderForm(){
  el('orderFirmDiscountHint').textContent='Cari seçildiğinde varsayılan iskonto otomatik gelecektir.';
  el('orderVatRate').value='1';
  el('orderNumber').value=nextOrderNumber();
+ refreshOrderProductStock();
  updateOrderTotals();
 }
 
 let selectedOrderForApproval=null;
+function orderEditButton(order){
+ if(!hasPermission('orders')||!hasPermission('editOrders'))return '';
+ if(order.status&&order.status!=='Yeni')return '';
+ return ' <button type="button" class="btn btn-light btn-sm" data-order-edit="'+esc(order.id)+'">Düzenle</button>';
+}
 function orderApproveButton(order){
  if(order.status==='Onaylandı')return ' <span class="muted" title="Stok çıkışı tamamlandı">Stoktan Düşüldü</span>';
  if(order.status&&order.status!=='Yeni')return '';
@@ -1735,8 +1745,15 @@ function renderOrders(){
  if(products.some(x=>x.id===beforeProduct))el('orderProductPicker').value=beforeProduct;
  refreshOrderProductStock();
  if(!el('orderDate').value)el('orderDate').value=localDateTimeValue().slice(0,10);
- el('orderNumber').value=nextOrderNumber();
- const allowedSave=isAdmin()||!secureMode||ordersBackendEnabled;
+ const editing=orderEditingId?db.orders.find(o=>o.id===orderEditingId):null;
+ if(orderEditingId&&(!editing||(editing.status&&editing.status!=='Yeni'))){resetOrderForm();}
+ else el('orderNumber').value=editing?.number||nextOrderNumber();
+ const activeEdit=!!orderEditingId;
+ el('orderFormTitle').textContent=activeEdit?'Siparişi Düzenle · '+(editing?.number||''):'Sipariş Formu';
+ el('orderEditingNotice').hidden=!activeEdit;
+ el('orderSaveBtn').textContent=activeEdit?'Sipariş Değişikliklerini Kaydet':'Siparişi Kaydet';
+ const allowedSave=activeEdit?(hasPermission('editOrders')&&(isAdmin()||!secureMode||orderEditBackendEnabled)):
+  (isAdmin()||!secureMode||ordersBackendEnabled);
  el('orderSaveBtn').disabled=!allowedSave;
  el('orderSaveBtn').title=allowedSave?'Siparişi Drive sistemine kaydet':
   'Çalışan sipariş kayıtları için merkezi sunucu güncellemesi gerekiyor.';
@@ -1750,12 +1767,12 @@ function renderOrders(){
   '</td><td class="num"><b>'+orderMoney(orderPayableCents(o))+'</b><div class="muted" style="font-size:11px">'+
    (storedOrderVat(o).hasVat?'KDV dahil':'Eski kayıt · KDV hesaplanmamış')+'</div></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
   '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button> '+
-  '<button class="btn btn-primary btn-sm" type="button" data-order-pdf="'+esc(o.id)+'">PDF</button>'+orderApproveButton(o)+'</td></tr>'
+  '<button class="btn btn-primary btn-sm" type="button" data-order-pdf="'+esc(o.id)+'">PDF</button>'+orderEditButton(o)+orderApproveButton(o)+'</td></tr>'
  ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
  updateOrderTotals();
 }
 function saveOrder(e){
- e.preventDefault();if(!requirePermission('orders'))return;
+ e.preventDefault();if(orderEditingId)return saveEditedOrder();if(!requirePermission('orders'))return;
  if(secureMode&&!isAdmin()&&!ordersBackendEnabled)
   return notify('Çalışan hesabıyla sipariş kaydı için Google Apps Script sunucu güncellemesi gerekiyor.',true);
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
@@ -1787,6 +1804,7 @@ function showOrderDetails(id){
  if(!requirePermission('orders'))return;
  const order=db.orders.find(o=>o.id===id);if(!order)return notify('Sipariş bulunamadı.',true);
  orderCurrentlyViewed=id;
+ el('orderDetailsEditBtn').style.display=hasPermission('editOrders')&&(!order.status||order.status==='Yeni')?'':'none';
  el('orderDetailsTitle').textContent=order.number+' - Sipariş Formu';
  el('orderDetailsHeader').innerHTML='<p><b>Cari:</b> '+esc(order.firmName||'')+
   ' &nbsp; <b>Tarih:</b> '+esc(order.date||'')+
@@ -2864,6 +2882,7 @@ el('orderLineRows').addEventListener('change',handleOrderLineEvent);
 el('orderLineRows').addEventListener('click',handleOrderLineEvent);
 el('orderListRows').addEventListener('click',e=>{
  const pdf=e.target.closest('button[data-order-pdf]');if(pdf){exportSavedOrderPDF(pdf.dataset.orderPdf);return}
+ const edit=e.target.closest('button[data-order-edit]');if(edit){editSavedOrder(edit.dataset.orderEdit);return}
  const approve=e.target.closest('button[data-order-approve]');if(approve){openOrderApproval(approve.dataset.orderApprove);return}
  const b=e.target.closest('button[data-order-view]');if(b)showOrderDetails(b.dataset.orderView);
 });
