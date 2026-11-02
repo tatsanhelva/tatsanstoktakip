@@ -1239,6 +1239,13 @@ function nextFirmCode(firms=db.firms){
  while(occupied.has(('FRM'+String(n).padStart(4,'0')).toLowerCase()))n++;
  return 'FRM'+String(n).padStart(4,'0');
 }
+function nextSupplierCode(firms=db.firms){
+ const used=new Set(firms.map(f=>String(f.code||'').toUpperCase()));
+ let n=1;
+ while(used.has('TDR'+String(n).padStart(3,'0')))n++;
+ return 'TDR'+String(n).padStart(3,'0');
+}
+function newFirmCodeForType(){return el('firmType').value==='supplier'?nextSupplierCode():nextFirmCode()}
 function firmBalanceCents(id){
  return (db.firmLedger||[]).filter(x=>x.firmId===id).reduce((total,x)=>
   total+(x.type==='DEBT'?Number(x.amountCents||0):-Number(x.amountCents||0)),0);
@@ -2386,7 +2393,7 @@ function saveFirm(e){
  if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce bekleyen Drive kaydı tamamlanmalı.',true);
  const previous=id?firmById(id):null;
  if(id&&!previous)return notify('Firma bulunamadı.',true);
- const code=previous?(previous.code||nextFirmCode()):nextFirmCode();
+ const code=previous?(previous.code||newFirmCodeForType()):newFirmCodeForType();
  const name=el('firmName').value.trim(),taxNo=firmTax(el('firmTaxNo').value),
   discountExpression=el('firmType').value==='supplier'?'':normalizeFirmDiscount(el('firmDiscount').value);
  if(!name)return notify('Firma adı zorunludur.',true);
@@ -2418,10 +2425,11 @@ function toggleFirmDiscountField(){
  const field=el('firmDiscountField');
  field.hidden=supplierOnly;field.style.display=supplierOnly?'none':'';
  if(supplierOnly)el('firmDiscount').value='';
+ if(!el('firmId').value)el('firmCode').value=newFirmCodeForType();
 }
 function resetFirmForm(){
- el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmCode').value=nextFirmCode();
- el('firmDiscount').value='';el('firmType').value='both';toggleFirmDiscountField();
+ el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmType').value='both';el('firmCode').value=newFirmCodeForType();
+ el('firmDiscount').value='';toggleFirmDiscountField();
 }
 function deleteFirm(id){
  if(!requirePermission('firms')||!requireAdminAction())return;
