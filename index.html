@@ -1513,6 +1513,188 @@ function resetOrderForm(){
  el('orderNumber').value=nextOrderNumber();
  updateOrderTotals();
 }
+
+let selectedOrderForApproval=null;
+function orderApproveButton(order){
+ if(order.status==='Onaylandı')return ' <span class="muted" title="Stok çıkışı tamamlandı">Stoktan Düşüldü</span>';
+ if(order.status&&order.status!=='Yeni')return '';
+ if(!hasPermission('approveOrders'))return '';
+ return ' <button type="button" class="btn btn-ok btn-sm" data-order-approve="'+esc(order.id)+'">Onayla</button>';
+}
+function orderApprovalUnit(line,product){
+ const original=line.displayUnit||line.unit||'Koli';
+ if(product.unit==='Kg'){
+  if(original==='Kg'||(original==='Adet'&&line.unit==='Adet'))return 'Kg';
+  return 'Koli';
+ }
+ return original==='Adet'?'Adet':'Koli';
+}
+function orderApprovalPlan(data,orderId,warehouseId){
+ const order=(data.orders||[]).find(o=>o.id===orderId);
+ if(!order)return {ok:false,error:'Sipariş bulunamadı.'};
+ if(order.status&&order.status!=='Yeni')return {ok:false,error:'Sipariş zaten onaylanmış veya artık yeni değil.'};
+ if((data.movements||[]).some(m=>m.orderId===orderId))
+  return {ok:false,error:'Bu sipariş için stok çıkışı hareketi zaten var; çift çıkış engellendi.'};
+ const warehouse=(data.warehouses||[]).find(w=>w.id===warehouseId);
+ if(!warehouse)return {ok:false,error:'Çıkış yapılacak depo seçilmedi.'};
+ const lines=order.lines||[];
+ if(!Array.isArray(lines)||!lines.length||lines.length>100)
+  return {ok:false,error:'Siparişin ürün sayısı geçersiz.'};
+ const stocks={...(data.stocks||{})},items=[],errors=[];
+ for(const line of lines){
+  const product=(data.products||[]).find(p=>p.id===line.productId);
+  if(!product||product.active===false){errors.push('Bir ürün silinmiş veya pasife alınmış.');continue}
+  const amount=Number(line.quantity);
+  if(!Number.isSafeInteger(amount)||amount<=0||amount>100000){
+   errors.push(product.name+' sipariş miktarı geçersiz.');continue;
+  }
+  const unit=orderApprovalUnit(line,product);
+  const pack=Number(product.packQty||1);
+  if(!Number.isFinite(pack)||pack<=0){errors.push(product.name+' koli içi miktarı geçersiz.');continue}
+  const quantity=(unit==='Koli')?amount:Math.round(amount/pack*1e9)/1e9;
+  if(!Number.isFinite(quantity)||quantity<=0){
+   errors.push(product.name+' miktarı stoktan düşmeye uygun değil.');continue;
+  }
+  const key=warehouseId+'::'+product.id;
+  const before=Number(stocks[key]||0);
+  const after=Math.round((before-quantity)*1e9)/1e9;
+  if(!Number.isFinite(before)||!Number.isFinite(after)){
+   errors.push(product.name+' stok değeri hatalı.');continue;
+  }
+  if(after< -0.000000001)errors.push(product.name+' için stok yetersiz. İstenen: '+amount+' '+unit+'.');
+  stocks[key]=after;
+  items.push({product,unit,amount,quantity,before,after,key});
+ }
+ return {ok:errors.length===0,errors,order,warehouse,warehouseId,items,stocks};
+}
+function buildOrderApprovalData(original,plan,user){
+ if(!plan?.ok||!plan.order||!user?.id)throw Error('Sipariş onayı koşulları sağlanmadı.');
+ const next=JSON.parse(JSON.stringify(original));
+ const order=next.orders.find(o=>o.id===plan.order.id);
+ if(!order||order.status&&order.status!=='Yeni')throw Error('Sipariş daha önce onaylandı.');
+ if((next.movements||[]).some(m=>m.orderId===order.id))throw Error('Sipariş hareketi zaten kaydedilmiş.');
+ const now=new Date().toISOString(),groupId=uid('ord-batch'),movementIds=[];
+ for(const item of plan.items){
+  const id=uid('mv');
+  movementIds.push(id);
+  next.movements.push({
+   id,groupId,orderId:order.id,type:'CIKIS',
+   warehouseId:plan.warehouseId,productId:item.product.id,
+   quantity:item.quantity,inputUnit:item.unit,inputQuantity:item.amount,
+   before:item.before,after:item.after,date:now,doc:order.number||'',
+   detail:'Sipariş '+(order.number||'')+' onayı | Firma: '+(order.firmName||''),
+   firmId:order.firmId||'',firmName:order.firmName||'',reason:'Sipariş Onayı',
+   userId:user.id,userName:user.fullName||user.username||'',unitCost:0
+  });
+  next.stocks[item.key]=item.after;
+ }
+ order.status='Onaylandı';
+ order.approvedAt=now;order.approvedById=user.id;order.approvedByName=user.fullName||user.username||'';
+ order.approvedWarehouseId=plan.warehouseId;
+ order.approvalBatchId=groupId;order.approvalMovementIds=movementIds;
+ next.auditLogs=Array.isArray(next.auditLogs)?next.auditLogs:[];
+ next.auditLogs.push({id:uid('log'),date:now,userId:user.id,userName:user.fullName||user.username||'',
+  username:user.username||'',module:'Sipariş Formu',action:'Sipariş onaylandı - stok çıkışı',
+  detail:(order.number||'')+' | Depo: '+plan.warehouse.name+' | Ürün: '+plan.items.length});
+ if(next.auditLogs.length>10000)next.auditLogs=next.auditLogs.slice(-10000);
+ return next;
+}
+function openOrderApproval(id){
+ if(!requirePermission('approveOrders')||!requirePermission('orders'))return;
+ if(orderApprovalBusy)return notify('Bir sipariş onay işlemi sürüyor.',true);
+ if(secureMode&&!orderApprovalBackendEnabled&&!isAdmin())
+  return notify('Çalışan hesabıyla sipariş onaylama için güncel Apps Script sunucusu gerekli. Yöneticiden sunucuyu güncellemesini isteyin.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
+  return notify('Onaylamadan önce bekleyen Drive kayıtları tamamlanmalı.',true);
+ const order=db.orders.find(o=>o.id===id);
+ if(!order||order.status&&order.status!=='Yeni')return notify('Bu sipariş zaten onaylanmış veya geçerli değil.',true);
+ selectedOrderForApproval=id;
+ el('orderApproveSummary').textContent=(order.number||'')+' · '+(order.firmName||'')+
+  ' · '+(order.lines||[]).length+' ürün · Onaylanınca stoktan düşülecek.';
+ const sel=el('orderApproveWarehouse');
+ sel.innerHTML='<option value="">Depo seçiniz</option>'+db.warehouses.map(w=>
+  '<option value="'+esc(w.id)+'">'+esc(w.code||'')+' - '+esc(w.name)+'</option>').join('');
+ sel.value='';
+ renderOrderApprovalPreview();
+ el('orderApprovalDialog').showModal();
+}
+function renderOrderApprovalPreview(){
+ const id=selectedOrderForApproval,w=el('orderApproveWarehouse').value,
+   out=el('orderApproveStockRows'),textNode=el('orderApproveStockMessage'),
+   button=el('orderApproveConfirmBtn');
+ if(!id||!w){
+  out.innerHTML='<tr><td colspan="4" class="empty">Önce depo seçin.</td></tr>';
+  textNode.textContent='Onay işleminden önce kaynak depoyu seçmelisiniz.';
+  button.disabled=true;return;
+ }
+ const plan=orderApprovalPlan(db,id,w);
+ out.innerHTML=(plan.items||[]).map(item=>
+  '<tr><td>'+esc(item.product.code||'')+' · '+esc(item.product.name)+'</td>'+
+  '<td>'+qty(item.amount)+' '+esc(item.unit)+'</td>'+
+  '<td>'+formatStockAmount(item.product.id,item.before)+'</td>'+
+  '<td style="font-weight:700">'+formatStockAmount(item.product.id,item.after)+'</td></tr>'
+ ).join('')||'<tr><td colspan="4" class="empty">Ürün yok.</td></tr>';
+ textNode.textContent=plan.ok?'Stok yeterli. Onaylandığında '+plan.items.length+' ürünün çıkışı yapılacak.':
+  (plan.errors?.join(' ')||plan.error||'Onay yapılamıyor.');
+ textNode.style.color=plan.ok?'':'#b42318';
+ button.disabled=!plan.ok||orderApprovalBusy;
+ return plan;
+}
+async function confirmOrderApproval(){
+ if(orderApprovalBusy)return;
+ if(!requirePermission('approveOrders')||!requirePermission('orders'))return;
+ if(secureMode&&!orderApprovalBackendEnabled&&!isAdmin())
+  return notify('Bu kullanıcının sipariş onayı için güncel sunucu sürümü gerekli.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
+  return notify('Önce Drive kuyruğunu tamamlayın.',true);
+ const orderId=selectedOrderForApproval,warehouseId=el('orderApproveWarehouse').value;
+ const preview=orderApprovalPlan(db,orderId,warehouseId);
+ if(!preview.ok)return renderOrderApprovalPreview();
+ const oldStatus=db.orders.find(o=>o.id===orderId)?.status;
+ if(oldStatus&&oldStatus!=='Yeni')return notify('Sipariş daha önce onaylanmış.',true);
+ if(!confirm(preview.order.number+' siparişi '+preview.warehouse.name+' deposundan '+
+   preview.items.length+' ürün stok çıkışı yapılarak ONAYLANACAK.\n\nBu işlem cari borcunu değiştirmez. Onaylıyor musunuz?'))return;
+ orderApprovalBusy=true;syncPullInProgress=true;
+ el('orderApproveConfirmBtn').disabled=true;
+ el('orderApproveStockMessage').textContent='Drive üzerinde sipariş ve stok hareketleri birlikte kaydediliyor…';
+ try{
+  let result;
+  if(secureMode&&orderApprovalBackendEnabled){
+   result=await rpc('orderApprove',{orderId,warehouseId,requestId:uid('ord-approve')});
+   if(!result?.ok)throw new Error(result?.error||'Sunucu sipariş onayını doğrulamadı.');
+  }else{
+   if(!isAdmin())throw new Error('Bu sunucu sürümünde sipariş onayı yalnızca yönetici tarafından yapılabilir.');
+   const latest=cloudResultCheck(await rpc('cloudRead'));
+   if(!latest?.data||!Number.isInteger(latest.revision))throw new Error('Drive verisi okunamadı.');
+   const current=orderApprovalPlan(latest.data,orderId,warehouseId);
+   if(!current.ok)throw new Error(current.errors?.join(' ')||current.error||'Sipariş başka kullanıcı tarafından onaylandı.');
+   if(current.items.some((item,i)=>Math.abs(item.before-preview.items[i]?.before)>0.000001))
+    throw new Error('Onay sırasında stok miktarı değişti. Depoyu yeniden kontrol edin.');
+   const data=buildOrderApprovalData(latest.data,current,currentUser);
+   result=await rpc('cloudWrite',{revision:latest.revision,requestId:uid('ord-approve'),data});
+   if(result?.conflict)throw new Error('Başka bilgisayar aynı anda kayıt yaptı. Sipariş onayını yeniden kontrol edin.');
+   if(!result?.ok||!Number.isInteger(result.revision))throw new Error('Drive onay kaydını doğrulamadı.');
+  }
+  const refreshed=cloudResultCheck(await rpc('cloudRead'));
+  const approved=refreshed.data?.orders?.find(o=>o.id===orderId);
+  if(!approved||approved.status!=='Onaylandı')throw new Error('Kaydın onay durumu doğrulanamadı; yeniden onaylamadan önce Drive verilerini yenileyin.');
+  db=normalizeDB(refreshed.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
+  currentUser=userById(currentUser.id);
+  cloudState.dirty=false;cloudState.pending=null;cloudConflict=false;
+  markSyncedBase(refreshed.data,refreshed.revision);rememberCloud();
+  el('orderApprovalDialog').close();selectedOrderForApproval=null;
+  el('syncIndicator').textContent='Drive: kaydedildi · v'+refreshed.revision;
+  showApp();
+  notify((approved.number||'Sipariş')+' onaylandı. '+(approved.approvalMovementIds?.length||0)+' stok çıkışı kaydedildi.');
+ }catch(err){
+  notify('Sipariş onaylanamadı: '+(err.message||err),true);
+  el('orderApproveStockMessage').textContent='İşlem doğrulanamadı. İkinci kez denemeden önce Drive kayıtlarını yenileyin. '+(err.message||'');
+ }finally{
+  syncPullInProgress=false;orderApprovalBusy=false;
+  renderOrderApprovalPreview();
+ }
+}
+
 function renderOrders(){
  if(!currentUser||!hasPermission('orders'))return;
  const beforeFirm=el('orderFirm').value,beforeProduct=el('orderProductPicker').value;
