@@ -3424,7 +3424,7 @@ function readPurchasePdf(file){
 }
 async function savePurchase(e){
  e.preventDefault();const editId=el('purchaseEditId').value;if(!requirePermission(editId?'editPurchases':'purchasing'))return;
- if(editId&&secureMode&&!isAdmin())return notify('Güvenli sunucuda düzenleme için yönetici oturumu gerekiyor.',true);
+
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
  const firm=firmById(el('purchaseFirmId').value),productName=el('purchaseProduct').value.trim(),kg=Number(el('purchaseKg').value),amount=Number(el('purchaseAmount').value),vatRate=Number(el('purchaseVat').value),date=el('purchaseDate').value;
  if(!firm||firm.active===false||!['supplier','both'].includes(firm.firmType))return notify('Yalnızca tedarikçi türündeki carilerle satın alma kaydedilebilir.',true);
@@ -3435,9 +3435,21 @@ async function savePurchase(e){
  if(!Number.isSafeInteger(netCents+vatCents))return notify('Tutar çok yüksek.',true);
  const previous=editId?(db.purchases||[]).find(x=>x.id===editId):null;
  if(editId&&!previous)return notify('Düzenlenecek kayıt bulunamadı.',true);
- if(editId&&invoiceFile)return notify('Düzenlemede mevcut PDF korunur. Yeni PDF için yeni kayıt oluşturun.',true);
- const record={...(previous||{}),id:editId||uid('purchase'),invoiceUrl:previous?.invoiceUrl||'',firmId:firm.id,firmName:firm.name,productName,kg,netCents,vatRate,vatCents,grossCents:netCents+vatCents,date,doc:el('purchaseDoc').value.trim(),note:el('purchaseNote').value.trim(),createdAt:new Date().toISOString(),userId:currentUser.id,userName:currentUser.fullName||currentUser.username};
+
+ const record={...(previous||{}),id:editId||uid('purchase'),invoiceUrl:previous?.invoiceUrl||'',firmId:firm.id,firmName:firm.name,productName,kg,netCents,vatRate,vatCents,grossCents:netCents+vatCents,date,doc:el('purchaseDoc').value.trim(),note:el('purchaseNote').value.trim(),createdAt:previous?.createdAt||new Date().toISOString(),userId:previous?.userId||currentUser.id,userName:previous?.userName||currentUser.fullName||currentUser.username};
  if(!confirm(record.firmName+' - '+productName+' - '+kg+' KG - '+firmMoney(record.grossCents)+' satın alma kaydedilsin mi?'))return;
+ if(editId){
+  if(!secureMode)return notify('Düzenleme için güvenli sunucu gerekli.',true);
+  try{
+   const patch={firmId:record.firmId,productName:record.productName,kg:record.kg,netCents:record.netCents,vatRate:record.vatRate,vatCents:record.vatCents,grossCents:record.grossCents,date:record.date,doc:record.doc,note:record.note};
+   const invoice=invoiceFile?{fileName:invoiceFile.name,mimeType:'application/pdf',dataBase64:await readPurchasePdf(invoiceFile)}:null;
+   const result=cloudResultCheck(await rpc('purchaseUpdate',{purchaseId:editId,expectedRevision:cloudState.revision,patch,invoice}));
+   if(!result.ok)throw new Error(result.error||'Güncelleme başarısız.');
+   resetPurchaseEdit();await refreshCloudIfIdle(true);
+   notify('Satın alma güncellendi.'+(invoice?(result.oldInvoiceTrashed?' Eski PDF kaldırıldı.':' Eski PDF kaldırılamadı; Drive’ı kontrol edin.'):''));
+  }catch(err){notify('Düzenleme başarısız: '+err.message,true)}
+  return;
+ }
  if(invoiceFile){
   try{
    const data=await readPurchasePdf(invoiceFile);
