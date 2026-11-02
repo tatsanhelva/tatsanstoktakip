@@ -216,11 +216,12 @@
   <div class="field" id="ledgerFirmField"><label>Cari / Firma *</label><input id="firmLedgerSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu yazın..." aria-controls="firmLedgerMatches"><input id="firmLedgerFirm" type="hidden"><div id="firmLedgerMatches" class="table-wrap" style="max-height:170px;overflow:auto;margin-top:5px"></div><small id="firmLedgerSelected" class="muted">Henüz cari seçilmedi.</small><div id="firmLedgerBalance" class="inline-info" style="margin-top:8px">Cari seçildiğinde borç gösterilir.</div></div>
   <div class="field" id="ledgerExpenseField" hidden><label>Gider Açıklaması *</label><input id="ledgerExpenseDescription" list="expenseDescriptionSuggestions" autocomplete="off" maxlength="200" placeholder="Örn. Nakliye, yakıt, temizlik"></div>
   <div class="field" id="ledgerGuestField" hidden><label>Misafir Müşteri Adı (İsteğe bağlı)</label><input id="ledgerGuestName" maxlength="120" placeholder="Perakende Müşteri"></div>
-  <div class="field" id="ledgerTransactionField"><label>İşlem *</label><select id="firmLedgerType"><option value="DEBT">Borç Ekle (+)</option><option value="PAYMENT">Tahsilat (-)</option></select></div>
+  <div class="field" id="ledgerTransactionField"><label>İşlem *</label><select id="firmLedgerType"><option value="PAYMENT">Tahsilat (-)</option></select></div>
   <div class="field full" id="ledgerGuestProducts" hidden><label>Peşin Satış Ürünleri (Fiyat gerekmez)</label>
  <div class="form-grid cols-3"><div class="field"><label>Çıkış Deposu *</label><select id="guestWarehouse"></select></div><div class="field"><label>Ürün Ara</label><input type="search" id="guestProductSearch" placeholder="Ürün adı, kodu veya barkod"><div id="guestProductMatches" style="max-height:200px;overflow:auto;margin-top:5px"></div></div><div class="field"><label>Ürün Ekle</label><select id="guestProductSelect"></select><button type="button" class="btn btn-light btn-sm" id="guestAddProduct">+ Ürün Ekle</button></div></div>
  <div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Mevcut</th><th>İşlem</th></tr></thead><tbody id="guestProductRows"></tbody></table></div><small class="muted">Ürün fiyatı istenmez. Girilen toplam tutar yalnızca tahsilat kaydıdır. Seçilen ürünler depodan düşer.</small></div>
-  <div class="field"><label>Ödeme Yöntemi</label><select id="ledgerPaymentMethod"><option value="CASH">Nakit</option><option value="POS">Kredi Kartı / POS</option><option value="TRANSFER">Havale / EFT</option></select></div>
+  <div class="field"><label>Ödeme Yöntemi</label><select id="ledgerPaymentMethod"><option value="CASH">Nakit</option><option value="POS">Kredi Kartı / POS</option><option value="TRANSFER">Havale / EFT</option><option value="CHECK">Çek</option></select></div>
+  <div class="field full" id="ledgerCheckFields" hidden style="display:none"><div class="form-grid cols-3"><div class="field"><label>Çek Numarası *</label><input id="ledgerCheckNumber" maxlength="70"></div><div class="field"><label>Banka *</label><input id="ledgerCheckBank" maxlength="120"></div><div class="field"><label>Vade Tarihi *</label><input id="ledgerCheckDueDate" type="date"></div><div class="field"><label>Çek Sahibi / Keşideci</label><input id="ledgerCheckIssuer" maxlength="150"></div><div class="field"><label>Şube</label><input id="ledgerCheckBranch" maxlength="100"></div></div></div>
   <div class="field"><label>Tutar (₺) *</label><input id="firmLedgerAmount" type="number" min="0.01" max="999999999999" step="0.01" required placeholder="0,00"></div>
   <div class="field"><label>Tarih</label><input id="firmLedgerDate" type="date"></div>
   <div class="field"><label>Belge / Fatura / Makbuz No</label><input id="firmLedgerDoc" maxlength="120"></div>
@@ -2601,8 +2602,22 @@ function toggleLedgerCustomerType(){
  for(const [id,visible] of [['ledgerFirmField',!guest&&!expense],['ledgerGuestField',guest],['ledgerExpenseField',expense],['ledgerGuestProducts',guest],['ledgerTransactionField',!guest&&!expense]]){
   const node=el(id);node.hidden=!visible;node.style.display=visible?'':'none';
  }
- el('ledgerPaymentMethod').disabled=!guest&&!expense&&el('firmLedgerType').value==='DEBT';
+ el('firmLedgerType').value='PAYMENT';
+ el('ledgerPaymentMethod').disabled=false;
+ updateLedgerCheckFields();
  if(guest)renderGuestProductPicker();
+}
+function updateLedgerCheckFields(){
+ const enabled=el('ledgerPaymentMethod').value==='CHECK'&&el('ledgerCustomerType').value!=='expense';
+ const box=el('ledgerCheckFields');box.hidden=!enabled;box.style.display=enabled?'':'none';
+ ['ledgerCheckNumber','ledgerCheckBank','ledgerCheckDueDate'].forEach(id=>{el(id).required=enabled});
+}
+function getLedgerCheckDetails(){
+ if(el('ledgerPaymentMethod').value!=='CHECK')return null;
+ const number=el('ledgerCheckNumber').value.trim(),bank=el('ledgerCheckBank').value.trim(),
+ dueDate=el('ledgerCheckDueDate').value,issuer=el('ledgerCheckIssuer').value.trim(),branch=el('ledgerCheckBranch').value.trim();
+ if(!number||!bank||!/^\d{4}-\d{2}-\d{2}$/.test(dueDate)||Number.isNaN(Date.parse(dueDate)))throw new Error('Çek numarası, banka ve geçerli vade tarihi zorunludur.');
+ return {number,bank,dueDate,issuer,branch,status:'Teslim alındı'};
 }
 function expenseAction(id,action){
  if(!isAdmin())return notify('Yönetici yetkisi gerekli.',true);
@@ -2767,6 +2782,9 @@ function saveFirmLedger(e){
  const kind=el('ledgerCustomerType').value,guest=kind==='guest',expense=kind==='expense',firm=firmById(el('firmLedgerFirm').value),type=expense?'EXPENSE':guest?'GUEST_SALE':el('firmLedgerType').value,
   amount=Number(el('firmLedgerAmount').value),date=el('firmLedgerDate').value||new Date().toISOString().slice(0,10);
  if(!guest&&!expense&&!firm)return notify('Cari seçin.',true);
+ if(!guest&&!expense&&type!=='PAYMENT')return notify('Kayıtlı cariye yalnızca tahsilat kaydedilebilir.',true);
+ let checkDetails=null;
+ if(!expense){try{checkDetails=getLedgerCheckDetails()}catch(err){return notify(err.message,true)}}
  if(type!=='EXPENSE'&&type!=='GUEST_SALE'&&type!=='DEBT'&&type!=='PAYMENT')return notify('İşlem türü geçersiz.',true);
  const cents=Math.round(amount*100);
  if(!Number.isSafeInteger(cents)||cents<=0||cents>99999999999999)return notify('Geçerli, pozitif tutar girin.',true);
@@ -2786,21 +2804,22 @@ function saveFirmLedger(e){
   const plan=guestStockPlan();if(plan.error)return notify(plan.error,true);
   if(!confirm('Peşin satış tahsilatı kaydedilsin ve '+plan.items.length+' ürün stoktan düşülsün mü?'))return;
   const sale={id:uid('pesin'),customerName:el('ledgerGuestName').value.trim()||'Perakende Müşteri',amountCents:cents,date,paymentMethod:el('ledgerPaymentMethod').value,doc:el('firmLedgerDoc').value.trim(),note:el('firmLedgerNote').value.trim(),userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()};
-  if(!['CASH','POS','TRANSFER'].includes(sale.paymentMethod))return notify('Ödeme yöntemi geçersiz.',true);
+  if(!['CASH','POS','TRANSFER','CHECK'].includes(sale.paymentMethod))return notify('Ödeme yöntemi geçersiz.',true);
+   if(checkDetails)sale.checkDetails=checkDetails;
   sale.warehouseId=plan.warehouseId;sale.items=plan.items.map(x=>({...x}));sale.stockMovementIds=[];
   for(const item of plan.items){const before=getStock(plan.warehouseId,item.productId),after=Math.round((before-item.quantity)*1e9)/1e9;
    setStock(plan.warehouseId,item.productId,after);
    addMovement({type:'CIKIS',groupId:sale.id,warehouseId:plan.warehouseId,productId:item.productId,quantity:item.quantity,inputUnit:item.unit,inputQuantity:item.inputQuantity,before,after,date:new Date().toISOString(),doc:sale.doc,detail:'Peşin satış stok çıkışı: '+sale.id});
    sale.stockMovementIds.push(db.movements[db.movements.length-1].id);
   }
-  db.guestSales.push(sale);audit('Peşin satış kaydedildi','Finans',sale.customerName+' | '+firmMoney(cents));saveDB();el('firmLedgerForm').reset();el('guestProductRows').innerHTML='';toggleLedgerCustomerType();renderGuestSales();notify('Peşin satış ve stok çıkışı kayda alındı; Drive senkronizasyonunu kontrol edin.');return;
+  db.guestSales.push(sale);audit('Peşin satış kaydedildi','Finans',sale.customerName+' | '+firmMoney(cents));saveDB();el('firmLedgerForm').reset();updateLedgerCheckFields();el('guestProductRows').innerHTML='';toggleLedgerCustomerType();renderGuestSales();notify('Peşin satış ve stok çıkışı kayda alındı; Drive senkronizasyonunu kontrol edin.');return;
  }
  const movement={id:uid('cari'),firmId:firm.id,type,amountCents:cents,date,paymentMethod:type==='PAYMENT'?el('ledgerPaymentMethod').value:null,
-  doc:el('firmLedgerDoc').value.trim(),note:el('firmLedgerNote').value.trim(),
+  doc:el('firmLedgerDoc').value.trim(),note:el('firmLedgerNote').value.trim(),...(checkDetails?{checkDetails}:{}),
   userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()};
  db.firmLedger.push(movement);
  audit(type==='DEBT'?'Cari borç eklendi':'Cari tahsilat kaydedildi','Firmalar',firm.name+' | '+firmMoney(cents));
- saveDB();el('firmLedgerForm').reset();el('firmLedgerFirm').value=firm.id;el('firmLedgerSearch').value=(firm.code||'')+' - '+firm.name;renderLedgerFirmMatches();toggleLedgerCustomerType();
+ saveDB();el('firmLedgerForm').reset();updateLedgerCheckFields();el('firmLedgerFirm').value=firm.id;el('firmLedgerSearch').value=(firm.code||'')+' - '+firm.name;renderLedgerFirmMatches();toggleLedgerCustomerType();
  notify('Cari hareketi kaydedildi: '+firm.name+' - '+firmMoney(cents));
 }
 function showFirmStatement(id){
@@ -3305,6 +3324,7 @@ function viewBizReportItem(index){
     products.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+esc(p.amount)+'</td><td>'+esc(p.unit)+'</td></tr>').join('')+'</tbody></table></div>':
     '<p class="muted">Bu cari hareketinde ürün detayı bulunmuyor.</p>');
   }
+  if(record.checkDetails){const c=record.checkDetails;html+='<h4>Çek Bilgileri</h4><table style="min-width:0"><tbody>'+[['Çek Numarası',c.number],['Banka',c.bank],['Vade',c.dueDate],['Keşideci',c.issuer],['Şube',c.branch],['Durum',c.status]].filter(x=>x[1]).map(x=>'<tr><th>'+esc(x[0])+'</th><td>'+esc(x[1])+'</td></tr>').join('')+'</tbody></table>'}
   if(bizTab==='guest'&&Array.isArray(record.items)){
    html+='<h4>Satılan Ürünler</h4><table style="min-width:0"><tbody>'+record.items.map(item=>'<tr><td>'+esc(productById(item.productId)?.name||item.productId)+'</td><td>'+esc(item.inputQuantity??item.quantity)+' '+esc(item.unit||'')+'</td></tr>').join('')+'</tbody></table>';
   }
@@ -3985,6 +4005,7 @@ el('guestWarehouse').addEventListener('change',refreshGuestStocks);
 el('guestProductRows').addEventListener('click',e=>{const b=e.target.closest('[data-remove-guest]');if(b)b.closest('tr').remove()});
 el('ledgerCustomerType').addEventListener('change',toggleLedgerCustomerType);
 el('firmLedgerType').addEventListener('change',toggleLedgerCustomerType);
+el('ledgerPaymentMethod').addEventListener('change',updateLedgerCheckFields);
 el('firmLedgerSearch').addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
 el('firmLedgerMatches').addEventListener('click',e=>{const b=e.target.closest('[data-ledger-firm]');if(!b)return;const f=firmById(b.dataset.ledgerFirm);if(!f)return;el('firmLedgerFirm').value=f.id;el('firmLedgerSearch').value=(f.code||'')+' - '+f.name;renderLedgerFirmMatches()});
 el('firmExcelInput').addEventListener('change',importFirmsExcel);
