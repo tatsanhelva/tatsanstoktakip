@@ -2758,9 +2758,8 @@ function renderLedgerFirmMatches(){
  const summary=el('firmLedgerBalance');if(!summary)return;
  if(!firm){summary.textContent='Cari seçildiğinde güncel toplam borcu gösterilir.';return}
  const debt=firmBalanceCents(firm.id),rows=(db.firmLedger||[]).filter(x=>x.firmId===firm.id);
- const totalDebt=rows.filter(x=>x.type==='DEBT').reduce((s,x)=>s+Number(x.amountCents||0),0);
  const totalPayment=rows.filter(x=>x.type==='PAYMENT').reduce((s,x)=>s+Number(x.amountCents||0),0);
- summary.innerHTML='<b>Güncel bakiye: '+esc(firmMoney(debt))+'</b> · Toplam borç: '+esc(firmMoney(totalDebt))+' · Tahsil edilen: '+esc(firmMoney(totalPayment))+(debt<0?' · Cari alacaklı':'');
+ summary.innerHTML='<b>Güncel bakiye: '+esc(firmMoney(debt))+'</b> · Tahsil edilen: '+esc(firmMoney(totalPayment))+(debt<0?' · Cari alacaklı':'');
 }
 function saveFirmLedger(e){
  e.preventDefault();if(!isAdmin())return notify('Cari borçlarını yalnızca yönetici kaydedebilir.',true);
