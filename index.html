@@ -2509,7 +2509,7 @@ async function syncMissingOrderDebts(){
 }
 function renderFirms(){
  const q=firmKey(el('firmSearch').value);
- const found=db.firms.filter(f=>firmKey([f.code,f.name,f.contact,f.phone,f.email,f.taxNo,f.address].join(' ')).includes(q));
+ const found=db.firms.filter(f=>firmKey([f.code,f.name,f.contact,f.phone,f.email,f.taxNo,f.address].join(' ')).includes(q)).sort(newestFirst);
  el('firmTable').innerHTML=found.length?found.map(f=>{
    const bal=firmBalanceStatus(f.id);
    const actions=(isAdmin()?'<button class="btn btn-light btn-sm" data-firm-action="edit" data-firm-id="'+esc(f.id)+'">Düzenle</button> <button class="btn btn-danger btn-sm" data-firm-action="delete" data-firm-id="'+esc(f.id)+'">Sil</button> ':'')+
@@ -3095,7 +3095,7 @@ function renderCountHistory(){
   if(!groups.has(id))groups.set(id,{id,rows:[],date:m.date,doc:m.doc,warehouseId:m.warehouseId,person:m.userName||''});
   groups.get(id).rows.push(m);
  }
- const entries=[...groups.values()].sort((a,b)=>new Date(b.date)-new Date(a.date));
+ const entries=[...groups.values()].sort(newestFirst);
  target.innerHTML=entries.length?entries.map(g=>{
   const person=g.person||((g.rows[0]?.detail||'').match(/Sayımı yapan: ([^|]+)/)||[])[1]||'Kullanıcı';
   const time=new Date(g.date);
@@ -3152,7 +3152,7 @@ function renderStock(){if(!hasPermission('stock')&&!isAdmin())return;
  const rows=filteredStockRows();
  el('stockTable').innerHTML=rows.length?rows.map(x=>{const status=stockIsVisiblyEmpty(x.product.id,x.current)?'<span class="badge b-red">Bitti</span>':x.current<=num(x.product.minStock)?'<span class="badge b-orange">Kritik</span>':'<span class="badge b-green">Normal</span>';return `<tr><td>${esc(x.warehouse.name)}</td><td>${esc(x.product.code)}</td><td>${esc(x.product.barcode)}</td><td><b>${esc(x.product.name)}</b></td><td>${isKgProduct(x.product)?'Koli / KG':'Koli / Adet'}</td><td class="num"><b>${formatStockAmount(x.product.id,x.current)}</b></td><td class="num">${qty(x.product.minStock)} ${'Koli'}</td><td class="num">${money(x.value)}</td><td>${status}</td></tr>`}).join(''):`<tr><td colspan="9" class="empty">Kayıt bulunamadı.</td></tr>`}
 function movementTypeMatch(m,f){if(f==='all')return true;if(f==='TRANSFER')return m.type.startsWith('TRANSFER');return m.type===f}
-function filteredMovements(){const type=el('movementType').value||'all',w=el('movementWarehouse').value||'all',p=el('movementProduct').value||'all',firm=el('movementFirm').value||'all',user=el('movementUser').value||'all',from=el('movementFrom').value,to=el('movementTo').value;return [...db.movements].filter(m=>movementTypeMatch(m,type)&&(w==='all'||m.warehouseId===w)&&(p==='all'||m.productId===p)&&(firm==='all'||m.firmId===firm)&&(user==='all'||m.userId===user)&&(!from||new Date(m.date)>=new Date(from+'T00:00:00'))&&(!to||new Date(m.date)<=new Date(to+'T23:59:59'))).sort((a,b)=>new Date(b.date)-new Date(a.date))}
+function filteredMovements(){const type=el('movementType').value||'all',w=el('movementWarehouse').value||'all',p=el('movementProduct').value||'all',firm=el('movementFirm').value||'all',user=el('movementUser').value||'all',from=el('movementFrom').value,to=el('movementTo').value;return [...db.movements].filter(m=>movementTypeMatch(m,type)&&(w==='all'||m.warehouseId===w)&&(p==='all'||m.productId===p)&&(firm==='all'||m.firmId===firm)&&(user==='all'||m.userId===user)&&(!from||new Date(m.date)>=new Date(from+'T00:00:00'))&&(!to||new Date(m.date)<=new Date(to+'T23:59:59'))).sort(newestFirst)}
 function renderMovements(){const btn=el('clearAllMovementsBtn');if(btn)btn.disabled=!isAdmin()||!db.movements.length;const rows=filteredMovements();el('movementTable').innerHTML=rows.length?rows.map(m=>`<tr><td>${dt(m.date)}</td><td>${movementBadge(m.type)}</td><td>${esc(warehouseById(m.warehouseId)?.name||'-')}</td><td>${esc(productById(m.productId)?.name||'-')}</td><td>${esc(m.firmName||firmById(m.firmId)?.name||'-')}</td><td class="num">${formatMovementQuantity(m,true)}</td><td class="num">${formatStockAmount(m.productId,m.before)}</td><td class="num">${formatStockAmount(m.productId,m.after)}</td><td>${esc(m.userName||userById(m.userId)?.fullName||'-')}</td><td>${esc(m.doc)}</td><td title="${esc(m.detail)}">${esc((m.detail||'').slice(0,80))}</td>${isAdmin()?`<td>${movementAdminButtons(m)}</td>`:''}</tr>`).join(''):`<tr><td colspan="${isAdmin()?12:11}" class="empty">Hareket bulunamadı.</td></tr>`}
 function reportRange(){const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10),from=el('reportFrom')?.value||first,to=el('reportTo')?.value||today,warehouse=el('reportWarehouse')?.value||'all';return {from,to,warehouse,start:new Date(from+'T00:00:00'),end:new Date(to+'T23:59:59')}}
 function generalReportData(){const range=reportRange(),movements=[...db.movements].filter(m=>{const d=new Date(m.date);return d>=range.start&&d<=range.end&&(range.warehouse==='all'||m.warehouseId===range.warehouse)}).sort((a,b)=>new Date(a.date)-new Date(b.date)),productMap=new Map(),firmMap=new Map();let entry=0,exit=0,transferIn=0,transferOut=0,entryPieces=0,exitPieces=0,transferInPieces=0,transferOutPieces=0;
@@ -3184,6 +3184,14 @@ function bizFilter(){
  const f=el('bizFirm').value,p=el('bizProduct').value,w=el('bizWarehouse').value,from=el('bizFrom').value,to=el('bizTo').value;
  return {f,p,w,date:d=>{const v=bizDate(d);return (!from||v>=from)&&(!to||v<=to)},firm:(id,name)=>f==='all'||String(id||'')===f||(!id&&firmById(f)?.name===name),product:(id,name)=>p==='all'||String(id||'')===p||(!id&&productById(p)?.name===name),warehouse:id=>w==='all'||id===w};
 }
+function newestFirst(a,b){
+ const time=x=>Date.parse(x.date||x.createdAt||x.updatedAt||'')||0;
+ const delta=time(b)-time(a);
+ if(delta)return delta;
+ const created=(Date.parse(b.createdAt||'')||0)-(Date.parse(a.createdAt||'')||0);
+ if(created)return created;
+ return String(b.id||'').localeCompare(String(a.id||''));
+}
 function bizData(){
  const F=bizFilter();
  const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&F.date(x.date)&&F.firm(x.firmId,x.firmName)&&F.product(x.productId,productById(x.productId)?.name)&&F.warehouse(x.warehouseId));
@@ -3193,7 +3201,7 @@ function bizData(){
  const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
  const expenses=(db.expenses||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
  const users=(db.auditLogs||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
- return {exits,purchases,guests,debts,payments,expenses,users};
+ return {exits:exits.sort(newestFirst),purchases:purchases.sort(newestFirst),guests:guests.sort(newestFirst),debts:debts.sort(newestFirst),payments:payments.sort(newestFirst),expenses:expenses.sort(newestFirst),users:users.sort(newestFirst)};
 }
 function renderBizReport(){
  if(!el('bizRows'))return;
@@ -3222,7 +3230,7 @@ function renderBizReport(){
   if(!exitGroups.has(key))exitGroups.set(key,[]);
   exitGroups.get(key).push(m);
  }
- const exitBatches=[...exitGroups.values()];
+ const exitBatches=[...exitGroups.values()].sort((a,b)=>newestFirst(a[0],b[0]));
  const debtDetails=[];
  const records={
   exit:{headers:['Tarih','Firma','Ürün Sayısı','Depo','Toplam Çıkış','Kullanıcı','Belge'],rows:exitBatches.map(batch=>{
@@ -3359,7 +3367,7 @@ function renderHistoricalOverview(){
   const x=batch[0],description=batch.map(m=>(productById(m.productId)?.name||m.productId)+' ('+formatMovementQuantity(m,true)+')').join(', ');
   add(x.date,'Stok Çıkışı',x.firmName||firmById(x.firmId)?.name||'-',description,batch.length+' ürün',0,0);
  }
- rows.sort((a,b)=>b[0].localeCompare(a[0])||a[1].localeCompare(b[1]));
+ rows.sort((a,b)=>b[0].localeCompare(a[0]));
  historyVisibleRows=rows;
  el('historySales').textContent=firmMoney(sums.sales);
  el('historyPurchase').textContent=firmMoney(sums.purchase);
