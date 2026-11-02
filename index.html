@@ -234,7 +234,8 @@
 <div class="field"><label>Tarih *</label><input id="purchaseDate" type="date" required></div>
 <div class="field"><label>Belge / Fatura No</label><input id="purchaseDoc" maxlength="120"></div>
 <div class="field full"><label>Açıklama</label><input id="purchaseNote" maxlength="500"></div>
-<div class="field full"><label>Orijinal Fatura PDF (Google Drive bağlantısı)</label><input type="url" id="purchaseInvoiceUrl" placeholder="https://drive.google.com/file/d/.../view" maxlength="1000"><small class="muted">PDF dosyanızı önce Google Drive'a yükleyin ve dosyanın bağlantısını buraya yapıştırın. Şu anda doğrudan PDF yükleme henüz etkin değil.</small></div></div>
+<div class="field full"><label>Orijinal Fatura PDF (Bilgisayardan)</label><input type="file" id="purchaseInvoiceFile" accept="application/pdf,.pdf"><small class="muted">En fazla 3 MB PDF. Yükleme sunucudaki invoiceUpload işlemi etkinleştirildiğinde çalışır. Yükleme başarısızsa satın alma kaydı oluşturulmaz.</small></div>
+<div class="field full"><label>Mevcut Google Drive Fatura Bağlantısı (Alternatif)</label><input type="url" id="purchaseInvoiceUrl" placeholder="https://drive.google.com/file/d/.../view" maxlength="1000"><small class="muted">PDF dosyanızı önce Google Drive'a yükleyin ve dosyanın bağlantısını buraya yapıştırın. Şu anda doğrudan PDF yükleme henüz etkin değil.</small></div></div>
 <div class="inline-info" id="purchaseTotals" style="margin-top:12px">Tutar ve KDV girildiğinde toplam hesaplanır.</div>
 <div class="actions"><button class="btn btn-primary" type="submit">Satın Alma Kaydet</button></div></form></div>
 <div class="card" style="margin-top:16px"><div class="card-head"><h3>Satın Alma Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Cari</th><th>Ürün</th><th>KG</th><th>KDV Hariç</th><th>KDV</th><th>Genel Toplam</th><th>Kaydeden</th><th>Fatura / Detay</th></tr></thead><tbody id="purchaseRows"></tbody></table></div></div></div>
@@ -3381,19 +3382,39 @@ function renderPurchases(){
  if(!el('purchaseDate').value)el('purchaseDate').value=new Date().toLocaleDateString('en-CA');
  renderPurchaseFirms();purchaseTotals();
 }
-function savePurchase(e){
+function readPurchasePdf(file){
+ return new Promise((resolve,reject)=>{
+  if(!file)return resolve('');
+  if(file.size>3*1024*1024||file.size===0||(!/\.pdf$/i.test(file.name)&&file.type!=='application/pdf'))return reject(new Error('En fazla 3 MB PDF seçin.'));
+  const reader=new FileReader();
+  reader.onerror=()=>reject(new Error('PDF okunamadı.'));
+  reader.onload=()=>{const data=String(reader.result||'');if(!data.startsWith('data:application/pdf;base64,'))return reject(new Error('Geçerli PDF dosyası seçin.'));resolve(data.split(',')[1]);};
+  reader.readAsDataURL(file);
+ });
+}
+async function savePurchase(e){
  e.preventDefault();if(!requirePermission('purchasing'))return;
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
  const firm=firmById(el('purchaseFirmId').value),productName=el('purchaseProduct').value.trim(),kg=Number(el('purchaseKg').value),amount=Number(el('purchaseAmount').value),vatRate=Number(el('purchaseVat').value),date=el('purchaseDate').value;
  if(!firm||firm.active===false||!['supplier','both'].includes(firm.firmType))return notify('Yalnızca tedarikçi türündeki carilerle satın alma kaydedilebilir.',true);
  if(!productName||!Number.isFinite(kg)||kg<=0||kg>100000000||!Number.isFinite(amount)||amount<=0||amount>999999999999||!Number.isFinite(vatRate)||vatRate<0||vatRate>100)return notify('Ürün, KG, tutar veya KDV geçersiz.',true);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
- const inputInvoiceUrl=el('purchaseInvoiceUrl').value.trim();
+ const inputInvoiceUrl=el('purchaseInvoiceUrl').value.trim(),invoiceFile=el('purchaseInvoiceFile').files[0];
+ if(invoiceFile&&inputInvoiceUrl)return notify('PDF dosyası veya Drive bağlantısından yalnızca birini seçin.',true);
  if(inputInvoiceUrl&&!purchaseInvoiceLink(inputInvoiceUrl))return notify('Yalnızca Google Drive PDF bağlantısı giriniz.',true);
  const netCents=Math.round(amount*100),vatCents=Math.round(netCents*vatRate/100);
  if(!Number.isSafeInteger(netCents+vatCents))return notify('Tutar çok yüksek.',true);
  const record={id:uid('purchase'),invoiceUrl:inputInvoiceUrl,firmId:firm.id,firmName:firm.name,productName,kg,netCents,vatRate,vatCents,grossCents:netCents+vatCents,date,doc:el('purchaseDoc').value.trim(),note:el('purchaseNote').value.trim(),createdAt:new Date().toISOString(),userId:currentUser.id,userName:currentUser.fullName||currentUser.username};
  if(!confirm(record.firmName+' - '+productName+' - '+kg+' KG - '+firmMoney(record.grossCents)+' satın alma kaydedilsin mi?'))return;
+ if(invoiceFile){
+  try{
+   const data=await readPurchasePdf(invoiceFile);
+   const result=await rpc('invoiceUpload',{fileName:invoiceFile.name,mimeType:'application/pdf',dataBase64:data,purchaseId:record.id});
+   const invoiceUrl=purchaseInvoiceLink(result?.url||'');
+   if(!invoiceUrl)throw new Error('Sunucu güvenilir bir Drive PDF bağlantısı döndürmedi.');
+   record.invoiceUrl=invoiceUrl;record.invoiceFileId=result.fileId||'';
+  }catch(err){notify('PDF Drive yüklemesi başarısız: '+err.message,true);return}
+ }
  db.purchases.push(record);audit('Satın alma kaydedildi','Tedarik',record.firmName+' | '+record.productName+' | '+kg+' KG | '+firmMoney(record.grossCents));saveDB();
  el('purchaseForm').reset();el('purchaseFirmId').value='';renderPurchases();notify('Satın alma kaydedildi. Stok değişmedi.');
 }
