@@ -233,10 +233,12 @@
 <div class="field"><label>KDV (%) *</label><input id="purchaseVat" type="number" min="0" max="100" step="0.01" value="1" required></div>
 <div class="field"><label>Tarih *</label><input id="purchaseDate" type="date" required></div>
 <div class="field"><label>Belge / Fatura No</label><input id="purchaseDoc" maxlength="120"></div>
-<div class="field full"><label>Açıklama</label><input id="purchaseNote" maxlength="500"></div></div>
+<div class="field full"><label>Açıklama</label><input id="purchaseNote" maxlength="500"></div>
+<div class="field full"><label>Orijinal Fatura PDF (Google Drive bağlantısı)</label><input type="url" id="purchaseInvoiceUrl" placeholder="https://drive.google.com/file/d/.../view" maxlength="1000"><small class="muted">PDF dosyanızı önce Google Drive'a yükleyin ve dosyanın bağlantısını buraya yapıştırın. Şu anda doğrudan PDF yükleme henüz etkin değil.</small></div></div>
 <div class="inline-info" id="purchaseTotals" style="margin-top:12px">Tutar ve KDV girildiğinde toplam hesaplanır.</div>
 <div class="actions"><button class="btn btn-primary" type="submit">Satın Alma Kaydet</button></div></form></div>
-<div class="card" style="margin-top:16px"><div class="card-head"><h3>Satın Alma Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Cari</th><th>Ürün</th><th>KG</th><th>KDV Hariç</th><th>KDV</th><th>Genel Toplam</th><th>Kaydeden</th></tr></thead><tbody id="purchaseRows"></tbody></table></div></div></div>
+<div class="card" style="margin-top:16px"><div class="card-head"><h3>Satın Alma Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Cari</th><th>Ürün</th><th>KG</th><th>KDV Hariç</th><th>KDV</th><th>Genel Toplam</th><th>Kaydeden</th><th>Fatura / Detay</th></tr></thead><tbody id="purchaseRows"></tbody></table></div></div></div>
+<dialog id="purchaseDetailDialog" style="width:min(650px,96vw);border:0;border-radius:14px;padding:24px"><div class="card-head"><h3>Satın Alma Detayı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('purchaseDetailDialog').close()">Kapat</button></div><div id="purchaseDetailContent"></div><div class="actions"><a id="purchaseDetailInvoice" target="_blank" rel="noopener noreferrer" class="btn btn-primary" hidden>Orijinal PDF Faturayı Aç</a></div></dialog>
 <div class="page" id="page-orders">
 <div class="card">
  <div class="card-head"><h3 id="orderFormTitle">Sipariş Formu</h3><span class="muted">Cari seçin, ürün ekleyin ve iskonto hesaplayın.</span></div>
@@ -3360,10 +3362,22 @@ function purchaseTotals(){
  const tax=Math.round(net*rate/100);
  el('purchaseTotals').textContent='KG Birim Maliyeti (KDV hariç): '+(kg>0?(net/100/kg).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+' ₺ | KDV: '+firmMoney(tax)+' | Genel Toplam: '+firmMoney(net+tax);
 }
+function purchaseInvoiceLink(url){
+ try{const u=new URL(url);if(u.protocol!=='https:'||u.hostname!=='drive.google.com')return '';return u.href;}catch(_){return ''}
+}
+function openPurchaseDetail(id){
+ if(!requirePermission('purchasing'))return;
+ const p=(db.purchases||[]).find(x=>x.id===id);if(!p)return notify('Satın alma bulunamadı.',true);
+ const fields=[['Tarih',p.date],['Tedarikçi',p.firmName],['Ürün',p.productName],['Miktar',p.kg+' KG'],['KDV Hariç',firmMoney(p.netCents)],['KDV Oranı',p.vatRate+'%'],['KDV Tutarı',firmMoney(p.vatCents)],['Genel Toplam',firmMoney(p.grossCents)],['Fatura No',p.doc||'-'],['Açıklama',p.note||'-'],['Kaydeden',p.userName||'-']];
+ el('purchaseDetailContent').innerHTML='<table><tbody>'+fields.map(([k,v])=>'<tr><th style="text-align:left;padding:7px">'+esc(k)+'</th><td style="padding:7px">'+esc(String(v))+'</td></tr>').join('')+'</tbody></table>';
+ const link=purchaseInvoiceLink(p.invoiceUrl),a=el('purchaseDetailInvoice');
+ a.hidden=!link;a.removeAttribute('href');if(link)a.href=link;
+ el('purchaseDetailDialog').showModal();
+}
 function renderPurchases(){
  const products=[...new Set((db.purchases||[]).map(p=>String(p.productName||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
  el('purchaseProductOptions').innerHTML=products.map(v=>'<option value="'+esc(v)+'"></option>').join('');
- el('purchaseRows').innerHTML=(db.purchases||[]).length?[...db.purchases].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).map(p=>'<tr><td>'+esc(p.date)+'</td><td>'+esc(p.firmName)+'</td><td>'+esc(p.productName)+'</td><td>'+esc(String(p.kg))+'</td><td>'+firmMoney(p.netCents)+'</td><td>'+esc(String(p.vatRate))+'% ('+firmMoney(p.vatCents)+')</td><td>'+firmMoney(p.grossCents)+'</td><td>'+esc(p.userName||'-')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">Henüz satın alma kaydı yok.</td></tr>';
+ el('purchaseRows').innerHTML=(db.purchases||[]).length?[...db.purchases].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).map(p=>'<tr><td>'+esc(p.date)+'</td><td>'+esc(p.firmName)+'</td><td>'+esc(p.productName)+'</td><td>'+esc(String(p.kg))+'</td><td>'+firmMoney(p.netCents)+'</td><td>'+esc(String(p.vatRate))+'% ('+firmMoney(p.vatCents)+')</td><td>'+firmMoney(p.grossCents)+'</td><td>'+esc(p.userName||'-')+'</td><td><button type="button" class="btn btn-light btn-sm" data-purchase-view="'+esc(p.id)+'">Görüntüle</button> '+(purchaseInvoiceLink(p.invoiceUrl)?'<a class="btn btn-light btn-sm" href="'+esc(purchaseInvoiceLink(p.invoiceUrl))+'" target="_blank" rel="noopener noreferrer">PDF Aç</a>':'Fatura yok')+'</td></tr>').join(''):'<tr><td colspan="9" class="empty">Henüz satın alma kaydı yok.</td></tr>';
  if(!el('purchaseDate').value)el('purchaseDate').value=new Date().toLocaleDateString('en-CA');
  renderPurchaseFirms();purchaseTotals();
 }
@@ -3374,9 +3388,11 @@ function savePurchase(e){
  if(!firm||firm.active===false||!['supplier','both'].includes(firm.firmType))return notify('Yalnızca tedarikçi türündeki carilerle satın alma kaydedilebilir.',true);
  if(!productName||!Number.isFinite(kg)||kg<=0||kg>100000000||!Number.isFinite(amount)||amount<=0||amount>999999999999||!Number.isFinite(vatRate)||vatRate<0||vatRate>100)return notify('Ürün, KG, tutar veya KDV geçersiz.',true);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
+ const inputInvoiceUrl=el('purchaseInvoiceUrl').value.trim();
+ if(inputInvoiceUrl&&!purchaseInvoiceLink(inputInvoiceUrl))return notify('Yalnızca Google Drive PDF bağlantısı giriniz.',true);
  const netCents=Math.round(amount*100),vatCents=Math.round(netCents*vatRate/100);
  if(!Number.isSafeInteger(netCents+vatCents))return notify('Tutar çok yüksek.',true);
- const record={id:uid('purchase'),firmId:firm.id,firmName:firm.name,productName,kg,netCents,vatRate,vatCents,grossCents:netCents+vatCents,date,doc:el('purchaseDoc').value.trim(),note:el('purchaseNote').value.trim(),createdAt:new Date().toISOString(),userId:currentUser.id,userName:currentUser.fullName||currentUser.username};
+ const record={id:uid('purchase'),invoiceUrl:inputInvoiceUrl,firmId:firm.id,firmName:firm.name,productName,kg,netCents,vatRate,vatCents,grossCents:netCents+vatCents,date,doc:el('purchaseDoc').value.trim(),note:el('purchaseNote').value.trim(),createdAt:new Date().toISOString(),userId:currentUser.id,userName:currentUser.fullName||currentUser.username};
  if(!confirm(record.firmName+' - '+productName+' - '+kg+' KG - '+firmMoney(record.grossCents)+' satın alma kaydedilsin mi?'))return;
  db.purchases.push(record);audit('Satın alma kaydedildi','Tedarik',record.firmName+' | '+record.productName+' | '+kg+' KG | '+firmMoney(record.grossCents));saveDB();
  el('purchaseForm').reset();el('purchaseFirmId').value='';renderPurchases();notify('Satın alma kaydedildi. Stok değişmedi.');
@@ -3422,6 +3438,7 @@ el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
 el('expenseEditForm').addEventListener('submit',saveExpenseEdit);
 el('expenseRows').addEventListener('click',e=>{const b=e.target.closest('[data-expense-action]');if(b)expenseAction(b.dataset.expenseId,b.dataset.expenseAction)});
 el('purchaseForm').addEventListener('submit',savePurchase);
+el('purchaseRows').addEventListener('click',e=>{const b=e.target.closest('[data-purchase-view]');if(b)openPurchaseDetail(b.dataset.purchaseView)});
 el('purchaseFirmSearch').addEventListener('input',()=>{el('purchaseFirmId').value='';renderPurchaseFirms()});
 el('purchaseFirmMatches').addEventListener('click',e=>{const b=e.target.closest('[data-purchase-firm]');if(!b)return;const f=firmById(b.dataset.purchaseFirm);if(!f)return;el('purchaseFirmId').value=f.id;el('purchaseFirmSearch').value=(f.code||'')+' - '+f.name;renderPurchaseFirms()});
 ['purchaseKg','purchaseAmount','purchaseVat'].forEach(id=>el(id).addEventListener('input',purchaseTotals));
