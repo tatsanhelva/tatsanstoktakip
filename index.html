@@ -93,7 +93,7 @@
 <button data-page="categories">🗂️ Kategoriler</button>
 <button data-page="warehouses">🏭 Depolar</button><button data-page="firms">🏢 Firmalar</button>
 <button data-page="orders">🧾 Sipariş Formu</button>
-<button data-admin-only="" data-page="ledger">💳 Cari Borç / Tahsilat</button>
+<button data-admin-only="" data-page="ledger">💳 Cari Hesap / Tahsilat / Peşin Satış</button>
 <div class="sep"></div>
 <button data-page="entry">➕ Stok Girişi</button>
 <button data-page="exit">➖ Stok Çıkışı</button>
@@ -199,10 +199,13 @@
 </div>
 </div>
 <div class="page" id="page-ledger"><div class="card">
- <div class="card-head"><h3>Cari Borç / Tahsilat Kaydı</h3><span class="muted">Borç ve ödemeler ayrı takip edilir.</span></div>
+ <div class="card-head"><h3>Cari Hesap / Tahsilat / Peşin Satış</h3><span class="muted">Borç ve ödemeler ayrı takip edilir.</span></div>
  <form id="firmLedgerForm"><div class="form-grid cols-3">
-  <div class="field"><label>Cari / Firma *</label><input id="firmLedgerSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu yazın..." aria-controls="firmLedgerMatches"><input id="firmLedgerFirm" type="hidden"><div id="firmLedgerMatches" class="table-wrap" style="max-height:170px;overflow:auto;margin-top:5px"></div><small id="firmLedgerSelected" class="muted">Henüz cari seçilmedi.</small></div>
-  <div class="field"><label>İşlem *</label><select id="firmLedgerType"><option value="DEBT">Borç Ekle (+)</option><option value="PAYMENT">Tahsilat (-)</option></select></div>
+  <div class="field"><label>Müşteri Türü</label><select id="ledgerCustomerType"><option value="registered">Kayıtlı Cari</option><option value="guest">Peşin Satış / Misafir Müşteri</option></select></div>
+  <div class="field" id="ledgerFirmField"><label>Cari / Firma *</label><input id="firmLedgerSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu yazın..." aria-controls="firmLedgerMatches"><input id="firmLedgerFirm" type="hidden"><div id="firmLedgerMatches" class="table-wrap" style="max-height:170px;overflow:auto;margin-top:5px"></div><small id="firmLedgerSelected" class="muted">Henüz cari seçilmedi.</small></div>
+  <div class="field" id="ledgerGuestField" hidden><label>Misafir Müşteri Adı (İsteğe bağlı)</label><input id="ledgerGuestName" maxlength="120" placeholder="Perakende Müşteri"></div>
+  <div class="field" id="ledgerTransactionField"><label>İşlem *</label><select id="firmLedgerType"><option value="DEBT">Borç Ekle (+)</option><option value="PAYMENT">Tahsilat (-)</option></select></div>
+  <div class="field"><label>Ödeme Yöntemi</label><select id="ledgerPaymentMethod"><option value="CASH">Nakit</option><option value="POS">Kredi Kartı / POS</option><option value="TRANSFER">Havale / EFT</option></select></div>
   <div class="field"><label>Tutar (₺) *</label><input id="firmLedgerAmount" type="number" min="0.01" max="999999999999" step="0.01" required placeholder="0,00"></div>
   <div class="field"><label>Tarih</label><input id="firmLedgerDate" type="date"></div>
   <div class="field"><label>Belge / Fatura / Makbuz No</label><input id="firmLedgerDoc" maxlength="120"></div>
@@ -210,8 +213,7 @@
  </div>
  <p class="muted" style="font-size:12px;margin-top:12px">Stok çıkışı otomatik borç oluşturmaz; satış tutarı kayıtlı olmadığı için borcu burada ayrıca kaydedin. Hatalı finansal hareketi ters kayıtla düzeltin.</p>
  <div class="actions"><button class="btn btn-primary" type="submit">Cari Hareketi Kaydet</button></div>
- </form>
-</div></div>
+ </form></div><div class="card" style="margin-top:16px"><div class="card-head"><h3>Peşin Satış Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Ödeme</th><th>Tutar</th><th>Kaydeden</th></tr></thead><tbody id="guestSalesRows"></tbody></table></div></div></div>
 <div class="page" id="page-orders">
 <div class="card">
  <div class="card-head"><h3 id="orderFormTitle">Sipariş Formu</h3><span class="muted">Cari seçin, ürün ekleyin ve iskonto hesaplayın.</span></div>
@@ -382,7 +384,7 @@ const APP_VERSION='3.0';
 const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu781xw2F9Wy1Ru0oKxiKWQvalu_gJFga3DDVdCe01o5tp_ISlVPwDx/exec';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
-const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Borç / Tahsilat Kaydı',orders:'Sipariş Formu',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
+const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Hesap / Tahsilat / Peşin Satış',orders:'Sipariş Formu',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
 const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
 const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme'],['deleteOrders','Kayıtlı Sipariş Silme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
@@ -403,7 +405,7 @@ let orderApprovalBusy=false;
 let syncPullInProgress=false;
 let syncPushInProgress=false;
 
-function defaultDB(){return {version:APP_VERSION,updatedAt:new Date().toISOString(),settings:{companyName:'Tatsan Stok Takip',allowNegative:false,currency:'TRY',sheetsUrl:DEFAULT_SHEETS_URL,sheetsToken:DEFAULT_SHEETS_TOKEN,autoSync:true,lastPush:'',lastPull:''},warehouses:[{id:'wh-main',code:'D001',name:'Ana Depo',manager:'',phone:'',address:'',notes:''}],products:[],categories:[],firms:[],firmLedger:[],orders:[],stocks:{},movements:[],users:[{id:'usr-admin',username:'admin',fullName:'Yönetici',role:'admin',active:true,passwordHash:DEFAULT_ADMIN_HASH,permissions:Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,true])),createdAt:new Date().toISOString()}],auditLogs:[]}}
+function defaultDB(){return {version:APP_VERSION,updatedAt:new Date().toISOString(),settings:{companyName:'Tatsan Stok Takip',allowNegative:false,currency:'TRY',sheetsUrl:DEFAULT_SHEETS_URL,sheetsToken:DEFAULT_SHEETS_TOKEN,autoSync:true,lastPush:'',lastPull:''},warehouses:[{id:'wh-main',code:'D001',name:'Ana Depo',manager:'',phone:'',address:'',notes:''}],products:[],categories:[],firms:[],firmLedger:[],guestSales:[],orders:[],stocks:{},movements:[],users:[{id:'usr-admin',username:'admin',fullName:'Yönetici',role:'admin',active:true,passwordHash:DEFAULT_ADMIN_HASH,permissions:Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,true])),createdAt:new Date().toISOString()}],auditLogs:[]}}
 function normalizeDB(x){
   const d=x&&typeof x==='object'?x:defaultDB();
   d.version=APP_VERSION;d.updatedAt=d.updatedAt||new Date().toISOString();
@@ -421,6 +423,7 @@ function normalizeDB(x){
       rack:p.rack||''}});
   const rawCategories=Array.isArray(d.categories)?d.categories:[];const seenCategories=new Set();d.categories=[];
   [...rawCategories,...d.products.map(p=>p.category).filter(Boolean)].forEach(c=>{const obj=typeof c==='string'?{name:c}:c||{};const name=String(obj.name||'').trim();const key=name.toLocaleLowerCase('tr-TR');if(name&&!seenCategories.has(key)){seenCategories.add(key);d.categories.push({id:obj.id||uid('cat'),name,notes:obj.notes||''})}});
+  d.guestSales=Array.isArray(d.guestSales)?d.guestSales:[];
   d.firms=Array.isArray(d.firms)?d.firms:[];d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
   d.movements=Array.isArray(d.movements)?d.movements:[];d.auditLogs=Array.isArray(d.auditLogs)?d.auditLogs:[];
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
@@ -2396,6 +2399,17 @@ function deleteFirm(id){
  db.firms=db.firms.filter(x=>x.id!==id);
  audit('Firma silindi','Firmalar',f.name);saveDB();resetFirmForm();notify('Firma silindi.');
 }
+function toggleLedgerCustomerType(){
+ const guest=el('ledgerCustomerType').value==='guest';
+ el('ledgerFirmField').hidden=guest;
+ el('ledgerGuestField').hidden=!guest;
+ el('ledgerTransactionField').hidden=guest;
+ el('ledgerPaymentMethod').disabled=!guest&&el('firmLedgerType').value==='DEBT';
+}
+function renderGuestSales(){
+ const rows=[...(db.guestSales||[])].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
+ el('guestSalesRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.customerName||'Perakende Müşteri')+'</td><td>'+esc({CASH:'Nakit',POS:'POS',TRANSFER:'Havale/EFT'}[x.paymentMethod]||'-')+'</td><td>'+firmMoney(x.amountCents)+'</td><td>'+esc(x.userName||'-')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Peşin satış kaydı yok.</td></tr>';
+}
 function renderLedgerFirmMatches(){
  const input=el('firmLedgerSearch'),list=el('firmLedgerMatches'),selected=el('firmLedgerFirm').value;
  const query=firmKey(input.value);
@@ -2407,19 +2421,24 @@ function renderLedgerFirmMatches(){
 function saveFirmLedger(e){
  e.preventDefault();if(!isAdmin())return notify('Cari borçlarını yalnızca yönetici kaydedebilir.',true);
  if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce bekleyen Drive kaydı tamamlanmalı.',true);
- const firm=firmById(el('firmLedgerFirm').value),type=el('firmLedgerType').value,
+ const guest=el('ledgerCustomerType').value==='guest',firm=firmById(el('firmLedgerFirm').value),type=guest?'GUEST_SALE':el('firmLedgerType').value,
   amount=Number(el('firmLedgerAmount').value),date=el('firmLedgerDate').value||new Date().toISOString().slice(0,10);
- if(!firm)return notify('Cari seçin.',true);
- if(type!=='DEBT'&&type!=='PAYMENT')return notify('İşlem türü geçersiz.',true);
+ if(!guest&&!firm)return notify('Cari seçin.',true);
+ if(type!=='GUEST_SALE'&&type!=='DEBT'&&type!=='PAYMENT')return notify('İşlem türü geçersiz.',true);
  const cents=Math.round(amount*100);
  if(!Number.isSafeInteger(cents)||cents<=0||cents>99999999999999)return notify('Geçerli, pozitif tutar girin.',true);
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
- const movement={id:uid('cari'),firmId:firm.id,type,amountCents:cents,date,
+ if(guest){
+  const sale={id:uid('pesin'),customerName:el('ledgerGuestName').value.trim()||'Perakende Müşteri',amountCents:cents,date,paymentMethod:el('ledgerPaymentMethod').value,doc:el('firmLedgerDoc').value.trim(),note:el('firmLedgerNote').value.trim(),userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()};
+  if(!['CASH','POS','TRANSFER'].includes(sale.paymentMethod))return notify('Ödeme yöntemi geçersiz.',true);
+  db.guestSales.push(sale);audit('Peşin satış kaydedildi','Finans',sale.customerName+' | '+firmMoney(cents));saveDB();el('firmLedgerForm').reset();toggleLedgerCustomerType();renderGuestSales();notify('Peşin satış kaydedildi.');return;
+ }
+ const movement={id:uid('cari'),firmId:firm.id,type,amountCents:cents,date,paymentMethod:type==='PAYMENT'?el('ledgerPaymentMethod').value:null,
   doc:el('firmLedgerDoc').value.trim(),note:el('firmLedgerNote').value.trim(),
   userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()};
  db.firmLedger.push(movement);
  audit(type==='DEBT'?'Cari borç eklendi':'Cari tahsilat kaydedildi','Firmalar',firm.name+' | '+firmMoney(cents));
- saveDB();el('firmLedgerForm').reset();el('firmLedgerFirm').value=firm.id;el('firmLedgerSearch').value=(firm.code||'')+' - '+firm.name;renderLedgerFirmMatches();
+ saveDB();el('firmLedgerForm').reset();el('firmLedgerFirm').value=firm.id;el('firmLedgerSearch').value=(firm.code||'')+' - '+firm.name;renderLedgerFirmMatches();toggleLedgerCustomerType();
  notify('Cari hareketi kaydedildi: '+firm.name+' - '+firmMoney(cents));
 }
 function showFirmStatement(id){
@@ -3139,7 +3158,7 @@ function clearAllAuditLogs(){
 }
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
@@ -3176,6 +3195,8 @@ el('orderListRows').addEventListener('click',e=>{
 });
 el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
+el('ledgerCustomerType').addEventListener('change',toggleLedgerCustomerType);
+el('firmLedgerType').addEventListener('change',toggleLedgerCustomerType);
 el('firmLedgerSearch').addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
 el('firmLedgerMatches').addEventListener('click',e=>{const b=e.target.closest('[data-ledger-firm]');if(!b)return;const f=firmById(b.dataset.ledgerFirm);if(!f)return;el('firmLedgerFirm').value=f.id;el('firmLedgerSearch').value=(f.code||'')+' - '+f.name;renderLedgerFirmMatches()});
 el('firmExcelInput').addEventListener('change',importFirmsExcel);
