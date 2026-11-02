@@ -213,7 +213,8 @@
  </div>
  <p class="muted" style="font-size:12px;margin-top:12px">Stok çıkışı otomatik borç oluşturmaz; satış tutarı kayıtlı olmadığı için borcu burada ayrıca kaydedin. Hatalı finansal hareketi ters kayıtla düzeltin.</p>
  <div class="actions"><button class="btn btn-primary" type="submit">Cari Hareketi Kaydet</button></div>
- </form></div><div class="card" style="margin-top:16px"><div class="card-head"><h3>Peşin Satış Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Ödeme</th><th>Tutar</th><th>Kaydeden</th></tr></thead><tbody id="guestSalesRows"></tbody></table></div></div></div>
+ </form></div><div class="card" style="margin-top:16px"><div class="card-head"><h3>Peşin Satış Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Ödeme</th><th>Tutar</th><th>Kaydeden</th><th>İşlemler</th></tr></thead><tbody id="guestSalesRows"></tbody></table></div></div></div>
+<dialog id="guestSaleDialog" style="width:min(560px,96vw);border:0;border-radius:14px;padding:24px"><div class="card-head"><h3 id="guestSaleDialogTitle">Peşin Satış Kaydı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('guestSaleDialog').close()">Kapat</button></div><form id="guestSaleEditForm"><input type="hidden" id="guestSaleEditId"><div class="form-grid"><div class="field"><label>Müşteri</label><input id="guestSaleEditName" maxlength="120"></div><div class="field"><label>Tarih</label><input id="guestSaleEditDate" type="date" required></div><div class="field"><label>Tutar (₺)</label><input id="guestSaleEditAmount" type="number" min="0.01" step="0.01" required></div><div class="field"><label>Ödeme</label><select id="guestSaleEditPayment"><option value="CASH">Nakit</option><option value="POS">POS</option><option value="TRANSFER">Havale / EFT</option></select></div><div class="field"><label>Belge</label><input id="guestSaleEditDoc" maxlength="120"></div><div class="field"><label>Açıklama</label><input id="guestSaleEditNote" maxlength="500"></div></div><p class="muted" id="guestSaleEditMeta"></p><div class="actions"><button type="submit" class="btn btn-primary" id="guestSaleEditSave">Değişiklikleri Kaydet</button><button type="button" class="btn btn-light" onclick="el('guestSaleDialog').close()">Kapat</button></div></form></dialog>
 <div class="page" id="page-orders">
 <div class="card">
  <div class="card-head"><h3 id="orderFormTitle">Sipariş Formu</h3><span class="muted">Cari seçin, ürün ekleyin ve iskonto hesaplayın.</span></div>
@@ -2402,13 +2403,49 @@ function deleteFirm(id){
 function toggleLedgerCustomerType(){
  const guest=el('ledgerCustomerType').value==='guest';
  el('ledgerFirmField').hidden=guest;
+ el('ledgerFirmField').style.display=guest?'none':'';
  el('ledgerGuestField').hidden=!guest;
  el('ledgerTransactionField').hidden=guest;
  el('ledgerPaymentMethod').disabled=!guest&&el('firmLedgerType').value==='DEBT';
 }
+function openGuestSale(id,edit=false){
+ if(!isAdmin())return notify('Bu işlem için yönetici yetkisi gerekir.',true);
+ const x=(db.guestSales||[]).find(s=>s.id===id);if(!x)return notify('Peşin satış bulunamadı.',true);
+ el('guestSaleEditId').value=x.id;el('guestSaleEditName').value=x.customerName||'';
+ el('guestSaleEditDate').value=x.date||'';el('guestSaleEditAmount').value=(Number(x.amountCents)/100).toFixed(2);
+ el('guestSaleEditPayment').value=x.paymentMethod||'CASH';el('guestSaleEditDoc').value=x.doc||'';
+ el('guestSaleEditNote').value=x.note||'';
+ el('guestSaleDialogTitle').textContent=edit?'Peşin Satış Düzenle':'Peşin Satış Görüntüle';
+ el('guestSaleEditMeta').textContent='Kaydeden: '+(x.userName||'-')+' | Kayıt: '+dt(x.createdAt);
+ [...el('guestSaleEditForm').querySelectorAll('input,select')].forEach(n=>{if(n.id!=='guestSaleEditId')n.disabled=!edit});
+ el('guestSaleEditSave').hidden=!edit;el('guestSaleDialog').showModal();
+}
+function saveGuestSaleEdit(e){
+ e.preventDefault();if(!isAdmin())return;
+ if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
+ const x=(db.guestSales||[]).find(s=>s.id===el('guestSaleEditId').value);if(!x)return notify('Kayıt bulunamadı.',true);
+ const amount=Number(el('guestSaleEditAmount').value),cents=Math.round(amount*100);
+ const date=el('guestSaleEditDate').value,payment=el('guestSaleEditPayment').value;
+ if(!Number.isSafeInteger(cents)||cents<=0||cents>99999999999999)return notify('Tutar geçersiz.',true);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
+ if(!['CASH','POS','TRANSFER'].includes(payment))return notify('Ödeme yöntemi geçersiz.',true);
+ if(!confirm('Peşin satış değişiklikleri kaydedilsin mi?'))return;
+ Object.assign(x,{customerName:el('guestSaleEditName').value.trim()||'Perakende Müşteri',date,amountCents:cents,paymentMethod:payment,doc:el('guestSaleEditDoc').value.trim(),note:el('guestSaleEditNote').value.trim(),editedAt:new Date().toISOString(),editedBy:currentUser.id});
+ audit('Peşin satış düzenlendi','Finans',x.id+' | '+firmMoney(cents));
+ saveDB();el('guestSaleDialog').close();notify('Peşin satış güncellendi.');
+}
+function deleteGuestSale(id){
+ if(!isAdmin())return notify('Bu işlem için yönetici yetkisi gerekir.',true);
+ if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
+ const x=(db.guestSales||[]).find(s=>s.id===id);if(!x)return notify('Kayıt bulunamadı.',true);
+ if(!confirm('Peşin satış kaydı ('+firmMoney(x.amountCents)+') silinsin mi? Bu işlem geri alınamaz.'))return;
+ db.guestSales=db.guestSales.filter(s=>s.id!==id);
+ audit('Peşin satış silindi','Finans',x.id+' | '+(x.customerName||'')+' | '+firmMoney(x.amountCents));
+ saveDB();notify('Peşin satış kaydı silindi.');
+}
 function renderGuestSales(){
  const rows=[...(db.guestSales||[])].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
- el('guestSalesRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.customerName||'Perakende Müşteri')+'</td><td>'+esc({CASH:'Nakit',POS:'POS',TRANSFER:'Havale/EFT'}[x.paymentMethod]||'-')+'</td><td>'+firmMoney(x.amountCents)+'</td><td>'+esc(x.userName||'-')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Peşin satış kaydı yok.</td></tr>';
+ el('guestSalesRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.customerName||'Perakende Müşteri')+'</td><td>'+esc({CASH:'Nakit',POS:'POS',TRANSFER:'Havale/EFT'}[x.paymentMethod]||'-')+'</td><td>'+firmMoney(x.amountCents)+'</td><td>'+esc(x.userName||'-')+'</td><td><button type="button" class="btn btn-light btn-sm" data-guest-action="view" data-guest-id="'+esc(x.id)+'">Görüntüle</button> <button type="button" class="btn btn-light btn-sm" data-guest-action="edit" data-guest-id="'+esc(x.id)+'">Düzenle</button> <button type="button" class="btn btn-danger btn-sm" data-guest-action="delete" data-guest-id="'+esc(x.id)+'">Sil</button></td></tr>').join(''):'<tr><td colspan="6" class="empty">Peşin satış kaydı yok.</td></tr>';
 }
 function renderLedgerFirmMatches(){
  const input=el('firmLedgerSearch'),list=el('firmLedgerMatches'),selected=el('firmLedgerFirm').value;
@@ -3195,6 +3232,8 @@ el('orderListRows').addEventListener('click',e=>{
 });
 el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
+el('guestSaleEditForm').addEventListener('submit',saveGuestSaleEdit);
+el('guestSalesRows').addEventListener('click',e=>{const b=e.target.closest('[data-guest-action]');if(!b)return;const id=b.dataset.guestId;switch(b.dataset.guestAction){case 'view':openGuestSale(id);break;case 'edit':openGuestSale(id,true);break;case 'delete':deleteGuestSale(id);break;}});
 el('ledgerCustomerType').addEventListener('change',toggleLedgerCustomerType);
 el('firmLedgerType').addEventListener('change',toggleLedgerCustomerType);
 el('firmLedgerSearch').addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
