@@ -380,7 +380,7 @@
 <div class="grid stats"><div class="stat"><div class="label">Cari Borç Toplamı (Tahsilat Sonrası)</div><div class="value" id="bizDebtTotal">0 ₺</div></div><div class="stat"><div class="label">Kalan Cari Alacak</div><div class="value" id="bizDebtBalance">0 ₺</div></div></div>
 <div class="card"><div class="card-head"><h3>Rapor Detayları</h3></div><div class="actions" id="bizTabs" style="flex-wrap:wrap">
 <button type="button" class="btn btn-primary btn-sm" data-biz-tab="exit">Stok Çıkışları</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="purchase">Satın Almalar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="guest">Peşin Satış</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="debt">Cari Borçlar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="payment">Cari Tahsilat</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="expense">Giderler</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="user">Kullanıcı İşlemleri</button></div>
-<div class="table-wrap wide-table"><table><thead id="bizHead"></thead><tbody id="bizRows"></tbody></table></div><div id="bizDebtAudit" class="inline-info danger-info" hidden style="margin:10px 0"></div><p class="muted" id="bizCount"></p></div>
+<div class="table-wrap wide-table"><table><thead id="bizHead"></thead><tbody id="bizRows"></tbody></table></div><div id="bizDebtAudit" class="inline-info danger-info" hidden style="margin:10px 0"></div><p class="muted" id="bizCount"></p><dialog id="bizDetailDialog" style="width:min(760px,96vw);max-height:90vh;overflow:auto;border:0;border-radius:14px;padding:22px"><div class="card-head"><h3 id="bizDetailTitle">İşlem Detayı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('bizDetailDialog').close()">Kapat</button></div><div id="bizDetailContent"></div></dialog></div>
 
 <div class="card"><div class="card-head"><h3>Tarih Bazlı Genel Stok Raporu</h3><div class="actions" style="margin-top:0"><button class="btn btn-ok btn-sm" onclick="exportGeneralReportExcel()">Excel Dosyası İndir</button><button class="btn btn-light btn-sm no-print" onclick="printReports()">Yazdır</button></div></div><div class="report-filter-grid"><div class="field"><label>Başlangıç Tarihi</label><input id="reportFrom" type="date"/></div><div class="field"><label>Bitiş Tarihi</label><input id="reportTo" type="date"/></div><div class="field"><label>Depo</label><select id="reportWarehouse"></select></div></div><div class="report-note">Giriş ve çıkış toplamları normal stok hareketlerini; transferler ise depolar arası hareketleri ayrı gösterir.</div></div>
 <div class="grid stats"><div class="stat"><div class="label">Toplam Giriş</div><div class="value" id="reportEntryQty">0</div><div class="sub" id="reportEntrySub">Koli eşdeğeri</div></div><div class="stat"><div class="label">Toplam Çıkış</div><div class="value" id="reportExitQty">0</div><div class="sub" id="reportExitSub">Koli eşdeğeri</div></div><div class="stat"><div class="label">Transfer Giriş</div><div class="value" id="reportTransferInQty">0</div><div class="sub" id="reportTransferInSub">Koli eşdeğeri</div></div><div class="stat"><div class="label">Transfer Çıkış</div><div class="value" id="reportTransferOutQty">0</div><div class="sub" id="reportTransferOutSub">Koli eşdeğeri</div></div></div>
@@ -3180,10 +3180,33 @@ function renderBizReport(){
   user:{headers:['Tarih','Kullanıcı','Modül','İşlem','Detay'],rows:D.users.map(x=>[fmtDate(x.date),esc(displayTurkishText(x.userName||'')),esc(displayTurkishText(x.module||'')),esc(displayTurkishText(x.action||x.act||'')),esc(displayTurkishText(x.detail||''))])}
  };
  const R=records[bizTab]||records.exit;bizVisibleHeaders=R.headers;bizVisibleRows=R.rows;
- el('bizHead').innerHTML='<tr>'+R.headers.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>';
- el('bizRows').innerHTML=R.rows.length?R.rows.map(row=>'<tr>'+row.map(c=>'<td>'+c+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="'+R.headers.length+'" class="empty">Bu filtrelerde kayıt bulunamadı.</td></tr>';
+ el('bizHead').innerHTML='<tr>'+[...R.headers,'İşlem'].map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>';
+ el('bizRows').innerHTML=R.rows.length?R.rows.map((row,i)=>'<tr>'+row.map(c=>'<td>'+c+'</td>').join('')+'<td><button type="button" class="btn btn-light btn-sm" data-biz-view="'+i+'">Görüntüle</button></td></tr>').join(''):'<tr><td colspan="'+(R.headers.length+1)+'" class="empty">Bu filtrelerde kayıt bulunamadı.</td></tr>';
  el('bizCount').textContent='Gösterilen kayıt: '+R.rows.length;
  el('bizTabs').querySelectorAll('[data-biz-tab]').forEach(b=>b.className='btn btn-sm '+(b.dataset.bizTab===bizTab?'btn-primary':'btn-light'));
+}
+function viewBizReportItem(index){
+ if(!Number.isInteger(index)||index<0||index>=bizVisibleRows.length)return notify('Rapor kaydı bulunamadı.',true);
+ const row=bizVisibleRows[index],headers=bizVisibleHeaders;
+ const title={exit:'Stok Çıkışı',purchase:'Satın Alma',guest:'Peşin Satış',debt:'Cari Borç',payment:'Cari Tahsilat',expense:'Gider',user:'Kullanıcı İşlemi'}[bizTab]||'İşlem';
+ el('bizDetailTitle').textContent=title+' Detayı';
+ const clean=x=>String(x??'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
+ let html='<table style="min-width:0"><tbody>'+headers.map((h,i)=>'<tr><th style="white-space:normal">'+esc(h)+'</th><td style="white-space:normal">'+esc(clean(row[i]))+'</td></tr>').join('')+'</tbody></table>';
+ const sources=bizData(),items={exit:sources.exits,purchase:sources.purchases,guest:sources.guests,payment:sources.payments,expense:sources.expenses,user:sources.users,debt:sources.debts};
+ const record=items[bizTab]?.[index];
+ if(record){
+  const extra=[['Kayıt Kimliği',record.id],['İşlem Tarihi',record.date],['Oluşturulma',record.createdAt],['Kaydeden',record.userName],['Açıklama',record.note||record.detail],['Belge No',record.doc],['İşlem Grubu',record.groupId||record.stockBatchId||record.orderId]];
+  html+='<h4>Ek Bilgiler</h4><table style="min-width:0"><tbody>'+extra.filter(([k,v])=>v!==undefined&&v!==null&&v!=='').map(([k,v])=>'<tr><th>'+esc(k)+'</th><td style="white-space:normal">'+esc(displayTurkishText(v))+'</td></tr>').join('')+'</tbody></table>';
+  if(bizTab==='exit'&&record.groupId){
+   const batch=(db.movements||[]).filter(m=>m.type==='CIKIS'&&m.groupId===record.groupId);
+   html+='<h4>Aynı Çıkıştaki Ürünler</h4><table style="min-width:0"><thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th></tr></thead><tbody>'+batch.map(m=>'<tr><td>'+esc(productById(m.productId)?.name||m.productId)+'</td><td>'+esc(m.inputQuantity??m.quantity)+'</td><td>'+esc(m.inputUnit||'Koli')+'</td></tr>').join('')+'</tbody></table>';
+  }
+  if(bizTab==='guest'&&Array.isArray(record.items)){
+   html+='<h4>Satılan Ürünler</h4><table style="min-width:0"><tbody>'+record.items.map(item=>'<tr><td>'+esc(productById(item.productId)?.name||item.productId)+'</td><td>'+esc(item.inputQuantity??item.quantity)+' '+esc(item.unit||'')+'</td></tr>').join('')+'</tbody></table>';
+  }
+ }
+ el('bizDetailContent').innerHTML=html;
+ el('bizDetailDialog').showModal();
 }
 function exportBizCSV(){
  const clean=x=>String(x).replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
@@ -3731,6 +3754,7 @@ el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('
 el('bizTabs').addEventListener('click',e=>{const b=e.target.closest('[data-biz-tab]');if(b){bizTab=b.dataset.bizTab;renderBizReport()}});
 el('bizReset').addEventListener('click',()=>{['bizFrom','bizTo'].forEach(id=>el(id).value='');['bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).value='all');renderBizReport()});
 el('bizExport').addEventListener('click',exportBizCSV);
+el('bizRows').addEventListener('click',e=>{const btn=e.target.closest('[data-biz-view]');if(btn)viewBizReportItem(Number(btn.dataset.bizView))});
 el('syncOrderDebtsBtn').addEventListener('click',syncMissingOrderDebts);
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
