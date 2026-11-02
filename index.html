@@ -377,6 +377,7 @@
 <div class="stat"><div class="label">Peşin Satış Tahsilatı</div><div class="value" id="bizGuest">0 ₺</div></div>
 <div class="stat"><div class="label">Cari Tahsilat</div><div class="value" id="bizPayment">0 ₺</div></div>
 <div class="stat"><div class="label">Giderler</div><div class="value" id="bizExpense">0 ₺</div></div></div>
+<div class="grid stats"><div class="stat"><div class="label">Cari Borç Toplamı</div><div class="value" id="bizDebtTotal">0 ₺</div></div><div class="stat"><div class="label">Kalan Cari Alacak</div><div class="value" id="bizDebtBalance">0 ₺</div></div></div>
 <div class="card"><div class="card-head"><h3>Rapor Detayları</h3></div><div class="actions" id="bizTabs" style="flex-wrap:wrap">
 <button type="button" class="btn btn-primary btn-sm" data-biz-tab="exit">Stok Çıkışları</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="purchase">Satın Almalar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="guest">Peşin Satış</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="debt">Cari Borçlar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="payment">Cari Tahsilat</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="expense">Giderler</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="user">Kullanıcı İşlemleri</button></div>
 <div class="table-wrap wide-table"><table><thead id="bizHead"></thead><tbody id="bizRows"></tbody></table></div><div id="bizDebtAudit" class="inline-info danger-info" hidden style="margin:10px 0"></div><p class="muted" id="bizCount"></p></div>
@@ -3125,6 +3126,9 @@ function renderBizReport(){
  const debtAlert=el('bizDebtAudit');if(debtAlert){debtAlert.hidden=!missing.size;debtAlert.textContent=missing.size+' stok çıkışı grubunda eşleşen cari borç bulunamadı. Geçmiş fiyatlar değişmiş olabileceğinden otomatik borç eklenmedi.';}
  el('bizPurchase').textContent=firmMoney(D.purchases.reduce((a,x)=>a+Number(x.grossCents||0),0));
  el('bizGuest').textContent=firmMoney(sum(D.guests));el('bizPayment').textContent=firmMoney(sum(D.payments));el('bizExpense').textContent=firmMoney(sum(D.expenses));
+ const debtsTotal=D.debts.reduce((n,x)=>n+Number(x.amountCents||0),0),paymentsTotal=D.payments.reduce((n,x)=>n+Number(x.amountCents||0),0);
+ el('bizDebtTotal').textContent=firmMoney(debtsTotal);
+ el('bizDebtBalance').textContent=firmMoney(debtsTotal-paymentsTotal);
  const fmtDate=x=>esc(String(x||'').slice(0,10));
  const records={
   exit:{headers:['Tarih','Firma','Ürün','Depo','Miktar','Kullanıcı','Belge'],rows:D.exits.map(x=>[fmtDate(x.date),esc(x.firmName||firmById(x.firmId)?.name||'-'),esc(productById(x.productId)?.name||'-'),esc(warehouseById(x.warehouseId)?.name||'-'),esc(formatMovementQuantity(x,true)),esc(x.userName||'-'),esc(x.doc||'')])},
