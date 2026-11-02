@@ -349,7 +349,7 @@
  <div id="orderDetailsHeader" style="margin-bottom:14px"></div>
  <div class="table-wrap"><table style="min-width:650px"><thead><tr><th>Ürün</th><th class="num">Miktar</th><th>Birim</th><th class="num">Birim Fiyat</th><th class="num">Tutar</th></tr></thead><tbody id="orderDetailsLines"></tbody></table></div>
  <div id="orderDetailsTotals" class="order-details-totals"></div>
- <div class="actions"><button type="button" id="orderDetailsApproveBtn" class="btn btn-ok" onclick="approveViewedOrder()">Onayla</button><button type="button" id="orderDetailsEditBtn" class="btn btn-light" onclick="editSavedOrder(orderCurrentlyViewed)">Siparişi Düzenle</button><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
+ <div class="actions"><button type="button" id="orderDetailsDeleteBtn" class="btn btn-danger" onclick="deleteSavedOrder(orderCurrentlyViewed)">Siparişi Sil</button><button type="button" id="orderDetailsApproveBtn" class="btn btn-ok" onclick="approveViewedOrder()">Onayla</button><button type="button" id="orderDetailsEditBtn" class="btn btn-light" onclick="editSavedOrder(orderCurrentlyViewed)">Siparişi Düzenle</button><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
 </dialog>
 <dialog id="firmStatementDialog" style="width:min(900px,96vw);max-height:88vh;border:0;border-radius:14px;padding:22px">
   <div class="card-head"><h3 id="firmStatementTitle">Cari Ekstresi</h3><button class="btn btn-light btn-sm" type="button" onclick="el('firmStatementDialog').close()">Kapat</button></div>
@@ -378,7 +378,7 @@ const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',orders:'Sipariş Formu',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
 const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
-const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme']];
+const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme'],['deleteOrders','Kayıtlı Sipariş Silme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
 const PAGE_PERMISSION=Object.fromEntries(PERMISSION_DEFS.map(([key])=>[key,key]));
 let db=loadDB();
@@ -418,7 +418,7 @@ function normalizeDB(x){
   d.firms=Array.isArray(d.firms)?d.firms:[];d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
   d.movements=Array.isArray(d.movements)?d.movements:[];d.auditLogs=Array.isArray(d.auditLogs)?d.auditLogs:[];
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
-  d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true,editOrders:role==='admin'||u.permissions?.editOrders===true},createdAt:u.createdAt||new Date().toISOString()}});
+  d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true,editOrders:role==='admin'||u.permissions?.editOrders===true,deleteOrders:role==='admin'||u.permissions?.deleteOrders===true},createdAt:u.createdAt||new Date().toISOString()}});
   if(!d._restricted&&!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
   d.movements=d.movements.map(m=>{const inputUnit=['Koli','Adet','Kg','Paket'].includes(m.inputUnit)?m.inputUnit:'Koli';const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
   return d;
@@ -1687,6 +1687,32 @@ async function saveEditedOrder(){
 }
 
 let selectedOrderForApproval=null;
+function orderDeleteButton(order){
+ if(!hasPermission('orders')||!hasPermission('deleteOrders'))return '';
+ if(order.status&&order.status!=='Yeni')return '';
+ if((db.movements||[]).some(m=>m.orderId===order.id))return '';
+ return ' <button type="button" class="btn btn-danger btn-sm" data-order-delete="'+esc(order.id)+'">Sil</button>';
+}
+function deleteSavedOrder(id){
+ if(!requirePermission('orders')||!requirePermission('deleteOrders'))return;
+ if(secureMode&&!isAdmin())return notify('Güvenli sipariş silme için merkezi sunucuya silme yetkisi denetimi eklenmelidir. Şimdilik yalnızca yönetici silebilir.',true);
+ if(orderEditBusy||orderApprovalBusy||syncPushInProgress||syncPullInProgress)return notify('Devam eden işlem varken silme yapılamaz.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict)
+  return notify('Silmeden önce Drive senkronizasyonunu tamamlayın.',true);
+ const order=db.orders.find(o=>o.id===id);
+ if(!order)return notify('Sipariş bulunamadı.',true);
+ if((order.status&&order.status!=='Yeni')||(db.movements||[]).some(m=>m.orderId===id))
+  return notify('Onaylanmış veya stok hareketi yapılmış sipariş silinemez.',true);
+ if(!confirm((order.number||'Sipariş')+' silinsin mi? Bu işlem geri alınamaz.'))return;
+ const index=db.orders.findIndex(o=>o.id===id);
+ if(index<0)return;
+ db.orders.splice(index,1);
+ audit('Sipariş silindi','Siparişler',(order.number||id)+' | '+(order.firmName||''));
+ if(orderEditingId===id)resetOrderForm();
+ if(orderCurrentlyViewed===id){el('orderDetailsDialog').close();orderCurrentlyViewed=null;}
+ saveDB();
+ notify('Sipariş silindi. Drive senkronizasyonu başlatıldı.');
+}
 function orderEditButton(order){
  if(!hasPermission('orders')||!hasPermission('editOrders'))return '';
  if(order.status&&order.status!=='Yeni')return '';
@@ -1893,7 +1919,7 @@ function renderOrders(){
   '</td><td class="num"><b>'+orderMoney(orderPayableCents(o))+'</b><div class="muted" style="font-size:11px">'+
    (storedOrderVat(o).hasVat?'KDV dahil':'Eski kayıt · KDV hesaplanmamış')+'</div></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
   '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button> '+
-  '<button class="btn btn-primary btn-sm" type="button" data-order-pdf="'+esc(o.id)+'">PDF</button>'+orderEditButton(o)+orderApproveButton(o)+'</td></tr>'
+  '<button class="btn btn-primary btn-sm" type="button" data-order-pdf="'+esc(o.id)+'">PDF</button>'+orderEditButton(o)+orderApproveButton(o)+orderDeleteButton(o)+'</td></tr>'
  ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
  updateOrderTotals();
 }
@@ -1936,6 +1962,7 @@ function showOrderDetails(id){
  if(!requirePermission('orders'))return;
  const order=db.orders.find(o=>o.id===id);if(!order)return notify('Sipariş bulunamadı.',true);
  orderCurrentlyViewed=id;
+ el('orderDetailsDeleteBtn').style.display=hasPermission('deleteOrders')&&(!order.status||order.status==='Yeni')&&!(db.movements||[]).some(m=>m.orderId===id)?'':'none';
  el('orderDetailsApproveBtn').style.display=hasPermission('approveOrders')&&(!order.status||order.status==='Yeni')?'':'none';
  el('orderDetailsEditBtn').style.display=hasPermission('editOrders')&&(!order.status||order.status==='Yeni')?'':'none';
  el('orderDetailsTitle').textContent=order.number+' - Sipariş Formu';
@@ -2645,7 +2672,7 @@ function readUserPermissions(){return Object.fromEntries(USER_PERMISSION_DEFS.ma
 function renderUsers(){if(!isAdmin())return;el('userTable').innerHTML=db.users.length?db.users.map(u=>`<tr><td><b>${esc(u.fullName)}</b></td><td>${esc(u.username)}</td><td>${u.role==='admin'?'<span class="badge b-blue">Yönetici</span>':'<span class="badge b-gray">Depo Kullanıcısı</span>'}</td><td>${u.role==='admin'?'Tüm modüller':`${permissionCount(u)} / ${USER_PERMISSION_DEFS.length} modül / işlem`}</td><td>${u.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-red">Pasif</span>'}</td><td>${dt(u.createdAt)}</td><td><button class="btn btn-light btn-sm" onclick="editUser('${u.id}')">Düzenle</button></td></tr>`).join(''):`<tr><td colspan="7" class="empty">Kullanıcı bulunamadı.</td></tr>`}
 async function saveUser(e){e.preventDefault();if(!isAdmin())return;const id=el('userId').value,username=el('userUsername').value.trim().toLowerCase(),fullName=el('userFullName').value.trim(),password=el('userPassword').value,role=el('userRole').value,active=el('userActive').value==='true',permissions=readUserPermissions();if(db.users.some(u=>u.username.toLowerCase()===username&&u.id!==id))return notify('Bu kullanıcı adı zaten kullanılıyor.',true);let obj=id?{...userById(id)}:{id:uid('usr'),createdAt:new Date().toISOString()};if(!id&&!password)return notify('Yeni kullanıcı için şifre zorunludur.',true);if(secureMode&&password&&password.length<8)return notify('Yeni şifre en az 8 karakter olmalıdır.',true);if(id===currentUser.id&&!active)return notify('Kendi kullanıcınızı pasif yapamazsınız.',true);if(obj.role==='admin'&&(role!=='admin'||!active)&&db.users.filter(u=>u.role==='admin'&&u.active!==false&&u.id!==id).length===0)return notify('En az bir aktif yönetici bulunmalıdır.',true);if(role!=='admin'&&!Object.values(permissions).some(Boolean))return notify('Depo kullanıcısına en az bir modül yetkisi vermelisiniz.',true);obj={...obj,username,fullName,role,active,permissions:role==='admin'?Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,true])):permissions};try{if(password)obj.passwordHash=await hashPassword(password)}catch(err){return notify(err.message,true)}if(id)db.users[db.users.findIndex(x=>x.id===id)]=obj;else db.users.push(obj);audit(id?'Kullanıcı güncellendi':'Kullanıcı oluşturuldu','Kullanıcılar',`${obj.fullName} (${obj.username}) - ${obj.role}`);saveDB();resetUserForm();notify('Kullanıcı kaydedildi.')}
 function editUser(id){const u=userById(id);if(!u)return;el('userId').value=u.id;el('userFullName').value=u.fullName;el('userUsername').value=u.username;el('userRole').value=u.role;el('userActive').value=String(u.active!==false);el('userPassword').value='';renderPermissionEditor(u.permissions||{});window.scrollTo({top:0,behavior:'smooth'})}
-function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'])))}
+function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'&&k!=='deleteOrders'])))}
 
 function renderSettings(){if(!isAdmin())return;el('settingCompany').value=db.settings.companyName||'Tatsan Stok Takip';el('settingNegative').value=String(!!db.settings.allowNegative);el('settingCurrency').value=db.settings.currency||'TRY';el('settingSheetsUrl').value=DEFAULT_SHEETS_URL;el('settingSheetsToken').value=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;el('settingAutoSync').value='true';el('brandName').textContent=db.settings.companyName||'Tatsan Stok Takip';document.title=(db.settings.companyName||'Tatsan Stok Takip')+' v'+APP_VERSION;el('sheetSyncStatus').innerHTML=`Son gönderme: <b>${db.settings.lastPush?dt(db.settings.lastPush):'Yok'}</b> &nbsp; | &nbsp; Son çekme: <b>${db.settings.lastPull?dt(db.settings.lastPull):'Yok'}</b>`}
 function saveSettings(e){e.preventDefault();db.settings.companyName=el('settingCompany').value.trim()||'Tatsan Stok Takip';db.settings.allowNegative=el('settingNegative').value==='true';db.settings.currency=el('settingCurrency').value;audit('Genel ayarlar güncellendi','Ayarlar',`Firma: ${db.settings.companyName}, negatif stok: ${db.settings.allowNegative?'açık':'kapalı'}`);saveDB();notify('Ayarlar kaydedildi.')}
@@ -3054,6 +3081,7 @@ el('orderLineRows').addEventListener('change',handleOrderLineEvent);
 el('orderLineRows').addEventListener('click',handleOrderLineEvent);
 el('countHistoryRows').addEventListener('click',e=>{const b=e.target.closest('[data-count-history]');if(b)showCountHistory(b.dataset.countHistory)});
 el('orderListRows').addEventListener('click',e=>{
+ const del=e.target.closest('button[data-order-delete]');if(del){deleteSavedOrder(del.dataset.orderDelete);return}
  const pdf=e.target.closest('button[data-order-pdf]');if(pdf){exportSavedOrderPDF(pdf.dataset.orderPdf);return}
  const edit=e.target.closest('button[data-order-edit]');if(edit){editSavedOrder(edit.dataset.orderEdit);return}
  const approve=e.target.closest('button[data-order-approve]');if(approve){openOrderApproval(approve.dataset.orderApprove);return}
@@ -3091,7 +3119,7 @@ el('dashboardWarehouseFilter').addEventListener('change',renderDashboard);['repo
 ['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id).addEventListener('change',renderAudit));el('auditSearch').addEventListener('input',renderAudit);
 el('userForm').addEventListener('submit',saveUser);el('userRole').addEventListener('change',updatePermissionEditorState);el('settingsForm').addEventListener('submit',saveSettings);el('sheetsForm').addEventListener('submit',saveSheetsSettings);el('backupInput').addEventListener('change',loadBackup);
 setInterval(()=>el('clock').textContent=new Date().toLocaleString('tr-TR'),1000);el('clock').textContent=new Date().toLocaleString('tr-TR');
-renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'])));resetDefaultUnits();updateCartonPrice();initializeApplication();
+renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'&&k!=='deleteOrders'])));resetDefaultUnits();updateCartonPrice();initializeApplication();
 </script>
 </body>
 </html>
