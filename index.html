@@ -222,6 +222,11 @@
   <div class="field"><label>Sipariş Tarihi *</label><input id="orderDate" type="date" required></div>
   <div class="field full"><label>Not / Açıklama</label><textarea id="orderNotes" rows="2" maxlength="1000" placeholder="Teslimat veya sipariş notu (isteğe bağlı)"></textarea></div>
  </div>
+ <div id="orderSuggestions" class="card" style="margin:12px 0;padding:14px;display:none">
+ <div class="card-head"><h3>Bu Carinin Sık Aldığı Ürünler</h3><button type="button" class="btn btn-light btn-sm" id="repeatLastOrderBtn" onclick="repeatLastFirmOrder()">Son Siparişi Tekrarla</button></div>
+ <p class="muted" id="orderSuggestionInfo"></p>
+ <div id="orderSuggestionItems" class="actions" style="flex-wrap:wrap"></div>
+ </div>
  <div class="order-product-picker">
   <div class="field" style="flex:1;min-width:220px"><label>Ürün Seç</label><select id="orderProductPicker"></select><div id="orderProductStockInfo" class="order-stock-badges" role="status" aria-live="polite"></div></div>
   <button type="button" id="orderAddProductButton" class="btn btn-light" onclick="addOrderProduct()">+ Ürün Ekle</button>
@@ -1365,6 +1370,66 @@ function refreshOrderProductStock(){
 function orderEditableRows(){
  return [...el('orderLineRows').querySelectorAll('tr[data-order-product-id]')];
 }
+function previousFirmOrders(){
+ const firmId=el('orderFirm').value;
+ return (db.orders||[]).filter(o=>o.firmId===firmId&&Array.isArray(o.lines)&&o.lines.length)
+  .sort((a,b)=>new Date(b.createdAt||b.date||0)-new Date(a.createdAt||a.date||0));
+}
+function applySuggestedLine(line){
+ const p=productById(line.productId);
+ if(!p||p.active===false)return false;
+ const existing=orderEditableRows().find(r=>r.dataset.orderProductId===p.id);
+ if(existing)return false;
+ if(orderEditableRows().length>=50)return false;
+ el('orderProductPicker').value=p.id;
+ addOrderProduct();
+ const row=orderEditableRows().find(r=>r.dataset.orderProductId===p.id);
+ if(!row)return false;
+ const unit=String(line.displayUnit||line.unit||'Koli');
+ if(stockUnitOptions(p.id).includes(unit)){
+  const select=row.querySelector('.order-unit');select.value=unit;
+  select.dispatchEvent(new Event('change',{bubbles:true}));
+ }
+ const amount=Number(line.quantity);
+ if(Number.isSafeInteger(amount)&&amount>0&&amount<=100000)row.querySelector('.order-quantity').value=String(amount);
+ updateOrderTotals();
+ return true;
+}
+function renderOrderSuggestions(){
+ const panel=el('orderSuggestions'),firmId=el('orderFirm').value;
+ panel.style.display=firmId?'':'none';
+ if(!firmId)return;
+ const orders=previousFirmOrders(),summary=new Map();
+ for(const order of orders){
+  const seen=new Set();
+  for(const line of order.lines){
+   if(seen.has(line.productId)||!productById(line.productId)||productById(line.productId).active===false)continue;
+   seen.add(line.productId);
+   const entry=summary.get(line.productId)||{id:line.productId,count:0,last:line};
+   entry.count++;summary.set(line.productId,entry);
+  }
+ }
+ const rows=[...summary.values()].sort((a,b)=>b.count-a.count).slice(0,12);
+ el('orderSuggestionInfo').textContent=orders.length?'Geçmiş '+orders.length+' siparişe göre. Ürünü seçerek ekleyebilirsiniz. Fiyatlar güncel ürün kartından hesaplanır.':'Bu cari için önceki sipariş bulunmuyor.';
+ el('repeatLastOrderBtn').disabled=!orders.length;
+ el('orderSuggestionItems').innerHTML=rows.map(x=>'<button type="button" class="btn btn-light btn-sm" data-suggest-product="'+esc(x.id)+'">'+esc(productById(x.id)?.name||'')+' · '+x.count+' sipariş</button>').join('');
+}
+function addSuggestedProduct(id){
+ const previous=previousFirmOrders().find(o=>o.lines.some(l=>l.productId===id));
+ const line=previous?.lines.find(l=>l.productId===id);
+ if(line&&!applySuggestedLine(line))notify('Ürün zaten siparişte veya ürün limiti doldu.',true);
+}
+function repeatLastFirmOrder(){
+ if(!requirePermission('orders'))return;
+ const order=previousFirmOrders()[0];
+ if(!order)return notify('Bu cariye ait eski sipariş yok.',true);
+ const available=order.lines.filter(l=>productById(l.productId)?.active!==false&&productById(l.productId));
+ if(!available.length)return notify('Önceki siparişte aktif ürün bulunamadı.',true);
+ if(orderEditableRows().length&&!confirm('Mevcut sipariş satırları kalsın ve eksik ürünler eklensin mi?'))return;
+ let count=0;
+ for(const line of available)if(applySuggestedLine(line))count++;
+ notify(count+' ürün son siparişten eklendi. Miktarları ve fiyatları kontrol edin.');
+}
 function addOrderProduct(){
  if(!requirePermission('orders'))return;
  const id=el('orderProductPicker').value,product=productById(id);
@@ -1550,7 +1615,7 @@ function resetOrderForm(){
  el('orderFirmDiscountHint').textContent='Cari seçildiğinde varsayılan iskonto otomatik gelecektir.';
  el('orderVatRate').value='1';
  el('orderNumber').value=nextOrderNumber();
- refreshOrderProductStock();
+ refreshOrderProductStock();renderOrderSuggestions();
  updateOrderTotals();
 }
 
@@ -1894,7 +1959,7 @@ function renderOrders(){
  fillSelect('orderProductPicker',products,'Ürün seçiniz');
  if(firms.some(x=>x.id===beforeFirm))el('orderFirm').value=beforeFirm;
  if(products.some(x=>x.id===beforeProduct))el('orderProductPicker').value=beforeProduct;
- refreshOrderProductStock();
+ refreshOrderProductStock();renderOrderSuggestions();
  if(!el('orderDate').value)el('orderDate').value=localDateTimeValue().slice(0,10);
  const editing=orderEditingId?db.orders.find(o=>o.id===orderEditingId):null;
  if(orderEditingId&&(!editing||(editing.status&&editing.status!=='Yeni'))){resetOrderForm();}
@@ -3070,7 +3135,8 @@ el('productTable').addEventListener('change',e=>{
 });
 el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
-el('orderFirm').addEventListener('change',applySelectedFirmDiscount);
+el('orderFirm').addEventListener('change',()=>{applySelectedFirmDiscount();renderOrderSuggestions()});
+el('orderSuggestionItems').addEventListener('click',e=>{const btn=e.target.closest('[data-suggest-product]');if(btn)addSuggestedProduct(btn.dataset.suggestProduct)});
 el('orderApproveWarehouse').addEventListener('change',renderOrderApprovalPreview);
 el('orderProductPicker').addEventListener('change',refreshOrderProductStock);
 el('orderDiscount').addEventListener('input',updateOrderTotals);
