@@ -124,6 +124,8 @@
 <div class="stat"><div class="label">Kritik / Biten</div><div class="value" id="statCritical">0</div><div class="sub">Müdahale gereken ürünler</div></div>
 </div>
 <div class="card"><div class="card-head"><h3>Depolardaki Stoklar</h3><button class="btn btn-light btn-sm" onclick="goPage('stock')">Tüm Stoklar</button></div><div class="warehouse-summary-grid" id="dashboardWarehouses"></div></div>
+<div class="card"><div class="card-head"><h3>Stok Çıkışı Yapılan Firmalar</h3><span class="muted">Seçilen depoya göre firmaların stok çıkışları</span></div>
+<div class="table-wrap"><table><thead><tr><th>Firma</th><th>Son Çıkış</th><th>Hareket</th><th>Ürün Çeşidi</th><th>İşlem</th></tr></thead><tbody id="dashboardExitFirms"></tbody></table></div></div>
 <div class="split">
 <div class="card"><div class="card-head"><h3>Son Stok Hareketleri</h3><button class="btn btn-light btn-sm" onclick="goPage('movements')">Tümünü Gör</button></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Ürün</th><th>Depo</th><th>Kullanıcı</th><th class="num">Miktar</th><th data-admin-column>İşlem</th></tr></thead><tbody id="dashboardMovements"></tbody></table></div></div>
 <div class="card"><div class="card-head"><h3>Kritik Stoklar</h3><button class="btn btn-light btn-sm" onclick="goPage('stock')">Stok Listesi</button></div><div class="report-list" id="dashboardCritical"></div></div>
@@ -200,6 +202,9 @@
  <div class="table-wrap"><table style="min-width:1100px"><thead><tr><th>Kod</th><th>Firma Adı / Adres</th><th>Cari Türü</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Vergi / TC</th><th>Varsayılan İskonto</th><th>Borç Durumu</th><th class="num">Bakiye (₺)</th><th>Durum</th><th>İşlemler</th></tr></thead><tbody id="firmTable"></tbody></table></div>
 </div>
 </div>
+<dialog id="dashboardFirmExitsDialog" style="width:min(850px,96vw);max-height:85vh;overflow:auto;border:0;border-radius:14px;padding:24px">
+<div class="card-head"><h3 id="dashboardFirmExitsTitle">Firma Stok Çıkışları</h3><button type="button" class="btn btn-light btn-sm" onclick="el('dashboardFirmExitsDialog').close()">Kapat</button></div>
+<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Ürün</th><th>Depo</th><th>Miktar</th><th>Belge</th><th>İşlemi Yapan</th></tr></thead><tbody id="dashboardFirmExitsRows"></tbody></table></div></dialog>
 <div class="page" id="page-ledger"><div class="card">
  <div class="card-head"><h3>Cari Hesap / Tahsilat / Peşin Satış / Gider</h3><span class="muted">Borç ve ödemeler ayrı takip edilir.</span></div>
  <form id="firmLedgerForm"><div class="form-grid cols-3">
@@ -872,11 +877,46 @@ function fillAllSelects(){
 }
 function allStockRows(){const rows=[];for(const w of db.warehouses)for(const p of db.products.filter(x=>x.active!==false)){const current=getStock(w.id,p.id);rows.push({warehouse:w,product:p,current,value:current*num(p.salePrice)})}return rows}
 
+function dashboardExitFirmRows(){
+ const warehouse=el('dashboardWarehouseFilter')?.value||'all';
+ const groups=new Map();
+ for(const m of db.movements||[]){
+  if(m.type!=='CIKIS'||(warehouse!=='all'&&m.warehouseId!==warehouse))continue;
+  const firm=firmById(m.firmId);
+  const name=firm?.name||String(m.firmName||'').trim();
+  if(!name)continue;
+  const key=m.firmId?'id:'+m.firmId:'name:'+firmKey(name);
+  if(!groups.has(key))groups.set(key,{key,name,movements:[]});
+  groups.get(key).movements.push(m);
+ }
+ return [...groups.values()].sort((a,b)=>{
+  const lastA=Math.max(...a.movements.map(m=>new Date(m.date).getTime()||0));
+  const lastB=Math.max(...b.movements.map(m=>new Date(m.date).getTime()||0));
+  return lastB-lastA;
+ });
+}
+function renderDashboardExitFirms(){
+ const groups=dashboardExitFirmRows();
+ el('dashboardExitFirms').innerHTML=groups.length?groups.map((g,i)=>{
+  const latest=g.movements.reduce((a,b)=>new Date(a.date)>new Date(b.date)?a:b);
+  const productCount=new Set(g.movements.map(m=>m.productId)).size;
+  return '<tr><td>'+esc(g.name)+'</td><td>'+dt(latest.date)+'</td><td>'+g.movements.length+'</td><td>'+productCount+'</td><td><button type="button" class="btn btn-light btn-sm" data-firm-exit-index="'+i+'">Görüntüle</button></td></tr>';
+ }).join(''):'<tr><td colspan="5" class="empty">Bu depoda firmalara yapılmış stok çıkışı bulunamadı.</td></tr>';
+}
+function showDashboardFirmExits(index){
+ const group=dashboardExitFirmRows()[index];if(!group)return notify('Firma çıkışları bulunamadı.',true);
+ el('dashboardFirmExitsTitle').textContent=group.name+' — Stok Çıkışları';
+ el('dashboardFirmExitsRows').innerHTML=[...group.movements].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(m=>
+  '<tr><td>'+dt(m.date)+'</td><td>'+esc(productById(m.productId)?.name||m.productName||'-')+'</td><td>'+esc(warehouseById(m.warehouseId)?.name||'-')+'</td><td>'+formatMovementQuantity(m,true)+'</td><td>'+esc(m.doc||'-')+'</td><td>'+esc(m.userName||'-')+'</td></tr>'
+ ).join('');
+ el('dashboardFirmExitsDialog').showModal();
+}
 function renderDashboard(){
   const selected=el('dashboardWarehouseFilter')?.value||'all',allRows=allStockRows(),rows=selected==='all'?allRows:allRows.filter(x=>x.warehouse.id===selected),selectedWarehouse=warehouseById(selected);
   const activeCount=new Set(rows.filter(x=>stockHasVisibleQuantity(x.product.id,x.current)).map(x=>x.product.id)).size,totalQty=rows.reduce((sum,x)=>sum+x.current,0),totalVal=rows.reduce((sum,x)=>sum+x.value,0),critical=rows.filter(x=>stockIsVisiblyEmpty(x.product.id,x.current)||x.current<=num(x.product.minStock));
   el('statProducts').textContent=activeCount;el('statQty').textContent=qty(totalQty);el('statValue').textContent=money(totalVal);el('statCritical').textContent=critical.length;
   el('statProductsSub').textContent='Fiziksel stoku bulunan ürün çeşidi';el('statQtySub').textContent=selected==='all'?'Tüm depolar toplamı':`${selectedWarehouse?.name||'Seçilen depo'} toplamı`;el('dashboardFilterInfo').textContent=selected==='all'?'Tüm depolar gösteriliyor.':`${selectedWarehouse?.name||''} verileri gösteriliyor.`;
+  renderDashboardExitFirms();
   const recent=[...db.movements].filter(m=>selected==='all'||m.warehouseId===selected).sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,8);el('dashboardMovements').innerHTML=recent.length?recent.map(m=>`<tr><td>${dt(m.date)}</td><td>${movementBadge(m.type)}</td><td>${esc(productById(m.productId)?.name||'-')}</td><td>${esc(warehouseById(m.warehouseId)?.name||'-')}</td><td>${esc(m.userName||'-')}</td><td class="num">${formatMovementQuantity(m,true)}</td>${isAdmin()?`<td>${movementAdminButtons(m)}</td>`:''}</tr>`).join(''):`<tr><td colspan="${isAdmin()?7:6}" class="empty">Henüz stok hareketi yok.</td></tr>`;
   el('dashboardCritical').innerHTML=critical.length?critical.slice(0,10).map(x=>`<div class="report-item"><span><b>${esc(x.product.name)}</b><br><small class="muted">${esc(x.warehouse.name)}</small></span><span class="badge ${stockIsVisiblyEmpty(x.product.id,x.current)?'b-red':'b-orange'}">${formatStockAmount(x.product.id,x.current)}</span></div>`).join(''):`<div class="inline-info ok-info">Kritik stok bulunmuyor.</div>`;
   const visibleWarehouses=selected==='all'?db.warehouses:db.warehouses.filter(w=>w.id===selected);el('dashboardWarehouses').innerHTML=visibleWarehouses.length?visibleWarehouses.map(w=>{const wr=allRows.filter(x=>x.warehouse.id===w.id),positive=wr.filter(x=>stockHasVisibleQuantity(x.product.id,x.current)),criticalCount=wr.filter(x=>x.current<=num(x.product.minStock)).length,total=wr.reduce((sum,x)=>sum+x.current,0),value=wr.reduce((sum,x)=>sum+x.value,0);return `<div class="warehouse-summary"><h4>${esc(w.name)}</h4><div class="summary-row"><span>Stoklu ürün</span><b>${positive.length}</b></div><div class="summary-row"><span>Toplam koli</span><b>${qty(total)}</b></div><div class="summary-row"><span>Stok değeri</span><b>${money(value)}</b></div><div class="summary-row"><span>Kritik / biten</span><b>${criticalCount}</b></div><button class="btn btn-light btn-sm" onclick="openWarehouseStock('${w.id}')">Depo Stoklarını Gör</button></div>`}).join(''):'<div class="empty">Depo bulunamadı.</div>';
@@ -3481,6 +3521,7 @@ async function savePurchase(e){
 }
 function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
+el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
 el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
