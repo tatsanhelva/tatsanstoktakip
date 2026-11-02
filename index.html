@@ -1328,6 +1328,20 @@ function firmBalanceStatus(id){
  return {label:'Borcu yok',css:'b-green',amount};
 }
 function firmMoney(cents){return (cents/100).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2})+' ₺'}
+function displayTurkishText(value){
+ let result=String(value??'');
+ const cp1252={8364:128,8218:130,402:131,8222:132,8230:133,8224:134,8225:135,710:136,8240:137,352:138,8249:139,338:140,381:142,8216:145,8217:146,8220:147,8221:148,8226:149,8211:150,8212:151,732:152,8482:153,353:154,8250:155,339:156,382:158,376:159};
+ for(let i=0;i<3;i++){
+  const fixed=result.replace(/(?:[ÃÄÅÂ][\u0080-\u00ff\u0152\u0153\u0160\u0161\u0178\u017d\u017e\u20ac\u2018-\u201e\u2020-\u2026\u2030\u2039\u203a\u2122]*)+/g,part=>{
+   const bytes=[];
+   for(const ch of part){const n=ch.codePointAt(0),byte=n<=255?n:cp1252[n];if(byte===undefined)return part;bytes.push(byte)}
+   try{return new TextDecoder('utf-8',{fatal:true}).decode(new Uint8Array(bytes))}catch(_){return part}
+  });
+  if(fixed===result)break;
+  result=fixed;
+ }
+ return result;
+}
 function firmKey(value){return String(value||'').trim().toLocaleLowerCase('tr-TR')}
 function firmTax(value){return String(value||'').replace(/\s/g,'').trim()}
 function validFirmTax(value){return !value||/^\d{10,11}$/.test(value)}
@@ -3152,7 +3166,7 @@ function renderBizReport(){
   })()},
   payment:{headers:['Tarih','Cari','Ödeme','Tutar','Belge'],rows:D.payments.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc(x.doc||'')])},
   expense:{headers:['Tarih','Açıklama','Ödeme','Tutar','Belge'],rows:D.expenses.map(x=>[fmtDate(x.date),esc(x.description),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc(x.doc||'')])},
-  user:{headers:['Tarih','Kullanıcı','Modül','İşlem','Detay'],rows:D.users.map(x=>[fmtDate(x.date),esc(x.userName||''),esc(x.module||''),esc(x.action||x.act||''),esc(x.detail||'')])}
+  user:{headers:['Tarih','Kullanıcı','Modül','İşlem','Detay'],rows:D.users.map(x=>[fmtDate(x.date),esc(displayTurkishText(x.userName||'')),esc(displayTurkishText(x.module||'')),esc(displayTurkishText(x.action||x.act||'')),esc(displayTurkishText(x.detail||''))])}
  };
  const R=records[bizTab]||records.exit;bizVisibleHeaders=R.headers;bizVisibleRows=R.rows;
  el('bizHead').innerHTML='<tr>'+R.headers.map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>';
@@ -3178,7 +3192,7 @@ function exportGeneralReportExcel(){const r=generalReportData(),warehouseName=r.
 
 function printReports(){document.querySelectorAll('.page').forEach(x=>x.classList.remove('print-target'));el('page-reports').classList.add('print-target');window.print()}
 
-function renderAudit(){if(!isAdmin())return;const user=el('auditUser').value||'all',module=(el('auditModule').value||'all'),q=el('auditSearch').value.toLowerCase(),from=el('auditFrom').value,to=el('auditTo').value;const rows=[...db.auditLogs].filter(a=>(user==='all'||a.userId===user)&&(module==='all'||a.module===module)&&[a.action,a.detail,a.userName,a.username,a.module].join(' ').toLowerCase().includes(q)&&(!from||new Date(a.date)>=new Date(from+'T00:00:00'))&&(!to||new Date(a.date)<=new Date(to+'T23:59:59'))).sort((a,b)=>new Date(b.date)-new Date(a.date));el('auditTable').innerHTML=rows.length?rows.map(a=>`<tr><td>${dt(a.date)}</td><td><b>${esc(a.userName||a.username||'-')}</b><br><small class="muted">${esc(a.username||'')}</small></td><td>${esc(a.module)}</td><td>${esc(a.action)}</td><td title="${esc(a.detail)}">${esc((a.detail||'').slice(0,120))}</td></tr>`).join(''):`<tr><td colspan="5" class="empty">İşlem kaydı bulunamadı.</td></tr>`}
+function renderAudit(){if(!isAdmin())return;const user=el('auditUser').value||'all',module=(el('auditModule').value||'all'),q=el('auditSearch').value.toLowerCase(),from=el('auditFrom').value,to=el('auditTo').value;const rows=[...db.auditLogs].filter(a=>(user==='all'||a.userId===user)&&(module==='all'||a.module===module)&&[a.action,a.detail,a.userName,a.username,a.module].join(' ').toLowerCase().includes(q)&&(!from||new Date(a.date)>=new Date(from+'T00:00:00'))&&(!to||new Date(a.date)<=new Date(to+'T23:59:59'))).sort((a,b)=>new Date(b.date)-new Date(a.date));el('auditTable').innerHTML=rows.length?rows.map(a=>`<tr><td>${dt(a.date)}</td><td><b>${esc(a.userName||a.username||'-')}</b><br><small class="muted">${esc(a.username||'')}</small></td><td>${esc(displayTurkishText(a.module))}</td><td>${esc(displayTurkishText(a.action))}</td><td title="${esc(displayTurkishText(a.detail))}">${esc(displayTurkishText(a.detail||'').slice(0,120))}</td></tr>`).join(''):`<tr><td colspan="5" class="empty">İşlem kaydı bulunamadı.</td></tr>`}
 function permissionCount(u){return u.role==='admin'?USER_PERMISSION_DEFS.length:USER_PERMISSION_DEFS.filter(([k])=>u.permissions?.[k]).length}
 function renderPermissionEditor(permissions={}){const grid=el('userPermissionGrid');if(!grid)return;grid.innerHTML=USER_PERMISSION_DEFS.map(([key,label])=>`<label class="permission-item"><input type="checkbox" name="userPermission" value="${key}" ${permissions[key]?'checked':''}/> ${label}</label>`).join('');updatePermissionEditorState()}
 function updatePermissionEditorState(){const admin=el('userRole').value==='admin';document.querySelectorAll('input[name="userPermission"]').forEach(x=>{x.disabled=admin;if(admin)x.checked=true})}
