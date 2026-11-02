@@ -265,7 +265,7 @@
  <div id="orderSuggestionItems" class="actions" style="flex-wrap:wrap"></div>
  </div>
  <div class="order-product-picker">
-  <div class="field" style="flex:1;min-width:220px"><label>Ürün Seç</label><select id="orderProductPicker"></select><div id="orderProductStockInfo" class="order-stock-badges" role="status" aria-live="polite"></div></div>
+  <div class="field" style="flex:1;min-width:220px"><label>Ürün Ara (Ad / Kod / Barkod)</label><input id="orderProductSearch" type="search" autocomplete="off" placeholder="Ürün adı, kodu veya barkodu yazın..." style="margin-bottom:7px"><select id="orderProductPicker"></select><div id="orderProductStockInfo" class="order-stock-badges" role="status" aria-live="polite"></div></div>
   <button type="button" id="orderAddProductButton" class="btn btn-light" onclick="addOrderProduct()">+ Ürün Ekle</button>
  </div>
  <div class="table-wrap" style="max-height:480px;overflow:auto"><table class="order-table">
@@ -1481,6 +1481,16 @@ function orderWarehouseStockHTML(productId){
    esc(w.name)+': <b>'+esc(formatStockAmount(productId,current))+'</b></span>';
  }).join('');
 }
+function filterOrderProductPicker(){
+ const select=el('orderProductPicker'),search=el('orderProductSearch');
+ if(!select||!search)return;
+ const q=firmKey(search.value),previous=select.value;
+ const items=db.products.filter(p=>p.active!==false&&(!q||firmKey([p.code,p.barcode,p.name,p.category].join(' ')).includes(q)));
+ select.innerHTML='<option value="">'+(items.length?'Ürün seçiniz':'Eşleşen ürün bulunamadı')+'</option>'+items.map(p=>
+  '<option value="'+esc(p.id)+'">'+esc((p.code?p.code+' - ':'')+p.name)+'</option>').join('');
+ if(items.some(p=>p.id===previous))select.value=previous;
+ refreshOrderProductStock();
+}
 function refreshOrderProductStock(){
  const id=el('orderProductPicker')?.value||'';
  const preview=el('orderProductStockInfo');
@@ -2095,6 +2105,7 @@ function renderOrders(){
  const products=db.products.filter(p=>p.active!==false).map(p=>({id:p.id,label:(p.code?p.code+' - ':'')+p.name}));
  fillSelect('orderFirm',firms,'Cari / firma seçiniz');
  fillSelect('orderProductPicker',products,'Ürün seçiniz');
+ if(el('orderProductSearch')?.value)filterOrderProductPicker();
  if(firms.some(x=>x.id===beforeFirm))el('orderFirm').value=beforeFirm;
  const chosenFirm=firmById(el('orderFirm').value);
  if(chosenFirm&&document.activeElement!==el('orderFirmSearch'))el('orderFirmSearch').value=(chosenFirm.code||'')+' - '+chosenFirm.name;
@@ -3739,6 +3750,7 @@ el('orderFirmSearch').addEventListener('input',()=>{el('orderFirm').value='';app
 el('orderFirmMatches').addEventListener('click',e=>{const b=e.target.closest('[data-order-firm]');if(!b)return;const firm=firmById(b.dataset.orderFirm);if(!firm)return;el('orderFirm').value=firm.id;el('orderFirmSearch').value=(firm.code||'')+' - '+firm.name;el('orderFirm').dispatchEvent(new Event('change',{bubbles:true}));renderOrderFirmMatches()});
 el('orderSuggestionItems').addEventListener('click',e=>{const btn=e.target.closest('[data-suggest-product]');if(btn)addSuggestedProduct(btn.dataset.suggestProduct)});
 el('orderApproveWarehouse').addEventListener('change',renderOrderApprovalPreview);
+el('orderProductSearch').addEventListener('input',filterOrderProductPicker);
 el('orderProductPicker').addEventListener('change',refreshOrderProductStock);
 el('orderDiscount').addEventListener('input',updateOrderTotals);
 el('orderVatRate').addEventListener('input',updateOrderTotals);
