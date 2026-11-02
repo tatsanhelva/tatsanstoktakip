@@ -370,7 +370,7 @@
 <div class="field"><label>Firma / Tedarikçi</label><select id="bizFirm"><option value="all">Tüm Firmalar</option></select></div>
 <div class="field"><label>Ürün</label><select id="bizProduct"><option value="all">Tüm Ürünler</option></select></div>
 <div class="field"><label>Depo</label><select id="bizWarehouse"><option value="all">Tüm Depolar</option></select></div></div>
-<div class="actions"><button type="button" class="btn btn-light btn-sm" id="bizReset">Filtreleri Sıfırla</button><button type="button" class="btn btn-ok btn-sm" id="bizExport">Görünen Raporu Excel/CSV İndir</button></div>
+<div class="actions"><button type="button" class="btn btn-light btn-sm" data-biz-period="today">Bugün</button><button type="button" class="btn btn-light btn-sm" data-biz-period="week">Haftalık</button><button type="button" class="btn btn-light btn-sm" data-biz-period="month">Aylık</button><button type="button" class="btn btn-light btn-sm" id="bizReset">Filtreleri Sıfırla</button><button type="button" class="btn btn-ok btn-sm" id="bizExport">Görünen Raporu Excel/CSV İndir</button></div>
 <div class="report-note">Tahsilatlar gelir akışıdır; stok çıkışları sevkiyat miktarıdır. Satın alma tutarı dönem gideri veya net kâr değildir.</div></div>
 <div class="grid stats">
 <div class="stat"><div class="label">Satın Alma (KDV Dahil)</div><div class="value" id="bizPurchase">0 ₺</div></div>
@@ -3129,6 +3129,23 @@ function generalReportData(){const range=reportRange(),movements=[...db.movement
   return {range,movements,products:[...productMap.values()].sort((a,b)=>a.product.name.localeCompare(b.product.name,'tr')),firms:[...firmMap.values()].sort((a,b)=>a.firm.localeCompare(b.firm,'tr')||a.product.name.localeCompare(b.product.name,'tr')),entry,exit,transferIn,transferOut,entryPieces,exitPieces,transferInPieces,transferOutPieces}}
 
 let bizTab='exit',bizVisibleHeaders=[],bizVisibleRows=[];
+function applyBizPeriod(period){
+ const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ if(period==='week')start.setDate(start.getDate()-(start.getDay()+6)%7);
+ else if(period==='month')start.setDate(1);
+ else if(period!=='today')return;
+ const localISO=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+ el('bizFrom').value=localISO(start);el('bizTo').value=localISO(now);
+ renderBizReport();
+}
+function updateBizPeriodButtons(){
+ const from=el('bizFrom').value,to=el('bizTo').value,now=new Date();
+ const localISO=d=>[d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-');
+ const today=localISO(now),week=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ week.setDate(week.getDate()-(week.getDay()+6)%7);
+ const selected=to===today?(from===today?'today':from===localISO(week)?'week':from===localISO(new Date(now.getFullYear(),now.getMonth(),1))?'month':''):'';
+ document.querySelectorAll('[data-biz-period]').forEach(b=>{b.className='btn btn-sm '+(b.dataset.bizPeriod===selected?'btn-primary':'btn-light')});
+}
 function bizDate(v){return String(v||'').slice(0,10)}
 function bizOptions(id,items){const n=el(id),old=n.value;n.innerHTML='<option value="all">Tümü</option>'+items.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.label)+'</option>').join('');if(items.some(x=>x.id===old))n.value=old}
 function bizFilter(){
@@ -3209,6 +3226,7 @@ function renderBizReport(){
  el('bizHead').innerHTML='<tr>'+[...R.headers,'İşlem'].map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>';
  el('bizRows').innerHTML=R.rows.length?R.rows.map((row,i)=>'<tr>'+row.map(c=>'<td>'+c+'</td>').join('')+'<td><button type="button" class="btn btn-light btn-sm" data-biz-view="'+i+'">Görüntüle</button></td></tr>').join(''):'<tr><td colspan="'+(R.headers.length+1)+'" class="empty">Bu filtrelerde kayıt bulunamadı.</td></tr>';
  el('bizCount').textContent='Gösterilen kayıt: '+R.rows.length;
+ updateBizPeriodButtons();
  el('bizTabs').querySelectorAll('[data-biz-tab]').forEach(b=>b.className='btn btn-sm '+(b.dataset.bizTab===bizTab?'btn-primary':'btn-light'));
 }
 let bizVisibleDetailRefs=null;
@@ -3799,6 +3817,7 @@ function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermi
 el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
 ['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).addEventListener('change',renderBizReport));
 el('bizTabs').addEventListener('click',e=>{const b=e.target.closest('[data-biz-tab]');if(b){bizTab=b.dataset.bizTab;renderBizReport()}});
+document.querySelectorAll('[data-biz-period]').forEach(b=>b.addEventListener('click',()=>applyBizPeriod(b.dataset.bizPeriod)));
 el('bizReset').addEventListener('click',()=>{['bizFrom','bizTo'].forEach(id=>el(id).value='');['bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).value='all');renderBizReport()});
 el('bizExport').addEventListener('click',exportBizCSV);
 el('bizRows').addEventListener('click',e=>{const btn=e.target.closest('[data-biz-view]');if(btn)viewBizReportItem(Number(btn.dataset.bizView))});
