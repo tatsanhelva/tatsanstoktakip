@@ -219,7 +219,7 @@
  <form id="orderForm">
  <div class="form-grid cols-3">
   <div class="field"><label>Sipariş No</label><input id="orderNumber" readonly placeholder="Otomatik oluşturulur"></div>
-  <div class="field"><label>Cari / Firma *</label><select id="orderFirm" required></select></div>
+  <div class="field"><label>Cari / Firma *</label><input id="orderFirmSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu ile ara..." aria-controls="orderFirmMatches"><select id="orderFirm" required style="position:absolute;width:1px;height:1px;opacity:0;pointer-events:none" tabindex="-1" aria-label="Seçilen cari"></select><div id="orderFirmMatches" style="max-height:175px;overflow:auto"></div><small id="orderFirmSelected" class="muted">Cari seçilmedi.</small></div>
   <div class="field"><label>Sipariş Tarihi *</label><input id="orderDate" type="date" required></div>
   <div class="field full"><label>Not / Açıklama</label><textarea id="orderNotes" rows="2" maxlength="1000" placeholder="Teslimat veya sipariş notu (isteğe bağlı)"></textarea></div>
  </div>
@@ -1610,6 +1610,7 @@ function resetOrderForm(){
  el('orderEditingNotice').hidden=true;el('orderSaveBtn').textContent='Siparişi Kaydet';
  el('orderResetBtn').textContent='Yeni Sipariş / Temizle';
  el('orderForm').reset();
+ el('orderFirmSearch').value='';renderOrderFirmMatches();
  el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
  el('orderDate').value=localDateTimeValue().slice(0,10);
  el('orderDiscount').value='0';
@@ -1951,6 +1952,14 @@ async function confirmOrderApproval(){
  }
 }
 
+function renderOrderFirmMatches(){
+ const input=el('orderFirmSearch'),list=el('orderFirmMatches'),chosen=el('orderFirm').value;
+ const search=firmKey(input.value);
+ const firms=search?db.firms.filter(f=>f.active!==false&&firmKey((f.code||'')+' '+f.name).includes(search)).slice(0,20):[];
+ list.innerHTML=firms.map(f=>'<button type="button" class="btn btn-light btn-sm" data-order-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(search?'<span class="muted">Eşleşen cari bulunamadı.</span>':'');
+ const selected=firmById(chosen);
+ el('orderFirmSelected').textContent=selected?'Seçilen cari: '+(selected.code||'')+' - '+selected.name:'Cari seçilmedi.';
+}
 function renderOrders(){
  if(!currentUser||!hasPermission('orders'))return;
  const beforeFirm=el('orderFirm').value,beforeProduct=el('orderProductPicker').value;
@@ -1959,6 +1968,9 @@ function renderOrders(){
  fillSelect('orderFirm',firms,'Cari / firma seçiniz');
  fillSelect('orderProductPicker',products,'Ürün seçiniz');
  if(firms.some(x=>x.id===beforeFirm))el('orderFirm').value=beforeFirm;
+ const chosenFirm=firmById(el('orderFirm').value);
+ if(chosenFirm&&document.activeElement!==el('orderFirmSearch'))el('orderFirmSearch').value=(chosenFirm.code||'')+' - '+chosenFirm.name;
+ renderOrderFirmMatches();
  if(products.some(x=>x.id===beforeProduct))el('orderProductPicker').value=beforeProduct;
  refreshOrderProductStock();renderOrderSuggestions();
  if(!el('orderDate').value)el('orderDate').value=localDateTimeValue().slice(0,10);
@@ -3142,7 +3154,9 @@ el('productTable').addEventListener('change',e=>{
 });
 el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
 el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
-el('orderFirm').addEventListener('change',()=>{applySelectedFirmDiscount();renderOrderSuggestions()});
+el('orderFirm').addEventListener('change',()=>{applySelectedFirmDiscount();renderOrderSuggestions();renderOrderFirmMatches()});
+el('orderFirmSearch').addEventListener('input',()=>{el('orderFirm').value='';applySelectedFirmDiscount();renderOrderSuggestions();renderOrderFirmMatches()});
+el('orderFirmMatches').addEventListener('click',e=>{const b=e.target.closest('[data-order-firm]');if(!b)return;const firm=firmById(b.dataset.orderFirm);if(!firm)return;el('orderFirm').value=firm.id;el('orderFirmSearch').value=(firm.code||'')+' - '+firm.name;el('orderFirm').dispatchEvent(new Event('change',{bubbles:true}));renderOrderFirmMatches()});
 el('orderSuggestionItems').addEventListener('click',e=>{const btn=e.target.closest('[data-suggest-product]');if(btn)addSuggestedProduct(btn.dataset.suggestProduct)});
 el('orderApproveWarehouse').addEventListener('change',renderOrderApprovalPreview);
 el('orderProductPicker').addEventListener('change',refreshOrderProductStock);
