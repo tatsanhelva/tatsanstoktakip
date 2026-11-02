@@ -3156,12 +3156,26 @@ function renderBizReport(){
  el('bizDebtTotal').textContent=firmMoney(Math.max(0,outstanding));
  el('bizDebtBalance').textContent=firmMoney(outstanding);
  const fmtDate=x=>esc(String(x||'').slice(0,10));
+ // Her stok çıkış grubu raporda bir satırdır; ürün satırları detayda açılır.
+ const exitGroups=new Map();
+ for(const m of D.exits){
+  const key=m.groupId||m.id;
+  if(!exitGroups.has(key))exitGroups.set(key,[]);
+  exitGroups.get(key).push(m);
+ }
+ const exitBatches=[...exitGroups.values()];
+ const debtDetails=[];
  const records={
-  exit:{headers:['Tarih','Firma','Ürün','Depo','Miktar','Kullanıcı','Belge'],rows:D.exits.map(x=>[fmtDate(x.date),esc(x.firmName||firmById(x.firmId)?.name||'-'),esc(productById(x.productId)?.name||'-'),esc(warehouseById(x.warehouseId)?.name||'-'),esc(formatMovementQuantity(x,true)),esc(x.userName||'-'),esc(x.doc||'')])},
+  exit:{headers:['Tarih','Firma','Ürün Sayısı','Depo','Toplam Çıkış','Kullanıcı','Belge'],rows:exitBatches.map(batch=>{
+   const x=batch[0];
+   return [fmtDate(x.date),esc(x.firmName||firmById(x.firmId)?.name||'-'),esc(String(batch.length)+' ürün'),
+    esc(warehouseById(x.warehouseId)?.name||'-'),esc(batch.map(m=>formatMovementQuantity(m,true)).join(' / ')),
+    esc(x.userName||'-'),esc(x.doc||'')];
+  })},
   purchase:{headers:['Tarih','Tedarikçi','Ürün','KG','KDV Hariç','KDV %','KDV','Toplam'],rows:D.purchases.map(x=>[fmtDate(x.date),esc(x.firmName),esc(x.productName),esc(String(x.kg)),firmMoney(x.netCents),esc(String(x.vatRate)),firmMoney(x.vatCents),firmMoney(x.grossCents)])},
   guest:{headers:['Tarih','Müşteri','Ödeme','Tahsilat','Ürünler'],rows:D.guests.map(x=>[fmtDate(x.date),esc(x.customerName||'Perakende'),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc((x.items||[]).map(i=>(productById(i.productId)?.name||'-')+' '+i.inputQuantity+' '+i.unit).join(', '))])},
   debt:{headers:['Tarih','Cari','Borç Tutarı','Belge','Kaynak / Durum'],rows:(()=>{
-    const actual=D.debts.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),firmMoney(x.amountCents),esc(x.doc||''),esc(x.stockBatchId?'Stok çıkışı · Kaydedildi':x.orderId?'Sipariş · Kaydedildi':'Manuel · Kaydedildi')]);
+    const actual=D.debts.map(x=>{debtDetails.push(x);return [fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),firmMoney(x.amountCents),esc(x.doc||''),esc(x.stockBatchId?'Stok çıkışı · Kaydedildi':x.orderId?'Sipariş · Kaydedildi':'Manuel · Kaydedildi')];});
     const seen=new Set((db.firmLedger||[]).filter(x=>x.type==='DEBT'&&x.stockBatchId).map(x=>x.stockBatchId));
     const groups=new Map();
     for(const m of D.exits){
@@ -3171,6 +3185,7 @@ function renderBizReport(){
     }
     for(const group of groups.values()){
       const m=group[0];
+      debtDetails.push({missing:true,stockBatchId:m.groupId,firmId:m.firmId,date:m.date,doc:m.doc});
       actual.push([fmtDate(m.date),esc(m.firmName||firmById(m.firmId)?.name||'-'),'—',esc(m.doc||''),'<span class="badge b-orange">Cari borç kaydı eksik</span>']);
     }
     return actual;
@@ -3180,11 +3195,13 @@ function renderBizReport(){
   user:{headers:['Tarih','Kullanıcı','Modül','İşlem','Detay'],rows:D.users.map(x=>[fmtDate(x.date),esc(displayTurkishText(x.userName||'')),esc(displayTurkishText(x.module||'')),esc(displayTurkishText(x.action||x.act||'')),esc(displayTurkishText(x.detail||''))])}
  };
  const R=records[bizTab]||records.exit;bizVisibleHeaders=R.headers;bizVisibleRows=R.rows;
+ bizVisibleDetailRefs=bizTab==='exit'?exitBatches:bizTab==='debt'?debtDetails:null;
  el('bizHead').innerHTML='<tr>'+[...R.headers,'İşlem'].map(v=>'<th>'+esc(v)+'</th>').join('')+'</tr>';
  el('bizRows').innerHTML=R.rows.length?R.rows.map((row,i)=>'<tr>'+row.map(c=>'<td>'+c+'</td>').join('')+'<td><button type="button" class="btn btn-light btn-sm" data-biz-view="'+i+'">Görüntüle</button></td></tr>').join(''):'<tr><td colspan="'+(R.headers.length+1)+'" class="empty">Bu filtrelerde kayıt bulunamadı.</td></tr>';
  el('bizCount').textContent='Gösterilen kayıt: '+R.rows.length;
  el('bizTabs').querySelectorAll('[data-biz-tab]').forEach(b=>b.className='btn btn-sm '+(b.dataset.bizTab===bizTab?'btn-primary':'btn-light'));
 }
+let bizVisibleDetailRefs=null;
 function viewBizReportItem(index){
  if(!Number.isInteger(index)||index<0||index>=bizVisibleRows.length)return notify('Rapor kaydı bulunamadı.',true);
  const row=bizVisibleRows[index],headers=bizVisibleHeaders;
@@ -3193,13 +3210,33 @@ function viewBizReportItem(index){
  const clean=x=>String(x??'').replace(/<[^>]*>/g,'').replace(/&amp;/g,'&').replace(/&lt;/g,'<').replace(/&gt;/g,'>');
  let html='<table style="min-width:0"><tbody>'+headers.map((h,i)=>'<tr><th style="white-space:normal">'+esc(h)+'</th><td style="white-space:normal">'+esc(clean(row[i]))+'</td></tr>').join('')+'</tbody></table>';
  const sources=bizData(),items={exit:sources.exits,purchase:sources.purchases,guest:sources.guests,payment:sources.payments,expense:sources.expenses,user:sources.users,debt:sources.debts};
- const record=items[bizTab]?.[index];
+ const group=bizTab==='exit'?bizVisibleDetailRefs?.[index]:null;
+ const record=bizTab==='exit'?group?.[0]:bizTab==='debt'?bizVisibleDetailRefs?.[index]:items[bizTab]?.[index];
  if(record){
-  const extra=[['Kayıt Kimliği',record.id],['İşlem Tarihi',record.date],['Oluşturulma',record.createdAt],['Kaydeden',record.userName],['Açıklama',record.note||record.detail],['Belge No',record.doc],['İşlem Grubu',record.groupId||record.stockBatchId||record.orderId]];
+  const extra=[['İşlem Tarihi',record.date],['Oluşturulma',record.createdAt],['Kaydeden',record.userName],['Açıklama',record.note||record.detail],['Belge No',record.doc]];
   html+='<h4>Ek Bilgiler</h4><table style="min-width:0"><tbody>'+extra.filter(([k,v])=>v!==undefined&&v!==null&&v!=='').map(([k,v])=>'<tr><th>'+esc(k)+'</th><td style="white-space:normal">'+esc(displayTurkishText(v))+'</td></tr>').join('')+'</tbody></table>';
-  if(bizTab==='exit'&&record.groupId){
-   const batch=(db.movements||[]).filter(m=>m.type==='CIKIS'&&m.groupId===record.groupId);
+  if(bizTab==='exit'&&record){
+   const batch=record.groupId?(db.movements||[]).filter(m=>m.type==='CIKIS'&&m.groupId===record.groupId):[record];
    html+='<h4>Aynı Çıkıştaki Ürünler</h4><table style="min-width:0"><thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th></tr></thead><tbody>'+batch.map(m=>'<tr><td>'+esc(productById(m.productId)?.name||m.productId)+'</td><td>'+esc(m.inputQuantity??m.quantity)+'</td><td>'+esc(m.inputUnit||'Koli')+'</td></tr>').join('')+'</tbody></table>';
+  }
+  if(bizTab==='debt'){
+   const movements=record.stockBatchId?(db.movements||[]).filter(m=>m.type==='CIKIS'&&m.groupId===record.stockBatchId):
+    record.orderId?(db.movements||[]).filter(m=>m.type==='CIKIS'&&m.orderId===record.orderId):[];
+   const order=record.orderId?(db.orders||[]).find(o=>o.id===record.orderId):null;
+   const products=movements.length?movements.map(m=>({
+    name:productById(m.productId)?.name||m.productId,
+    amount:m.inputQuantity??m.quantity,unit:m.inputUnit||'Koli'
+   })):Array.isArray(order?.lines)?order.lines.map(l=>({
+    name:l.productName||productById(l.productId)?.name||'-',
+    amount:l.quantity,unit:l.displayUnit||l.unit||'Koli'
+   })):Array.isArray(record.lines)?record.lines.map(l=>({
+    name:productById(l.productId)?.name||l.productId,
+    amount:l.quantity,unit:l.unit||'Koli'
+   })):[];
+   html+='<h4>Alınan Ürünler</h4>'+(products.length?
+    '<div class="table-wrap"><table style="min-width:0"><thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th></tr></thead><tbody>'+
+    products.map(p=>'<tr><td>'+esc(p.name)+'</td><td>'+esc(p.amount)+'</td><td>'+esc(p.unit)+'</td></tr>').join('')+'</tbody></table></div>':
+    '<p class="muted">Bu cari hareketinde ürün detayı bulunmuyor.</p>');
   }
   if(bizTab==='guest'&&Array.isArray(record.items)){
    html+='<h4>Satılan Ürünler</h4><table style="min-width:0"><tbody>'+record.items.map(item=>'<tr><td>'+esc(productById(item.productId)?.name||item.productId)+'</td><td>'+esc(item.inputQuantity??item.quantity)+' '+esc(item.unit||'')+'</td></tr>').join('')+'</tbody></table>';
