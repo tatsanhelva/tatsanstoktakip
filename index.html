@@ -3348,7 +3348,7 @@ function clearAllAuditLogs(){
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
 function renderPurchaseFirms(){
- const q=firmKey(el('purchaseFirmSearch').value),matches=q?db.firms.filter(f=>f.active!==false&&f.firmType!=='customer'&&firmKey((f.code||'')+' '+f.name).includes(q)).slice(0,20):[];
+ const q=firmKey(el('purchaseFirmSearch').value),matches=q?db.firms.filter(f=>f.active!==false&&['supplier','both'].includes(f.firmType)&&firmKey((f.code||'')+' '+f.name).includes(q)).slice(0,20):[];
  el('purchaseFirmMatches').innerHTML=matches.map(f=>'<button type="button" class="btn btn-light btn-sm" data-purchase-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(q?'<span class="muted">Firma bulunamadı.</span>':'');
  const firm=firmById(el('purchaseFirmId').value);
  el('purchaseFirmChosen').textContent=firm?'Seçilen: '+firm.name:'Tedarikçi seçilmedi.';
@@ -3371,7 +3371,7 @@ function savePurchase(e){
  e.preventDefault();if(!requirePermission('purchasing'))return;
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
  const firm=firmById(el('purchaseFirmId').value),productName=el('purchaseProduct').value.trim(),kg=Number(el('purchaseKg').value),amount=Number(el('purchaseAmount').value),vatRate=Number(el('purchaseVat').value),date=el('purchaseDate').value;
- if(!firm||firm.active===false||firm.firmType==='customer')return notify('Geçerli tedarikçi seçin.',true);
+ if(!firm||firm.active===false||!['supplier','both'].includes(firm.firmType))return notify('Yalnızca tedarikçi türündeki carilerle satın alma kaydedilebilir.',true);
  if(!productName||!Number.isFinite(kg)||kg<=0||kg>100000000||!Number.isFinite(amount)||amount<=0||amount>999999999999||!Number.isFinite(vatRate)||vatRate<0||vatRate>100)return notify('Ürün, KG, tutar veya KDV geçersiz.',true);
  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
  const netCents=Math.round(amount*100),vatCents=Math.round(netCents*vatRate/100);
