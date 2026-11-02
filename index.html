@@ -3035,7 +3035,7 @@ function bizFilter(){
 function bizData(){
  const F=bizFilter();
  const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&F.date(x.date)&&F.firm(x.firmId,x.firmName)&&F.product(x.productId,productById(x.productId)?.name)&&F.warehouse(x.warehouseId));
- const purchases=(db.purchases||[]).filter(x=>F.date(x.date)&&F.firm(x.firmId,x.firmName)&&(F.p==='all'||firmKey(productById(F.p)?.name)===firmKey(x.productName))&&F.w==='all');
+ const purchases=(db.purchases||[]).filter(x=>F.date(x.date)&&F.firm(x.firmId,x.firmName)&&(F.p==='all'||(F.p.startsWith('purchase:')?firmKey(F.p.slice(9))===firmKey(x.productName):firmKey(productById(F.p)?.name)===firmKey(x.productName)))&&F.w==='all');
  const guests=(db.guestSales||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.warehouse(x.warehouseId)&&(F.p==='all'||(x.items||[]).some(i=>i.productId===F.p)));
  const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
  const expenses=(db.expenses||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
