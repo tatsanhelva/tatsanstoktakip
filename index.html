@@ -212,7 +212,7 @@
  <div class="card-head"><h3>Cari Hesap / Tahsilat / Peşin Satış / Gider</h3><span class="muted">Borç ve ödemeler ayrı takip edilir.</span></div>
  <form id="firmLedgerForm"><div class="form-grid cols-3">
   <div class="field"><label>Müşteri Türü</label><select id="ledgerCustomerType"><option value="registered">Kayıtlı Cari</option><option value="guest">Peşin Satış / Misafir Müşteri</option><option value="expense">Gider</option></select></div>
-  <div class="field" id="ledgerFirmField"><label>Cari / Firma *</label><input id="firmLedgerSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu yazın..." aria-controls="firmLedgerMatches"><input id="firmLedgerFirm" type="hidden"><div id="firmLedgerMatches" class="table-wrap" style="max-height:170px;overflow:auto;margin-top:5px"></div><small id="firmLedgerSelected" class="muted">Henüz cari seçilmedi.</small></div>
+  <div class="field" id="ledgerFirmField"><label>Cari / Firma *</label><input id="firmLedgerSearch" type="search" autocomplete="off" placeholder="Firma adı veya kodu yazın..." aria-controls="firmLedgerMatches"><input id="firmLedgerFirm" type="hidden"><div id="firmLedgerMatches" class="table-wrap" style="max-height:170px;overflow:auto;margin-top:5px"></div><small id="firmLedgerSelected" class="muted">Henüz cari seçilmedi.</small><div id="firmLedgerBalance" class="inline-info" style="margin-top:8px">Cari seçildiğinde borç gösterilir.</div></div>
   <div class="field" id="ledgerExpenseField" hidden><label>Gider Açıklaması *</label><input id="ledgerExpenseDescription" list="expenseDescriptionSuggestions" autocomplete="off" maxlength="200" placeholder="Örn. Nakliye, yakıt, temizlik"></div>
   <div class="field" id="ledgerGuestField" hidden><label>Misafir Müşteri Adı (İsteğe bağlı)</label><input id="ledgerGuestName" maxlength="120" placeholder="Perakende Müşteri"></div>
   <div class="field" id="ledgerTransactionField"><label>İşlem *</label><select id="firmLedgerType"><option value="DEBT">Borç Ekle (+)</option><option value="PAYMENT">Tahsilat (-)</option></select></div>
@@ -2680,12 +2680,20 @@ function renderGuestSales(){
  el('guestSalesRows').innerHTML=rows.length?rows.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.customerName||'Perakende Müşteri')+'</td><td>'+esc({CASH:'Nakit',POS:'POS',TRANSFER:'Havale/EFT'}[x.paymentMethod]||'-')+'</td><td>'+firmMoney(x.amountCents)+'</td><td>'+esc(x.userName||'-')+'</td><td><button type="button" class="btn btn-light btn-sm" data-guest-action="view" data-guest-id="'+esc(x.id)+'">Görüntüle</button> <button type="button" class="btn btn-light btn-sm" data-guest-action="edit" data-guest-id="'+esc(x.id)+'">Düzenle</button> <button type="button" class="btn btn-danger btn-sm" data-guest-action="delete" data-guest-id="'+esc(x.id)+'">Sil</button></td></tr>').join(''):'<tr><td colspan="6" class="empty">Peşin satış kaydı yok.</td></tr>';
 }
 function renderLedgerFirmMatches(){
- const input=el('firmLedgerSearch'),list=el('firmLedgerMatches'),selected=el('firmLedgerFirm').value;
- const query=firmKey(input.value);
- const matches=query?db.firms.filter(f=>firmKey(f.code+' '+f.name).includes(query)).slice(0,20):[];
- list.innerHTML=matches.map(f=>'<button type="button" class="btn btn-light btn-sm" data-ledger-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(query?'<span class="muted">Eşleşen firma bulunamadı.</span>':'');
- const firm=firmById(selected);
- el('firmLedgerSelected').textContent=firm?'Seçilen cari: '+(firm.code||'')+' - '+firm.name:'Henüz cari seçilmedi.';
+ const input=el('firmLedgerSearch'),list=el('firmLedgerMatches'),selected=el('firmLedgerFirm').value,
+  firm=firmById(selected),query=firmKey(input.value);
+ const label=firm?(firm.code||'')+' - '+firm.name:'';
+ const exact=!!firm&&(firmKey(input.value)===firmKey(label)||firmKey(input.value)===firmKey(firm.name));
+ const matches=!exact&&query?db.firms.filter(f=>firmKey((f.code||'')+' '+f.name).includes(query)).slice(0,20):[];
+ list.innerHTML=matches.map(f=>'<button type="button" class="btn btn-light btn-sm" data-ledger-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(!exact&&query&&!firm?'<span class="muted">Eşleşen firma bulunamadı.</span>':'');
+ list.style.display=matches.length||(!exact&&query&&!firm)?'':'none';
+ el('firmLedgerSelected').textContent=firm?'Seçilen cari: '+label:'Henüz cari seçilmedi.';
+ const summary=el('firmLedgerBalance');if(!summary)return;
+ if(!firm){summary.textContent='Cari seçildiğinde güncel toplam borcu gösterilir.';return}
+ const debt=firmBalanceCents(firm.id),rows=(db.firmLedger||[]).filter(x=>x.firmId===firm.id);
+ const totalDebt=rows.filter(x=>x.type==='DEBT').reduce((s,x)=>s+Number(x.amountCents||0),0);
+ const totalPayment=rows.filter(x=>x.type==='PAYMENT').reduce((s,x)=>s+Number(x.amountCents||0),0);
+ summary.innerHTML='<b>Güncel bakiye: '+esc(firmMoney(debt))+'</b> · Toplam borç: '+esc(firmMoney(totalDebt))+' · Tahsil edilen: '+esc(firmMoney(totalPayment))+(debt<0?' · Cari alacaklı':'');
 }
 function saveFirmLedger(e){
  e.preventDefault();if(!isAdmin())return notify('Cari borçlarını yalnızca yönetici kaydedebilir.',true);
