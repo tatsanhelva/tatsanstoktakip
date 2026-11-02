@@ -364,6 +364,34 @@
 </div></div>
 <div class="movement-warning" data-admin-only style="margin-bottom:12px"><b>Önemli:</b> Tüm Hareketleri Sil işlemi geçmiş giriş, çıkış, transfer ve sayım kayıtlarını temizler; mevcut depo stok miktarlarına, ürünlere, carilere, siparişlere ve işlem denetim kayıtlarına dokunmaz. Geçmişe dayalı raporlar sıfırlanır. Önce JSON yedeği indirilir.</div><div class="filter-row wide"><div class="field"><label>İşlem</label><select id="movementType"><option value="all">Tümü</option><option value="GIRIS">Stok Girişi</option><option value="CIKIS">Stok Çıkışı</option><option value="TRANSFER">Transfer</option><option value="SAYIM">Sayım</option></select></div><div class="field"><label>Depo</label><select id="movementWarehouse"></select></div><div class="field"><label>Ürün</label><select id="movementProduct"></select></div><div class="field"><label>Firma</label><select id="movementFirm"></select></div><div class="field"><label>Kullanıcı</label><select id="movementUser"></select></div><div class="field"><label>Başlangıç</label><input id="movementFrom" type="date"/></div><div class="field"><label>Bitiş</label><input id="movementTo" type="date"/></div></div><div class="movement-warning" data-admin-only><b>Yönetici düzeltme alanı:</b> Hatalı giriş, çıkış, transfer veya sayım kaydını düzenlediğinizde stok bakiyeleri ve sonraki hareketlerin önceki/sonraki değerleri otomatik yeniden hesaplanır.</div><div class="table-wrap wide-table"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Depo</th><th>Ürün</th><th>Firma</th><th class="num">Miktar</th><th class="num">Önceki</th><th class="num">Sonraki</th><th>Kullanıcı</th><th>Belge</th><th>Detay</th><th data-admin-column>Yönetici İşlemi</th></tr></thead><tbody id="movementTable"></tbody></table></div></div></div>
 <div class="page" id="page-reports"> 
+<div class="card" id="historicalOverview">
+<div class="card-head"><h3>Tarihsel İşlem Özeti</h3><span class="muted">Satış, alış, borç, tahsilat ve sevkiyatlar tek ekranda</span></div>
+<div class="report-filter-grid">
+<div class="field"><label>Başlangıç</label><input id="historyFrom" type="date"></div>
+<div class="field"><label>Bitiş</label><input id="historyTo" type="date"></div>
+<div class="field"><label>Cari / Firma</label><select id="historyFirm"><option value="all">Tüm Firmalar</option></select></div>
+</div>
+<div class="actions" style="flex-wrap:wrap">
+<button type="button" class="btn btn-light btn-sm" data-history-period="today">Bugün</button>
+<button type="button" class="btn btn-light btn-sm" data-history-period="week">Haftalık</button>
+<button type="button" class="btn btn-light btn-sm" data-history-period="month">Aylık</button>
+<button type="button" class="btn btn-light btn-sm" data-history-period="year">Yıllık</button>
+<button type="button" class="btn btn-light btn-sm" id="historyReset">Tüm Tarihler</button>
+<button type="button" class="btn btn-ok btn-sm" id="historyExport">CSV İndir</button>
+</div>
+<div class="grid stats">
+<div class="stat"><div class="label">Satış / Oluşan Cari Borç</div><div class="value" id="historySales">0 ₺</div></div>
+<div class="stat"><div class="label">Satın Alma</div><div class="value" id="historyPurchase">0 ₺</div></div>
+<div class="stat"><div class="label">Cari Tahsilat</div><div class="value" id="historyPayment">0 ₺</div></div>
+<div class="stat"><div class="label">Kalan Cari Alacak</div><div class="value" id="historyBalance">0 ₺</div></div>
+<div class="stat"><div class="label">Peşin Satış</div><div class="value" id="historyGuest">0 ₺</div></div>
+<div class="stat"><div class="label">Gider</div><div class="value" id="historyExpense">0 ₺</div></div>
+<div class="stat"><div class="label">Çıkan Ürün</div><div class="value" id="historyExitCount">0</div></div>
+</div>
+<div class="report-note">Cari satışlar kayıtlı borç hareketlerinden hesaplanır. Dönem bakiyesi seçilen tarihlerdeki borç eksi tahsilattır; önceki dönemden devreden bakiyeyi içermez. Alış ve giderler kâr hesabı değildir. Borç kaydı eksik çıkışlar finansal toplama eklenmez.</div>
+<div class="table-wrap"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Firma / Cari</th><th>Ürün / Açıklama</th><th>Miktar</th><th>Giriş / Alacak (₺)</th><th>Çıkış / Borç (₺)</th></tr></thead><tbody id="historyRows"></tbody></table></div>
+<p class="muted" id="historyCount"></p>
+</div>
 <div class="card"><div class="card-head"><h3>İşletme Rapor Merkezi</h3><span class="muted">İlk aşama • Tüm tutarlar kayıtlı işlem verilerinden hesaplanır.</span></div>
 <div class="report-filter-grid">
 <div class="field"><label>Başlangıç</label><input id="bizFrom" type="date"></div><div class="field"><label>Bitiş</label><input id="bizTo" type="date"></div>
@@ -3280,7 +3308,72 @@ function exportBizCSV(){
  const csv='\uFEFF'+[bizVisibleHeaders,...bizVisibleRows].map(row=>row.map(escCsv).join(';')).join('\r\n');
  downloadFile('Tatsan-Rapor-'+bizTab+'.csv',csv,'text/csv;charset=utf-8');
 }
-function renderReports(){renderBizReport();const rows=allStockRows(),total=rows.reduce((sum,x)=>sum+x.value,0),critical=rows.filter(x=>x.current>0&&x.current<=num(x.product.minStock)),zero=rows.filter(x=>x.current<=0),soon=[...db.movements].filter(m=>m.type==='GIRIS'&&m.expiry).map(m=>({...m,days:Math.ceil((new Date(m.expiry+'T23:59:59')-new Date())/86400000)})).filter(m=>m.days>=0&&m.days<=90).sort((a,b)=>a.days-b.days),r=generalReportData();
+let historyVisibleRows=[];
+function historyDate(d){return String(d||'').slice(0,10)}
+function historyDateLocal(d){return [d.getFullYear(),String(d.getMonth()+1).padStart(2,'0'),String(d.getDate()).padStart(2,'0')].join('-')}
+function applyHistoryPeriod(period){
+ const today=new Date(),start=new Date(today.getFullYear(),today.getMonth(),today.getDate());
+ if(period==='week')start.setDate(start.getDate()-(start.getDay()+6)%7);
+ else if(period==='month')start.setDate(1);
+ else if(period==='year')start.setMonth(0,1);
+ else if(period!=='today')return;
+ el('historyFrom').value=historyDateLocal(start);el('historyTo').value=historyDateLocal(today);renderHistoricalOverview();
+}
+function renderHistoricalOverview(){
+ const f=el('historyFirm'),old=f.value;
+ f.innerHTML='<option value="all">Tüm Firmalar</option>'+db.firms.map(x=>'<option value="'+esc(x.id)+'">'+esc((x.code||'')+' - '+x.name)+'</option>').join('');
+ if(db.firms.some(x=>x.id===old))f.value=old;
+ const from=el('historyFrom').value,to=el('historyTo').value,firmId=f.value;
+ const pass=(date,id)=>{const d=historyDate(date);return (!from||d>=from)&&(!to||d<=to)&&(firmId==='all'||id===firmId)};
+ const sums={sales:0,purchase:0,payment:0,guest:0,expense:0,exits:0},rows=[];
+ const add=(date,kind,firm,desc,quantity,incoming,outgoing)=>rows.push([historyDate(date),kind,firm,desc,quantity,incoming,outgoing]);
+ for(const x of db.firmLedger||[]){
+  if(!pass(x.date,x.firmId))continue;
+  const amount=Number(x.amountCents||0),name=firmById(x.firmId)?.name||'-';
+  if(x.type==='DEBT'){sums.sales+=amount;add(x.date,'Cari Borç / Satış',name,x.note||x.doc||'Cari borç','',amount,0)}
+  if(x.type==='PAYMENT'){sums.payment+=amount;add(x.date,'Cari Tahsilat',name,x.note||x.doc||'Tahsilat','',0,amount)}
+ }
+ for(const x of db.purchases||[]){
+  if(!pass(x.date,x.firmId))continue;
+  const amount=Number(x.grossCents||0);sums.purchase+=amount;
+  add(x.date,'Satın Alma',x.firmName||firmById(x.firmId)?.name||'-',x.productName||'-',String(x.kg??'')+' kg',0,amount);
+ }
+ for(const x of db.guestSales||[]){
+  if(!pass(x.date,null))continue;
+  const amount=Number(x.amountCents||0);sums.guest+=amount;
+  add(x.date,'Peşin Satış',x.customerName||'Perakende', (x.items||[]).map(i=>productById(i.productId)?.name||i.productId).join(', '), '',amount,0);
+ }
+ for(const x of db.expenses||[]){
+  if(!pass(x.date,null))continue;
+  const amount=Number(x.amountCents||0);sums.expense+=amount;
+  add(x.date,'Gider','-',x.description||'-','',0,amount);
+ }
+ const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&pass(x.date,x.firmId||null));
+ const groups=new Map();
+ for(const x of exits){const id=x.groupId||x.id;if(!groups.has(id))groups.set(id,[]);groups.get(id).push(x)}
+ sums.exits=exits.length;
+ for(const batch of groups.values()){
+  const x=batch[0],description=batch.map(m=>(productById(m.productId)?.name||m.productId)+' ('+formatMovementQuantity(m,true)+')').join(', ');
+  add(x.date,'Stok Çıkışı',x.firmName||firmById(x.firmId)?.name||'-',description,batch.length+' ürün',0,0);
+ }
+ rows.sort((a,b)=>b[0].localeCompare(a[0])||a[1].localeCompare(b[1]));
+ historyVisibleRows=rows;
+ el('historySales').textContent=firmMoney(sums.sales);
+ el('historyPurchase').textContent=firmMoney(sums.purchase);
+ el('historyPayment').textContent=firmMoney(sums.payment);
+ el('historyBalance').textContent=firmMoney(sums.sales-sums.payment);
+ el('historyGuest').textContent=firmMoney(sums.guest);
+ el('historyExpense').textContent=firmMoney(sums.expense);
+ el('historyExitCount').textContent=String(sums.exits);
+ el('historyRows').innerHTML=rows.length?rows.map(r=>'<tr>'+r.map((v,i)=>'<td>'+esc(i>=5?(v?firmMoney(v):'—'):v||'—')+'</td>').join('')+'</tr>').join(''):'<tr><td colspan="7" class="empty">Seçili aralıkta kayıt yok.</td></tr>';
+ el('historyCount').textContent=rows.length+' işlem grubu / satır gösteriliyor.';
+}
+function exportHistoricalOverview(){
+ const headers=['Tarih','İşlem','Firma','Açıklama','Miktar','Giriş / Alacak (Kuruş)','Çıkış / Borç (Kuruş)'];
+ const csv='\uFEFF'+[headers,...historyVisibleRows].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+ downloadFile('Tatsan-Tarihsel-Islem-Ozeti.csv',csv,'text/csv;charset=utf-8');
+}
+function renderReports(){renderBizReport();renderHistoricalOverview();const rows=allStockRows(),total=rows.reduce((sum,x)=>sum+x.value,0),critical=rows.filter(x=>x.current>0&&x.current<=num(x.product.minStock)),zero=rows.filter(x=>x.current<=0),soon=[...db.movements].filter(m=>m.type==='GIRIS'&&m.expiry).map(m=>({...m,days:Math.ceil((new Date(m.expiry+'T23:59:59')-new Date())/86400000)})).filter(m=>m.days>=0&&m.days<=90).sort((a,b)=>a.days-b.days),r=generalReportData();
   el('reportEntryQty').textContent=qty(r.entry);el('reportExitQty').textContent=qty(r.exit);el('reportTransferInQty').textContent=qty(r.transferIn);el('reportTransferOutQty').textContent=qty(r.transferOut);el('reportEntrySub').textContent=`Koli eşdeğeri • ${qty(r.entryPieces)} adet`;el('reportExitSub').textContent=`Koli eşdeğeri • ${qty(r.exitPieces)} adet`;el('reportTransferInSub').textContent=`Koli eşdeğeri • ${qty(r.transferInPieces)} adet`;el('reportTransferOutSub').textContent=`Koli eşdeğeri • ${qty(r.transferOutPieces)} adet`;el('reportRangeLabel').textContent=`${new Date(r.range.from+'T00:00:00').toLocaleDateString('tr-TR')} - ${new Date(r.range.to+'T00:00:00').toLocaleDateString('tr-TR')}`;
   el('reportProductTable').innerHTML=r.products.length?r.products.map(x=>{const net=x.entry-x.exit+x.transferIn-x.transferOut+x.countDiff,p=x.product;return `<tr><td>${esc(p.code)}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.category)}</td><td class="num">${formatStockAmount(p.id,x.entry)}</td><td class="num">${formatStockAmount(p.id,x.exit)}</td><td class="num">${formatStockAmount(p.id,x.transferIn)}</td><td class="num">${formatStockAmount(p.id,x.transferOut)}</td><td class="num">${formatStockAmount(p.id,x.countDiff)}</td><td class="num"><b>${formatStockAmount(p.id,net)}</b></td></tr>`}).join(''):'<tr><td colspan="9" class="empty">Seçilen tarih aralığında ürün hareketi yok.</td></tr>';
   el('reportFirmTable').innerHTML=r.firms.length?r.firms.map(x=>`<tr><td><b>${esc(x.firm)}</b></td><td>${esc(x.product.code)}</td><td>${esc(x.product.name)}</td><td class="num"><b>${formatStockAmount(x.product.id,x.qty)}</b></td><td class="num">${qty(x.pieces)}</td><td class="num">${x.count}</td><td>${dt(x.lastDate)}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">Seçilen tarih aralığında firmaya yapılan stok çıkışı yok.</td></tr>';
@@ -3821,6 +3914,10 @@ el('bizTabs').addEventListener('click',e=>{const b=e.target.closest('[data-biz-t
 document.querySelectorAll('[data-biz-period]').forEach(b=>b.addEventListener('click',()=>applyBizPeriod(b.dataset.bizPeriod)));
 el('bizReset').addEventListener('click',()=>{['bizFrom','bizTo'].forEach(id=>el(id).value='');['bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).value='all');renderBizReport()});
 el('bizExport').addEventListener('click',exportBizCSV);
+['historyFrom','historyTo','historyFirm'].forEach(id=>el(id).addEventListener('change',renderHistoricalOverview));
+document.querySelectorAll('[data-history-period]').forEach(b=>b.addEventListener('click',()=>applyHistoryPeriod(b.dataset.historyPeriod)));
+el('historyReset').addEventListener('click',()=>{el('historyFrom').value='';el('historyTo').value='';renderHistoricalOverview()});
+el('historyExport').addEventListener('click',exportHistoricalOverview);
 el('bizRows').addEventListener('click',e=>{const btn=e.target.closest('[data-biz-view]');if(btn)viewBizReportItem(Number(btn.dataset.bizView))});
 el('syncOrderDebtsBtn').addEventListener('click',syncMissingOrderDebts);
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
