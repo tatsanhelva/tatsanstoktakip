@@ -3392,13 +3392,18 @@ function editPurchase(id){
  el('purchaseSubmitBtn').textContent='Satın Almayı Güncelle';el('purchaseCancelEdit').hidden=false;renderPurchaseFirms();purchaseTotals();
  el('purchaseForm').scrollIntoView({behavior:'smooth',block:'start'});
 }
-function deletePurchase(id){
+async function deletePurchase(id){
  if(!requirePermission('deletePurchases'))return;
- if(secureMode&&!isAdmin())return notify('Güvenli sunucuda silme için yönetici oturumu gerekiyor.',true);
- if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
+ if(!secureMode)return notify('Silme için güvenli sunucu gerekli.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
  const p=(db.purchases||[]).find(x=>x.id===id);if(!p)return notify('Kayıt bulunamadı.',true);
- if(!confirm(p.firmName+' / '+p.productName+' satın alma kaydı silinsin mi? Fatura dosyası Drive üzerinden silinmez.'))return;
- db.purchases=db.purchases.filter(x=>x.id!==id);audit('Satın alma silindi','Tedarik',id+' | '+p.firmName+' | '+p.productName);saveDB();notify('Satın alma silindi.');
+ if(!confirm(p.firmName+' / '+p.productName+' satın alma ve PDF fatura kaldırılsın mı?'))return;
+ try{
+  const result=cloudResultCheck(await rpc('purchaseDelete',{purchaseId:id,expectedRevision:cloudState.revision}));
+  if(!result.ok)throw new Error(result.error||'Silinemedi.');
+  await refreshCloudIfIdle(true);
+  notify(result.invoiceDeleted?'Kayıt silindi ve PDF Drive çöp kutusuna taşındı.':'Kayıt silindi; bağlı PDF bulunamadı.');
+ }catch(err){notify('Silme başarısız: '+err.message,true)}
 }
 function renderPurchases(){
  const products=[...new Set((db.purchases||[]).map(p=>String(p.productName||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
