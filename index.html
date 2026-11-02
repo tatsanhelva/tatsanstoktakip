@@ -67,6 +67,9 @@
     .order-table td{vertical-align:middle}
     .order-table td:first-child{white-space:normal;min-width:210px}
     .order-table input,.order-table select{width:100%;min-width:85px;border:1px solid var(--border);border-radius:9px;padding:9px;background:#fff}
+    .order-stock-badges{display:flex;flex-wrap:wrap;gap:5px;margin-top:5px;font-size:11px;color:var(--muted)}
+    .order-stock-badge{padding:3px 6px;border:1px solid var(--border);border-radius:6px;background:var(--card,#fff)}
+    .order-stock-badge.order-stock-empty{color:#a52020}
     .product-price-unit-select{min-width:84px;padding:8px;border:1px solid var(--border);border-radius:8px;background:#fff}
     #productUnitPricePreview{font-weight:700;background:#f5f8fc}
     .order-table .order-quantity{max-width:120px}
@@ -210,7 +213,8 @@
 </div>
 <div class="page" id="page-orders">
 <div class="card">
- <div class="card-head"><h3>Sipariş Formu</h3><span class="muted">Cari seçin, ürün ekleyin ve iskonto hesaplayın.</span></div>
+ <div class="card-head"><h3 id="orderFormTitle">Sipariş Formu</h3><span class="muted">Cari seçin, ürün ekleyin ve iskonto hesaplayın.</span></div>
+<p id="orderEditingNotice" class="muted" hidden>Kaydedilmiş bir siparişi düzenliyorsun. Sadece onaylanmamış siparişler değiştirilebilir.</p>
  <form id="orderForm">
  <div class="form-grid cols-3">
   <div class="field"><label>Sipariş No</label><input id="orderNumber" readonly placeholder="Otomatik oluşturulur"></div>
@@ -219,11 +223,11 @@
   <div class="field full"><label>Not / Açıklama</label><textarea id="orderNotes" rows="2" maxlength="1000" placeholder="Teslimat veya sipariş notu (isteğe bağlı)"></textarea></div>
  </div>
  <div class="order-product-picker">
-  <div class="field" style="flex:1;min-width:220px"><label>Ürün Seç</label><select id="orderProductPicker"></select></div>
+  <div class="field" style="flex:1;min-width:220px"><label>Ürün Seç</label><select id="orderProductPicker"></select><div id="orderProductStockInfo" class="order-stock-badges" role="status" aria-live="polite"></div></div>
   <button type="button" id="orderAddProductButton" class="btn btn-light" onclick="addOrderProduct()">+ Ürün Ekle</button>
  </div>
  <div class="table-wrap" style="max-height:480px;overflow:auto"><table class="order-table">
-  <thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Birim Fiyat (₺)</th><th class="num">Tutar (₺)</th><th>İşlem</th></tr></thead>
+  <thead><tr><th>Ürün / Depo Stokları</th><th>Miktar</th><th>Birim</th><th>Birim Fiyat (₺)</th><th class="num">Tutar (₺)</th><th>İşlem</th></tr></thead>
   <tbody id="orderLineRows"><tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr></tbody>
  </table></div>
  <div class="order-calculations">
@@ -275,7 +279,7 @@
 <div class="form-grid cols-3">
 <div class="field"><label>Çıkış Yapılacak Depo *</label><select id="exitWarehouse" required></select></div>
 <div class="field"><label>Cari / Teslim Edilen Firma *</label><select id="exitFirm" required></select></div>
-<div class="field"><label>Çıkış Nedeni</label><select id="exitReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Diğer</option></select></div>
+<div class="field"><label>Çıkış Nedeni</label><select id="exitReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Değişim</option><option>Diğer</option></select></div>
 <div class="field"><label>Teslim Alan Kişi</label><input id="exitReceiver" placeholder="Cari yetkilisi / teslim alan"></div>
 <div class="field"><label>Belge / İrsaliye No</label><input id="exitDoc"></div>
 <div class="field"><label>İşlem Tarihi</label><input id="exitDate" type="datetime-local"></div>
@@ -324,7 +328,7 @@
 </section>
 </main>
 </div>
-<div class="modal-overlay" id="movementEditModal" aria-hidden="true"><div class="modal-card"><div class="modal-head"><div><h3>Stok Hareketini Düzelt</h3><div class="muted" id="movementEditSubtitle">Yalnızca yönetici kullanabilir.</div></div><button class="modal-close" onclick="closeMovementEditor()" type="button">✕</button></div><div class="movement-warning">Kaydetme veya silme sonrasında tüm stoklar hareket tarih sırasına göre yeniden hesaplanır. İşlem ayrıca kullanıcı işlem kayıtlarına yazılır.</div><form id="movementEditForm"><input id="movementEditId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>İşlem Türü</label><input id="movementEditType" readonly=""/></div><div class="field"><label>İşlem Tarihi *</label><input id="movementEditDate" required="" type="datetime-local"/></div><div class="field"><label>Belge No</label><input id="movementEditDoc"/></div><div class="field"><label id="movementEditWarehouseLabel">Depo *</label><select id="movementEditWarehouse" required=""></select></div><div class="field" id="movementEditTargetWrap" style="display:none"><label>Hedef Depo *</label><select id="movementEditTargetWarehouse"></select></div><div class="field"><label>Ürün *</label><select id="movementEditProduct" required=""></select></div><div class="field"><label>Birim *</label><select id="movementEditUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="movementEditQtyLabel">Miktar (Koli) *</label><input id="movementEditQty" min="0" required="" step="1" inputmode="numeric" type="number"/></div><div class="field" id="movementEditFirmWrap" style="display:none"><label>Teslim Edilen Firma</label><select id="movementEditFirm"></select></div><div class="field" id="movementEditReasonWrap" style="display:none"><label>Çıkış Nedeni</label><select id="movementEditReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Diğer</option></select></div><div class="field" id="movementEditLotWrap" style="display:none"><label>Lot / Parti No</label><input id="movementEditLot"/></div><div class="field" id="movementEditExpiryWrap" style="display:none"><label>Son Kullanma Tarihi</label><input id="movementEditExpiry" type="date"/></div><div class="field full"><label>Açıklama / Detay</label><textarea id="movementEditDetail"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">Düzeltmeyi Kaydet</button><button class="btn btn-light" onclick="closeMovementEditor()" type="button">Vazgeç</button><button class="btn btn-danger" id="movementDeleteBtn" onclick="deleteMovementFromEditor()" type="button">Hareketi Sil</button></div></form></div></div><iframe id="sheetSyncFrame" name="sheetSyncFrame" style="display:none"></iframe><div class="toast" id="toast"></div>
+<div class="modal-overlay" id="movementEditModal" aria-hidden="true"><div class="modal-card"><div class="modal-head"><div><h3>Stok Hareketini Düzelt</h3><div class="muted" id="movementEditSubtitle">Yalnızca yönetici kullanabilir.</div></div><button class="modal-close" onclick="closeMovementEditor()" type="button">✕</button></div><div class="movement-warning">Kaydetme veya silme sonrasında tüm stoklar hareket tarih sırasına göre yeniden hesaplanır. İşlem ayrıca kullanıcı işlem kayıtlarına yazılır.</div><form id="movementEditForm"><input id="movementEditId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>İşlem Türü</label><input id="movementEditType" readonly=""/></div><div class="field"><label>İşlem Tarihi *</label><input id="movementEditDate" required="" type="datetime-local"/></div><div class="field"><label>Belge No</label><input id="movementEditDoc"/></div><div class="field"><label id="movementEditWarehouseLabel">Depo *</label><select id="movementEditWarehouse" required=""></select></div><div class="field" id="movementEditTargetWrap" style="display:none"><label>Hedef Depo *</label><select id="movementEditTargetWarehouse"></select></div><div class="field"><label>Ürün *</label><select id="movementEditProduct" required=""></select></div><div class="field"><label>Birim *</label><select id="movementEditUnit"><option value="Koli" selected>Koli</option><option value="Adet">Adet</option></select></div><div class="field"><label id="movementEditQtyLabel">Miktar (Koli) *</label><input id="movementEditQty" min="0" required="" step="1" inputmode="numeric" type="number"/></div><div class="field" id="movementEditFirmWrap" style="display:none"><label>Teslim Edilen Firma</label><select id="movementEditFirm"></select></div><div class="field" id="movementEditReasonWrap" style="display:none"><label>Çıkış Nedeni</label><select id="movementEditReason"><option>Satış</option><option>Sevkiyat</option><option>Fire</option><option>Numune</option><option>İade</option><option>Değişim</option><option>Diğer</option></select></div><div class="field" id="movementEditLotWrap" style="display:none"><label>Lot / Parti No</label><input id="movementEditLot"/></div><div class="field" id="movementEditExpiryWrap" style="display:none"><label>Son Kullanma Tarihi</label><input id="movementEditExpiry" type="date"/></div><div class="field full"><label>Açıklama / Detay</label><textarea id="movementEditDetail"></textarea></div></div><div class="actions"><button class="btn btn-primary" type="submit">Düzeltmeyi Kaydet</button><button class="btn btn-light" onclick="closeMovementEditor()" type="button">Vazgeç</button><button class="btn btn-danger" id="movementDeleteBtn" onclick="deleteMovementFromEditor()" type="button">Hareketi Sil</button></div></form></div></div><iframe id="sheetSyncFrame" name="sheetSyncFrame" style="display:none"></iframe><div class="toast" id="toast"></div>
 <dialog id="orderApprovalDialog" style="width:min(740px,96vw);max-height:92vh;border:0;border-radius:14px;padding:24px">
  <div class="card-head"><h3>Sipariş Onayı ve Stok Çıkışı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('orderApprovalDialog').close()">Kapat</button></div>
  <p id="orderApproveSummary" class="muted"></p>
@@ -340,7 +344,7 @@
  <div id="orderDetailsHeader" style="margin-bottom:14px"></div>
  <div class="table-wrap"><table style="min-width:650px"><thead><tr><th>Ürün</th><th class="num">Miktar</th><th>Birim</th><th class="num">Birim Fiyat</th><th class="num">Tutar</th></tr></thead><tbody id="orderDetailsLines"></tbody></table></div>
  <div id="orderDetailsTotals" class="order-details-totals"></div>
- <div class="actions"><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
+ <div class="actions"><button type="button" id="orderDetailsEditBtn" class="btn btn-light" onclick="editSavedOrder(orderCurrentlyViewed)">Siparişi Düzenle</button><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
 </dialog>
 <dialog id="firmStatementDialog" style="width:min(900px,96vw);max-height:88vh;border:0;border-radius:14px;padding:22px">
   <div class="card-head"><h3 id="firmStatementTitle">Cari Ekstresi</h3><button class="btn btn-light btn-sm" type="button" onclick="el('firmStatementDialog').close()">Kapat</button></div>
@@ -369,7 +373,7 @@ const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',orders:'Sipariş Formu',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
 const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
-const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)']];
+const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
 const PAGE_PERMISSION=Object.fromEntries(PERMISSION_DEFS.map(([key])=>[key,key]));
 let db=loadDB();
@@ -380,6 +384,9 @@ let syncBootstrapComplete=false;
 let secureMode=false;
 let ordersBackendEnabled=false;
 let orderApprovalBackendEnabled=false;
+let orderEditBackendEnabled=false;
+let orderEditingId=null;
+let orderEditBusy=false;
 let orderApprovalBusy=false;
 let syncPullInProgress=false;
 let syncPushInProgress=false;
@@ -405,7 +412,7 @@ function normalizeDB(x){
   d.firms=Array.isArray(d.firms)?d.firms:[];d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
   d.movements=Array.isArray(d.movements)?d.movements:[];d.auditLogs=Array.isArray(d.auditLogs)?d.auditLogs:[];
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
-  d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true},createdAt:u.createdAt||new Date().toISOString()}});
+  d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true,editOrders:role==='admin'||u.permissions?.editOrders===true},createdAt:u.createdAt||new Date().toISOString()}});
   if(!d._restricted&&!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
   d.movements=d.movements.map(m=>{const inputUnit=['Koli','Adet','Kg','Paket'].includes(m.inputUnit)?m.inputUnit:'Koli';const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
   return d;
@@ -692,6 +699,7 @@ async function initializeApplication(){
       secureMode=true;
       ordersBackendEnabled=probe?.features?.orders===true;
       orderApprovalBackendEnabled=probe?.features?.orderApproval===true;
+      orderEditBackendEnabled=probe?.features?.orderEdit===true;
       if(cloudState.dirty&&localStorage.getItem(DB_KEY))localStorage.setItem('tatsanPreSecureMigrationBackup',localStorage.getItem(DB_KEY));
       localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url:DEFAULT_SERVER_URL}));
       sessionStorage.removeItem('tatsanCloudKey');
@@ -2425,7 +2433,7 @@ function readUserPermissions(){return Object.fromEntries(USER_PERMISSION_DEFS.ma
 function renderUsers(){if(!isAdmin())return;el('userTable').innerHTML=db.users.length?db.users.map(u=>`<tr><td><b>${esc(u.fullName)}</b></td><td>${esc(u.username)}</td><td>${u.role==='admin'?'<span class="badge b-blue">Yönetici</span>':'<span class="badge b-gray">Depo Kullanıcısı</span>'}</td><td>${u.role==='admin'?'Tüm modüller':`${permissionCount(u)} / ${USER_PERMISSION_DEFS.length} modül / işlem`}</td><td>${u.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-red">Pasif</span>'}</td><td>${dt(u.createdAt)}</td><td><button class="btn btn-light btn-sm" onclick="editUser('${u.id}')">Düzenle</button></td></tr>`).join(''):`<tr><td colspan="7" class="empty">Kullanıcı bulunamadı.</td></tr>`}
 async function saveUser(e){e.preventDefault();if(!isAdmin())return;const id=el('userId').value,username=el('userUsername').value.trim().toLowerCase(),fullName=el('userFullName').value.trim(),password=el('userPassword').value,role=el('userRole').value,active=el('userActive').value==='true',permissions=readUserPermissions();if(db.users.some(u=>u.username.toLowerCase()===username&&u.id!==id))return notify('Bu kullanıcı adı zaten kullanılıyor.',true);let obj=id?{...userById(id)}:{id:uid('usr'),createdAt:new Date().toISOString()};if(!id&&!password)return notify('Yeni kullanıcı için şifre zorunludur.',true);if(secureMode&&password&&password.length<8)return notify('Yeni şifre en az 8 karakter olmalıdır.',true);if(id===currentUser.id&&!active)return notify('Kendi kullanıcınızı pasif yapamazsınız.',true);if(obj.role==='admin'&&(role!=='admin'||!active)&&db.users.filter(u=>u.role==='admin'&&u.active!==false&&u.id!==id).length===0)return notify('En az bir aktif yönetici bulunmalıdır.',true);if(role!=='admin'&&!Object.values(permissions).some(Boolean))return notify('Depo kullanıcısına en az bir modül yetkisi vermelisiniz.',true);obj={...obj,username,fullName,role,active,permissions:role==='admin'?Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,true])):permissions};try{if(password)obj.passwordHash=await hashPassword(password)}catch(err){return notify(err.message,true)}if(id)db.users[db.users.findIndex(x=>x.id===id)]=obj;else db.users.push(obj);audit(id?'Kullanıcı güncellendi':'Kullanıcı oluşturuldu','Kullanıcılar',`${obj.fullName} (${obj.username}) - ${obj.role}`);saveDB();resetUserForm();notify('Kullanıcı kaydedildi.')}
 function editUser(id){const u=userById(id);if(!u)return;el('userId').value=u.id;el('userFullName').value=u.fullName;el('userUsername').value=u.username;el('userRole').value=u.role;el('userActive').value=String(u.active!==false);el('userPassword').value='';renderPermissionEditor(u.permissions||{});window.scrollTo({top:0,behavior:'smooth'})}
-function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'])))}
+function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'])))}
 
 function renderSettings(){if(!isAdmin())return;el('settingCompany').value=db.settings.companyName||'Tatsan Stok Takip';el('settingNegative').value=String(!!db.settings.allowNegative);el('settingCurrency').value=db.settings.currency||'TRY';el('settingSheetsUrl').value=DEFAULT_SHEETS_URL;el('settingSheetsToken').value=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;el('settingAutoSync').value='true';el('brandName').textContent=db.settings.companyName||'Tatsan Stok Takip';document.title=(db.settings.companyName||'Tatsan Stok Takip')+' v'+APP_VERSION;el('sheetSyncStatus').innerHTML=`Son gönderme: <b>${db.settings.lastPush?dt(db.settings.lastPush):'Yok'}</b> &nbsp; | &nbsp; Son çekme: <b>${db.settings.lastPull?dt(db.settings.lastPull):'Yok'}</b>`}
 function saveSettings(e){e.preventDefault();db.settings.companyName=el('settingCompany').value.trim()||'Tatsan Stok Takip';db.settings.allowNegative=el('settingNegative').value==='true';db.settings.currency=el('settingCurrency').value;audit('Genel ayarlar güncellendi','Ayarlar',`Firma: ${db.settings.companyName}, negatif stok: ${db.settings.allowNegative?'açık':'kapalı'}`);saveDB();notify('Ayarlar kaydedildi.')}
@@ -2868,7 +2876,7 @@ el('dashboardWarehouseFilter').addEventListener('change',renderDashboard);['repo
 ['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id).addEventListener('change',renderAudit));el('auditSearch').addEventListener('input',renderAudit);
 el('userForm').addEventListener('submit',saveUser);el('userRole').addEventListener('change',updatePermissionEditorState);el('settingsForm').addEventListener('submit',saveSettings);el('sheetsForm').addEventListener('submit',saveSheetsSettings);el('backupInput').addEventListener('change',loadBackup);
 setInterval(()=>el('clock').textContent=new Date().toLocaleString('tr-TR'),1000);el('clock').textContent=new Date().toLocaleString('tr-TR');
-renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'])));resetDefaultUnits();updateCartonPrice();initializeApplication();
+renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'])));resetDefaultUnits();updateCartonPrice();initializeApplication();
 </script>
 </body>
 </html>
