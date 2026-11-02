@@ -182,7 +182,7 @@
   <div class="field"><label>Telefon</label><input id="firmPhone" type="tel" maxlength="50"></div>
   <div class="field"><label>E-posta</label><input id="firmEmail" type="email" maxlength="200"></div>
   <div class="field"><label>Vergi No / TC Kimlik No</label><input id="firmTaxNo" maxlength="11" inputmode="numeric" placeholder="10 veya 11 hane"></div>
-  <div class="field"><label>Varsayılan İskonto (%)</label><input id="firmDiscount" type="text" maxlength="60" inputmode="decimal" autocomplete="off" placeholder="Örn. 20+5"><small class="muted">Sipariş Formu'nda cari seçilince otomatik gelir; sipariş sırasında değiştirilebilir.</small></div>
+  <div class="field" id="firmDiscountField"><label>Varsayılan İskonto (%)</label><input id="firmDiscount" type="text" maxlength="60" inputmode="decimal" autocomplete="off" placeholder="Örn. 20+5"><small class="muted">Sipariş Formu'nda cari seçilince otomatik gelir; sipariş sırasında değiştirilebilir.</small></div>
   <div class="field"><label>Durum</label><select id="firmActive"><option value="true">Aktif</option><option value="false">Pasif</option></select></div>
   <div class="field full"><label>Adres</label><textarea id="firmAddress" rows="2" maxlength="1000"></textarea></div>
   <div class="field full"><label>Açıklama</label><textarea id="firmNotes" rows="2" maxlength="1000"></textarea></div>
@@ -2385,7 +2385,7 @@ function saveFirm(e){
  if(id&&!previous)return notify('Firma bulunamadı.',true);
  const code=previous?(previous.code||nextFirmCode()):nextFirmCode();
  const name=el('firmName').value.trim(),taxNo=firmTax(el('firmTaxNo').value),
-  discountExpression=normalizeFirmDiscount(el('firmDiscount').value);
+  discountExpression=el('firmType').value==='supplier'?'':normalizeFirmDiscount(el('firmDiscount').value);
  if(!name)return notify('Firma adı zorunludur.',true);
  if(discountExpression===null)return notify('İskonto geçersiz. 20+5, 20+6 veya 15 gibi yazabilirsiniz.',true);
  if(!validFirmTax(taxNo))return notify('Vergi No 10, TC Kimlik No 11 rakam olmalıdır.',true);
@@ -2406,13 +2406,19 @@ function editFirm(id){
  el('firmName').value=f.name||'';el('firmContact').value=f.contact||'';
  el('firmPhone').value=f.phone||'';el('firmEmail').value=f.email||'';
  el('firmTaxNo').value=f.taxNo||'';el('firmAddress').value=f.address||'';
- el('firmDiscount').value=f.discountExpression||'';el('firmType').value=f.firmType||'both';
+ el('firmDiscount').value=f.discountExpression||'';el('firmType').value=f.firmType||'both';toggleFirmDiscountField();
  el('firmActive').value=String(f.active!==false);el('firmNotes').value=f.notes||'';
  el('page-firms').scrollIntoView({behavior:'smooth',block:'start'});
 }
+function toggleFirmDiscountField(){
+ const supplierOnly=el('firmType').value==='supplier';
+ const field=el('firmDiscountField');
+ field.hidden=supplierOnly;field.style.display=supplierOnly?'none':'';
+ if(supplierOnly)el('firmDiscount').value='';
+}
 function resetFirmForm(){
  el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmCode').value=nextFirmCode();
- el('firmDiscount').value='';el('firmType').value='both';
+ el('firmDiscount').value='';el('firmType').value='both';toggleFirmDiscountField();
 }
 function deleteFirm(id){
  if(!requirePermission('firms')||!requireAdminAction())return;
@@ -3411,6 +3417,7 @@ el('orderListRows').addEventListener('click',e=>{
  const b=e.target.closest('button[data-order-view]');if(b)showOrderDetails(b.dataset.orderView);
 });
 el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
+el('firmType').addEventListener('change',toggleFirmDiscountField);
 el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
 el('expenseEditForm').addEventListener('submit',saveExpenseEdit);
 el('expenseRows').addEventListener('click',e=>{const b=e.target.closest('[data-expense-action]');if(b)expenseAction(b.dataset.expenseId,b.dataset.expenseAction)});
