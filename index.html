@@ -856,7 +856,7 @@ async function clearAllStockMovements(){
  }
 }
 
-function fillSelect(id,items,placeholder='Seçiniz'){const node=el(id);if(!node)return;const old=node.value;node.innerHTML=`<option value="">${esc(placeholder)}</option>`+items.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('');if(items.some(x=>x.id===old))node.value=old}
+function fillSelect(id,items,placeholder='Seçiniz'){const node=el(id);if(!node)return;const old=node.value;node.innerHTML=`<option value="">${esc(placeholder)}</option>`+items.map(x=>`<option value="${esc(x.id)}">${esc(x.label)}</option>`).join('');if(items.some(x=>x.id===old))node.value=old;else if(['entryWarehouse','exitWarehouse','transferFrom','countWarehouse'].includes(id)){const preferred=defaultWarehouseId();if(items.some(x=>x.id===preferred))node.value=preferred}}
 function fillAllSelects(){
   const wh=db.warehouses.map(x=>({id:x.id,label:`${x.code} - ${x.name}`}));const pr=db.products.filter(x=>x.active!==false).map(x=>({id:x.id,label:`${x.code} - ${x.name}`}));const fi=db.firms.filter(x=>x.active!==false).map(x=>({id:x.id,label:`${x.code?x.code+' - ':''}${x.name}`}));const us=db.users.map(x=>({id:x.id,label:`${x.fullName} (${x.username})`}));
   ['entryWarehouse','exitWarehouse','transferFrom','transferTo','countWarehouse'].forEach(id=>fillSelect(id,wh));['transferProduct'].forEach(id=>fillSelect(id,pr));fillSelect('exitFirm',fi,'Cari / firma seçiniz');
@@ -2506,7 +2506,7 @@ function renderExpenses(){
 function renderGuestProductPicker(){
  const w=el('guestWarehouse'),old=w.value;
  w.innerHTML='<option value="">Depo seçiniz</option>'+db.warehouses.map(x=>'<option value="'+esc(x.id)+'">'+esc(x.name)+'</option>').join('');
- if(db.warehouses.some(x=>x.id===old))w.value=old;
+ if(db.warehouses.some(x=>x.id===old))w.value=old;else w.value=defaultWarehouseId();
  const query=firmKey(el('guestProductSearch').value),select=el('guestProductSelect'),prior=select.value;
  const digits=v=>/^0*\\d+$/.test(v)?String(Number(v)):'';
  const matches=p=>{
