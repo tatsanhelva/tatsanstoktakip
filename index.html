@@ -265,8 +265,8 @@
  <div id="orderSuggestionItems" class="actions" style="flex-wrap:wrap"></div>
  </div>
  <div class="order-product-picker">
-  <div class="field" style="flex:1;min-width:220px"><label>Ürün Ara (Ad / Kod / Barkod)</label><input id="orderProductSearch" type="search" autocomplete="off" placeholder="Ürün adı, kodu veya barkodu yazın..." style="margin-bottom:7px"><select id="orderProductPicker"></select><div id="orderProductStockInfo" class="order-stock-badges" role="status" aria-live="polite"></div></div>
-  <button type="button" id="orderAddProductButton" class="btn btn-light" onclick="addOrderProduct()">+ Ürün Ekle</button>
+  <div class="field" style="flex:1;min-width:220px"><label>Ürün Ara ve Seç</label><input id="orderProductSearch" type="search" autocomplete="off" placeholder="Ürün adı, kodu veya barkodu yazın..."><select id="orderProductPicker" hidden style="display:none"></select><div id="orderProductMatches" class="table-wrap" style="display:none;max-height:220px;overflow:auto;margin-top:5px"></div><div id="orderProductStockInfo" class="order-stock-badges" role="status" aria-live="polite"></div></div>
+  <button type="button" id="orderAddProductButton" class="btn btn-light" onclick="el('orderProductSearch').focus()">Ürün Ara</button>
  </div>
  <div class="table-wrap" style="max-height:480px;overflow:auto"><table class="order-table">
   <thead><tr><th>Ürün / Depo Stokları</th><th>Miktar</th><th>Birim</th><th>Birim Fiyat (₺)</th><th class="num">Tutar (₺)</th><th>İşlem</th></tr></thead>
@@ -1482,15 +1482,24 @@ function orderWarehouseStockHTML(productId){
  }).join('');
 }
 function filterOrderProductPicker(){
- const select=el('orderProductPicker'),search=el('orderProductSearch');
- if(!select||!search)return;
- const q=firmKey(search.value),previous=select.value;
- const items=db.products.filter(p=>p.active!==false&&(!q||firmKey([p.code,p.barcode,p.name,p.category].join(' ')).includes(q)));
- select.innerHTML='<option value="">'+(items.length?'Ürün seçiniz':'Eşleşen ürün bulunamadı')+'</option>'+items.map(p=>
-  '<option value="'+esc(p.id)+'">'+esc((p.code?p.code+' - ':'')+p.name)+'</option>').join('');
- if(items.some(p=>p.id===previous))select.value=previous;
+ const search=el('orderProductSearch'),list=el('orderProductMatches');
+ if(!search||!list)return;
+ const q=firmKey(search.value.trim());
+ const items=q?db.products.filter(p=>p.active!==false&&firmKey([p.code,p.barcode,p.name,p.category].join(' ')).includes(q)).slice(0,30):[];
+ list.innerHTML=items.map(p=>'<button type="button" class="btn btn-light btn-sm" data-order-product-pick="'+esc(p.id)+'" style="display:block;width:100%;text-align:left;margin:2px 0">'+esc((p.code?p.code+' - ':'')+p.name)+'</button>').join('')||(q?'<div class="muted" style="padding:10px">Ürün bulunamadı.</div>':'');
+ list.style.display=q?'block':'none';
+}
+function selectOrderSearchProduct(id){
+ const product=productById(id);
+ if(!product||product.active===false)return;
+ el('orderProductPicker').value=id;
+ addOrderProduct();
+ el('orderProductSearch').value='';
+ el('orderProductMatches').style.display='none';
+ el('orderProductMatches').innerHTML='';
  refreshOrderProductStock();
 }
+
 function refreshOrderProductStock(){
  const id=el('orderProductPicker')?.value||'';
  const preview=el('orderProductStockInfo');
@@ -1743,6 +1752,7 @@ function resetOrderForm(){
  el('orderResetBtn').textContent='Yeni Sipariş / Temizle';
  el('orderForm').reset();
  el('orderFirmSearch').value='';renderOrderFirmMatches();
+ el('orderProductSearch').value='';filterOrderProductPicker();
  el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
  el('orderDate').value=localDateTimeValue().slice(0,10);
  el('orderDiscount').value='0';
@@ -3812,6 +3822,7 @@ el('orderFirmMatches').addEventListener('click',e=>{const b=e.target.closest('[d
 el('orderSuggestionItems').addEventListener('click',e=>{const btn=e.target.closest('[data-suggest-product]');if(btn)addSuggestedProduct(btn.dataset.suggestProduct)});
 el('orderApproveWarehouse').addEventListener('change',renderOrderApprovalPreview);
 el('orderProductSearch').addEventListener('input',filterOrderProductPicker);
+el('orderProductMatches').addEventListener('click',e=>{const b=e.target.closest('[data-order-product-pick]');if(b)selectOrderSearchProduct(b.dataset.orderProductPick)});
 el('orderProductPicker').addEventListener('change',refreshOrderProductStock);
 el('orderDiscount').addEventListener('input',updateOrderTotals);
 el('orderVatRate').addEventListener('input',updateOrderTotals);
