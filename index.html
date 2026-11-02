@@ -174,6 +174,9 @@
 <div class="card"><h3>Depo Kartı</h3><form id="warehouseForm"><input id="warehouseId" type="hidden"/><div class="form-grid cols-3"><div class="field"><label>Depo Kodu *</label><input id="warehouseCode" required=""/></div><div class="field"><label>Depo Adı *</label><input id="warehouseName" required=""/></div><div class="field"><label>Sorumlu Kişi</label><input id="warehouseManager"/></div><div class="field"><label>Telefon</label><input id="warehousePhone"/></div><div class="field"><label>Adres</label><input id="warehouseAddress"/></div><div class="field"><label>Açıklama</label><input id="warehouseNotes"/></div><div class="field"><label>Varsayılan Depo</label><select id="warehouseDefault"><option value="false">Hayır</option><option value="true">Evet</option></select></div></div><div class="actions"><button class="btn btn-primary" type="submit">Kaydet</button><button class="btn btn-light" onclick="resetWarehouseForm()" type="button">Temizle</button></div></form></div>
 <div class="card"><h3>Depo Listesi</h3><div class="table-wrap"><table><thead><tr><th>Kod</th><th>Depo</th><th>Sorumlu</th><th>Telefon</th><th>Adres</th><th>Varsayılan</th><th>İşlem</th></tr></thead><tbody id="warehouseTable"></tbody></table></div></div>
 </div><div class="page" id="page-firms">
+<div class="card" data-admin-only><div class="card-head"><h3>Onaylı Siparişlerin Cari Borçlarını Kontrol Et</h3></div>
+<p class="muted">Önceden onaylanıp cari borcu oluşmamış siparişler için tek seferlik düzeltme. Aynı siparişe ikinci borç oluşturulmaz.</p>
+<button class="btn btn-light btn-sm" id="syncOrderDebtsBtn" type="button">Eksik Sipariş Borçlarını Tamamla</button></div>
 <div class="card">
  <div class="card-head"><h3>Firma / Cari Kartı</h3><span class="muted">Firma kodu otomatik oluşturulur.</span></div>
  <form id="firmForm"><input id="firmId" type="hidden"><div class="form-grid cols-3">
@@ -2423,6 +2426,19 @@ function printCurrentOrder(){
  win.document.open();win.document.write(html);win.document.close();win.focus();win.print();
 }
 
+async function syncMissingOrderDebts(){
+ if(!isAdmin()||!secureMode||!syncBootstrapComplete)return notify('Güvenli sunucuda yönetici oturumu gerekir.',true);
+ if(cloudState.dirty||cloudConflict||syncPullInProgress||syncPushInProgress)return notify('Önce Drive eşitlemesini tamamlayın.',true);
+ if(!confirm('Onaylı siparişleri kontrol edip borcu eksik olanları cari hesaplara eklemek istiyor musunuz?'))return;
+ const btn=el('syncOrderDebtsBtn');btn.disabled=true;
+ try{
+  const r=cloudResultCheck(await rpc('orderDebtSync',{expectedRevision:cloudState.revision}));
+  if(!r.ok)throw new Error(r.error||'İşlem yapılamadı.');
+  await refreshCloudIfIdle(true);
+  notify((r.added||0)+' siparişin eksik cari borcu tamamlandı.');
+ }catch(err){notify('Cari borç işlemi başarısız: '+err.message,true)}
+ finally{btn.disabled=false}
+}
 function renderFirms(){
  const q=firmKey(el('firmSearch').value);
  const found=db.firms.filter(f=>firmKey([f.code,f.name,f.contact,f.phone,f.email,f.taxNo,f.address].join(' ')).includes(q));
@@ -3599,6 +3615,7 @@ el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('
 el('bizTabs').addEventListener('click',e=>{const b=e.target.closest('[data-biz-tab]');if(b){bizTab=b.dataset.bizTab;renderBizReport()}});
 el('bizReset').addEventListener('click',()=>{['bizFrom','bizTo'].forEach(id=>el(id).value='');['bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).value='all');renderBizReport()});
 el('bizExport').addEventListener('click',exportBizCSV);
+el('syncOrderDebtsBtn').addEventListener('click',syncMissingOrderDebts);
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
 el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
