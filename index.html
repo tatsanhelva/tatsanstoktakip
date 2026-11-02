@@ -3122,7 +3122,21 @@ function renderBizReport(){
   exit:{headers:['Tarih','Firma','Ürün','Depo','Miktar','Kullanıcı','Belge'],rows:D.exits.map(x=>[fmtDate(x.date),esc(x.firmName||firmById(x.firmId)?.name||'-'),esc(productById(x.productId)?.name||'-'),esc(warehouseById(x.warehouseId)?.name||'-'),esc(formatMovementQuantity(x,true)),esc(x.userName||'-'),esc(x.doc||'')])},
   purchase:{headers:['Tarih','Tedarikçi','Ürün','KG','KDV Hariç','KDV %','KDV','Toplam'],rows:D.purchases.map(x=>[fmtDate(x.date),esc(x.firmName),esc(x.productName),esc(String(x.kg)),firmMoney(x.netCents),esc(String(x.vatRate)),firmMoney(x.vatCents),firmMoney(x.grossCents)])},
   guest:{headers:['Tarih','Müşteri','Ödeme','Tahsilat','Ürünler'],rows:D.guests.map(x=>[fmtDate(x.date),esc(x.customerName||'Perakende'),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc((x.items||[]).map(i=>(productById(i.productId)?.name||'-')+' '+i.inputQuantity+' '+i.unit).join(', '))])},
-  debt:{headers:['Tarih','Cari','Borç Tutarı','Belge','Kaynak'],rows:D.debts.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),firmMoney(x.amountCents),esc(x.doc||''),esc(x.stockBatchId?'Stok çıkışı':x.orderId?'Sipariş':'Manuel')])},
+  debt:{headers:['Tarih','Cari','Borç Tutarı','Belge','Kaynak / Durum'],rows:(()=>{
+    const actual=D.debts.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),firmMoney(x.amountCents),esc(x.doc||''),esc(x.stockBatchId?'Stok çıkışı · Kaydedildi':x.orderId?'Sipariş · Kaydedildi':'Manuel · Kaydedildi')]);
+    const seen=new Set((db.firmLedger||[]).filter(x=>x.type==='DEBT'&&x.stockBatchId).map(x=>x.stockBatchId));
+    const groups=new Map();
+    for(const m of D.exits){
+      if(!m.firmId||m.orderId||!m.groupId||seen.has(m.groupId))continue;
+      if(!groups.has(m.groupId))groups.set(m.groupId,[]);
+      groups.get(m.groupId).push(m);
+    }
+    for(const group of groups.values()){
+      const m=group[0];
+      actual.push([fmtDate(m.date),esc(m.firmName||firmById(m.firmId)?.name||'-'),'—',esc(m.doc||''),'<span class="badge b-orange">Cari borç kaydı eksik</span>']);
+    }
+    return actual;
+  })()},
   payment:{headers:['Tarih','Cari','Ödeme','Tutar','Belge'],rows:D.payments.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc(x.doc||'')])},
   expense:{headers:['Tarih','Açıklama','Ödeme','Tutar','Belge'],rows:D.expenses.map(x=>[fmtDate(x.date),esc(x.description),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc(x.doc||'')])},
   user:{headers:['Tarih','Kullanıcı','Modül','İşlem','Detay'],rows:D.users.map(x=>[fmtDate(x.date),esc(x.userName||''),esc(x.module||''),esc(x.action||x.act||''),esc(x.detail||'')])}
