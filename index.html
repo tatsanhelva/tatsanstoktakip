@@ -1579,6 +1579,232 @@ function showOrderDetails(id){
   orderMoney(vat.grandTotalCents)+'</b></div>';
  el('orderDetailsDialog').showModal();
 }
+
+let tatsanPDFLibraryPromise=null;
+function tatsanLoadPDFLibrary(){
+ if(window.pdfMake&&window.pdfMake.vfs)return Promise.resolve(window.pdfMake);
+ if(tatsanPDFLibraryPromise)return tatsanPDFLibraryPromise;
+ function addScript(url){
+  return new Promise((resolve,reject)=>{
+   const script=document.createElement('script');
+   script.src=url;script.async=true;
+   script.onload=resolve;
+   script.onerror=()=>{script.remove();reject(new Error('PDF bileşeni yüklenemedi.'))};
+   document.head.appendChild(script);
+  });
+ }
+ function loadWithFallback(cdn,backup){
+  return addScript(cdn).catch(()=>addScript(backup));
+ }
+ tatsanPDFLibraryPromise=loadWithFallback(
+  'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/pdfmake.min.js',
+  'https://cdn.jsdelivr.net/npm/pdfmake@0.2.12/build/pdfmake.min.js'
+ ).then(()=>loadWithFallback(
+  'https://cdnjs.cloudflare.com/ajax/libs/pdfmake/0.2.12/vfs_fonts.js',
+  'https://cdn.jsdelivr.net/npm/pdfmake@0.2.12/build/vfs_fonts.js'
+ )).then(()=>{
+  if(!window.pdfMake||!window.pdfMake.vfs)throw new Error('PDF yazı tipleri yüklenemedi.');
+  return window.pdfMake;
+ }).catch(err=>{tatsanPDFLibraryPromise=null;throw err});
+ return tatsanPDFLibraryPromise;
+}
+function tatsanPDFCell(value,align='left',bold=false){
+ return {text:String(value??''),alignment:align,bold,fontSize:8,margin:[0,3,0,3]};
+}
+function tatsanPDFTable(headings,body,widths){
+ return {table:{headerRows:1,widths,body:[
+  headings.map(h=>({text:String(h),bold:true,color:'#163A58',fontSize:8,margin:[0,5,0,5]})),
+  ...body
+ ]},layout:{
+  fillColor:row=>row===0?'#E8F2F8':row%2===0?'#F7FAFC':null,
+  hLineWidth:()=>0.4,vLineWidth:()=>0,
+  hLineColor:()=> '#CBD5E1',paddingLeft:()=>5,paddingRight:()=>5
+ },margin:[0,12,0,12]};
+}
+function tatsanPDFDocument(title,orientation='portrait'){
+ const company=String(db.settings?.companyName||'TATSAN');
+ return {
+  pageSize:'A4',pageOrientation:orientation,
+  pageMargins:orientation==='landscape'?[24,36,24,40]:[32,38,32,42],
+  defaultStyle:{font:'Roboto',fontSize:9,color:'#1E293B'},
+  styles:{
+   brand:{fontSize:15,bold:true,color:'#122A43'},
+   title:{fontSize:16,bold:true,color:'#122A43'},
+   label:{fontSize:9,bold:true,color:'#475569'},
+   total:{fontSize:12,bold:true,color:'#122A43'},
+   muted:{fontSize:8,color:'#64748B'}
+  },
+  footer:(page,pages)=>({
+   columns:[{text:company+' · '+title,fontSize:7,color:'#64748B'},
+    {text:'Sayfa '+page+' / '+pages,alignment:'right',fontSize:7,color:'#64748B'}],
+   margin:[32,12,32,0]
+  }),
+  content:[{
+   columns:[
+    {text:company,style:'brand'},
+    {text:title,style:'title',alignment:'right'}
+   ],margin:[0,0,0,8]
+  },{canvas:[{type:'line',x1:0,y1:0,x2:orientation==='landscape'?780:530,y2:0,lineWidth:1.1,lineColor:'#2F6D9D'}],margin:[0,0,0,12]}]
+ };
+}
+async function tatsanDownloadPDF(definition,filename){
+ const pdf=await tatsanLoadPDFLibrary();
+ await new Promise((resolve,reject)=>{
+  try{pdf.createPdf(definition).download(filename,resolve)}
+  catch(err){reject(err)}
+ });
+ notify(filename+' indirilmeye hazır.');
+}
+function tatsanPDFFileName(prefix,id,date){
+ const safe=s=>String(s||'').replace(/[^0-9a-zA-Z_-]/g,'_').replace(/_+/g,'_').slice(0,65);
+ return prefix+'_'+safe(id)+'_'+safe(date||localDateTimeValue().slice(0,10))+'.pdf';
+}
+function tatsanOrderPDFDefinition(order,draft=false){
+ const doc=tatsanPDFDocument('SİPARİŞ FORMU');
+ const vat=storedOrderVat(order);
+ doc.content.push({
+  columns:[{
+    stack:[{text:'Sipariş No',style:'label'},{text:String(order.number||'-'),bold:true,fontSize:11}]
+   },{
+    stack:[{text:'Tarih',style:'label'},{text:String(order.date||'-'),fontSize:10}],alignment:'right'
+   }],
+  margin:[0,0,0,11]
+ });
+ doc.content.push({
+  stack:[
+   {text:'Cari / Firma',style:'label'},
+   {text:String(order.firmName||'-'),fontSize:11,bold:true}
+  ],margin:[0,0,0,10]
+ });
+ if(draft)doc.content.push({text:'TASLAK - KAYDEDİLMEMİŞ SİPARİŞ',color:'#AE5B09',bold:true,margin:[0,2,0,8]});
+ const body=(order.lines||[]).map(l=>[
+  tatsanPDFCell(l.productCode||'-'),
+  tatsanPDFCell(l.productName||'-'),
+  tatsanPDFCell(Number(l.quantity||0).toLocaleString('tr-TR'),'right'),
+  tatsanPDFCell(l.displayUnit==='Paket'?'Koli':(l.displayUnit||l.unit||'-')),
+  tatsanPDFCell(orderMoney(l.unitPriceCents),'right'),
+  tatsanPDFCell(orderMoney(l.lineTotalCents),'right',true)
+ ]);
+ if(!body.length)body.push([{text:'Siparişte ürün bulunmuyor.',colSpan:6},...Array(5).fill('')]);
+ doc.content.push(tatsanPDFTable(
+  ['Kod','Ürün','Miktar','Birim','Birim Fiyat','Tutar'],
+  body,[51,'*',43,42,80,81]
+ ));
+ const totalLines=[
+  ['Ara Toplam (KDV Hariç)',orderMoney(order.subtotalCents)],
+  ['İskonto '+orderDiscountText(order),'− '+orderMoney(order.discountCents)],
+  ['İskontolu Tutar (KDV Hariç)',orderMoney(order.totalCents)],
+  [vat.hasVat?'KDV (%'+(vat.vatRateBasisPoints/100).toLocaleString('tr-TR',{maximumFractionDigits:2})+')':'KDV (eski siparişte hesaplanmamış)',
+   vat.hasVat?'+ '+orderMoney(vat.vatCents):'—']
+ ];
+ doc.content.push({
+  columns:[{text:order.note?'Açıklama: '+order.note:'',fontSize:9,color:'#475569',width:'*',margin:[0,8,12,0]},
+   {width:255,stack:[
+    ...totalLines.map(pair=>({
+     columns:[{text:pair[0],fontSize:8,color:'#475569',width:'*'},
+      {text:pair[1],fontSize:9,alignment:'right',width:95}],
+     margin:[0,4,0,4]
+    })),
+    {canvas:[{type:'line',x1:0,y1:0,x2:255,y2:0,lineWidth:0.7,lineColor:'#94A3B8'}],margin:[0,7,0,7]},
+    {columns:[{text:vat.hasVat?'KDV Dahil Genel Toplam':'Toplam (Eski Sipariş)',style:'total',width:'*'},
+      {text:orderMoney(vat.grandTotalCents),style:'total',alignment:'right',width:95}]}
+   ]}
+  ],columnGap:12,margin:[0,4,0,20]
+ });
+ doc.content.push({text:'Bu belge bir sipariş formudur, fatura yerine geçmez. Stok veya cari bakiyesini değiştirmez.',
+  style:'muted',margin:[0,8,0,0]});
+ return doc;
+}
+async function tatsanDownloadOrderPDF(order,draft=false){
+ if(!hasPermission('orders')&&!isAdmin())return notify('Sipariş Formu yetkiniz yok.',true);
+ try{
+  const definition=tatsanOrderPDFDefinition(order,draft);
+  const filename=tatsanPDFFileName('Tatsan_Siparis',order.number+(draft?'_Taslak':''),order.date);
+  await tatsanDownloadPDF(definition,filename);
+ }catch(err){notify('Sipariş PDF indirilemedi: '+(err?.message||'PDF oluşturucu hatası'),true)}
+}
+function exportDraftOrderPDF(){
+ if(!hasPermission('orders')&&!isAdmin())return notify('Sipariş Formu yetkiniz yok.',true);
+ const firm=firmById(el('orderFirm').value);
+ if(!firm||firm.active===false)return notify('PDF için önce geçerli bir cari seçin.',true);
+ const date=el('orderDate').value;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))
+  return notify('Geçerli sipariş tarihi girin.',true);
+ const quote=getOrderQuote(true);if(!quote)return;
+ const order={
+  number:nextOrderNumber(),date,firmId:firm.id,firmName:firm.name,firmCode:firm.code||'',
+  lines:quote.lines,subtotalCents:quote.subtotalCents,
+  discountBasisPoints:quote.discountBasisPoints,discountExpression:quote.discountExpression,
+  discountCents:quote.discountCents,totalCents:quote.totalCents,
+  vatRateBasisPoints:quote.vatRateBasisPoints,vatCents:quote.vatCents,
+  grandTotalCents:quote.grandTotalCents,note:el('orderNotes').value.trim()
+ };
+ // Taslak PDF mevcut stokları, sipariş numarası sayacını veya cari bakiyeyi kaydetmez.
+ return tatsanDownloadOrderPDF(order,true);
+}
+function exportSavedOrderPDF(id){
+ if(!hasPermission('orders')&&!isAdmin())return notify('Sipariş Formu yetkiniz yok.',true);
+ const order=db.orders.find(o=>o.id===id);
+ if(!order)return notify('Sipariş bulunamadı.',true);
+ return tatsanDownloadOrderPDF(order,false);
+}
+function exportCurrentOrderPDF(){
+ if(!orderCurrentlyViewed)return notify('Önce sipariş seçin.',true);
+ return exportSavedOrderPDF(orderCurrentlyViewed);
+}
+async function exportStockPDF(){
+ if(!hasPermission('stock')&&!isAdmin())return notify('Stok Durumu yetkiniz yok.',true);
+ try{
+  const rows=filteredStockRows(),doc=tatsanPDFDocument('STOK DURUMU','landscape');
+  const warehouseId=el('stockWarehouseFilter').value||'all';
+  const w=warehouseId==='all'?'Tüm Depolar':(warehouseById(warehouseId)?.name||'Seçilen Depo');
+  const search=el('stockSearch').value.trim();
+  const statusNames={all:'Tümü',positive:'Stokta Var',critical:'Kritik',zero:'Stok Bitti'};
+  const status=statusNames[el('stockStatusFilter').value]||'Tümü';
+  const now=new Date().toLocaleString('tr-TR');
+  const total=rows.reduce((n,x)=>n+Number(x.value||0),0);
+  doc.content.push({
+   columns:[{width:'*',stack:[
+    {text:'Depo: '+w,fontSize:9,bold:true},
+    {text:'Durum filtresi: '+status+(search?' · Arama: '+search:''),fontSize:8,color:'#475569',margin:[0,5,0,0]}
+   ]},{width:'auto',stack:[
+    {text:'Oluşturulma: '+now,fontSize:8,alignment:'right'},
+    {text:'Ürün / Depo Satırı: '+rows.length,fontSize:9,bold:true,alignment:'right',margin:[0,5,0,0]}
+   ]}],margin:[0,0,0,5]
+  });
+  const body=rows.map(x=>{
+   const stocked=stockHasVisibleQuantity(x.product.id,x.current);
+   const statusText=!stocked?'Bitti':x.current<=num(x.product.minStock)?'Kritik':'Normal';
+   return [
+    tatsanPDFCell(x.warehouse.name),
+    tatsanPDFCell(x.product.code||'-'),
+    tatsanPDFCell(x.product.barcode||'-'),
+    tatsanPDFCell(x.product.name||'-'),
+    tatsanPDFCell(isKgProduct(x.product)?'Koli / KG':'Koli / Adet'),
+    tatsanPDFCell(formatStockAmount(x.product.id,x.current),'right',true),
+    tatsanPDFCell(qty(x.product.minStock)+' Koli','right'),
+    tatsanPDFCell(money(x.value),'right'),
+    tatsanPDFCell(statusText)
+   ];
+  });
+  if(!body.length)body.push([{text:'Seçili filtrelerde stok kaydı bulunamadı.',colSpan:9},...Array(8).fill('')]);
+  doc.content.push(tatsanPDFTable(
+   ['Depo','Kod','Barkod','Ürün','Birim','Mevcut Stok','Min.','Stok Satış Değeri','Durum'],
+   body,[73,43,54,'*',53,84,47,92,44]
+  ));
+  doc.content.push({
+   columns:[
+    {text:'Yalnızca seçili filtrelere uyan kayıtlar dahil edilmiştir. Değerler KDV hariç liste satış fiyatına göredir.',
+     style:'muted',width:'*',margin:[0,5,12,0]},
+    {text:'Toplam Satış Değeri: '+money(total),style:'total',alignment:'right',width:230}
+   ],margin:[0,5,0,0]
+  });
+  const suffix=warehouseId==='all'?'Tum_Depolar':(warehouseById(warehouseId)?.code||'Depo');
+  await tatsanDownloadPDF(doc,tatsanPDFFileName('Tatsan_Stok_Durumu',suffix+'_'+(el('stockStatusFilter').value||'all'),
+   localDateTimeValue().slice(0,10)));
+ }catch(err){notify('Stok Durumu PDF indirilemedi: '+(err?.message||'PDF oluşturucu hatası'),true)}
+}
+
 function printCurrentOrder(){
  const order=db.orders.find(o=>o.id===orderCurrentlyViewed);if(!order)return;
  const win=window.open('','_blank','width=920,height=740');
