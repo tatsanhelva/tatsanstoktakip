@@ -3361,7 +3361,7 @@ function purchaseTotals(){
  el('purchaseTotals').textContent='KG Birim Maliyeti (KDV hariç): '+(kg>0?(net/100/kg).toLocaleString('tr-TR',{minimumFractionDigits:2,maximumFractionDigits:2}):'—')+' ₺ | KDV: '+firmMoney(tax)+' | Genel Toplam: '+firmMoney(net+tax);
 }
 function renderPurchases(){
- const products=[...new Set([...db.products.map(p=>p.name),...(db.purchases||[]).map(p=>p.productName)].filter(Boolean))];
+ const products=[...new Set((db.purchases||[]).map(p=>String(p.productName||'').trim()).filter(Boolean))].sort((a,b)=>a.localeCompare(b,'tr'));
  el('purchaseProductOptions').innerHTML=products.map(v=>'<option value="'+esc(v)+'"></option>').join('');
  el('purchaseRows').innerHTML=(db.purchases||[]).length?[...db.purchases].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt))).map(p=>'<tr><td>'+esc(p.date)+'</td><td>'+esc(p.firmName)+'</td><td>'+esc(p.productName)+'</td><td>'+esc(String(p.kg))+'</td><td>'+firmMoney(p.netCents)+'</td><td>'+esc(String(p.vatRate))+'% ('+firmMoney(p.vatCents)+')</td><td>'+firmMoney(p.grossCents)+'</td><td>'+esc(p.userName||'-')+'</td></tr>').join(''):'<tr><td colspan="8" class="empty">Henüz satın alma kaydı yok.</td></tr>';
  if(!el('purchaseDate').value)el('purchaseDate').value=new Date().toLocaleDateString('en-CA');
