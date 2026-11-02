@@ -247,7 +247,7 @@
   </div>
  </div>
  <p class="muted" style="font-size:12px;margin:12px 0 0">Fiyatlar KDV hariç girilir. İskonto düşülür, kalan tutara seçilen KDV oranı uygulanır. Sipariş stok miktarlarını veya cari borç bakiyesini değiştirmez.</p>
- <div class="actions"><button type="submit" id="orderSaveBtn" class="btn btn-primary">Siparişi Kaydet</button><button type="button" class="btn btn-light" onclick="exportDraftOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="resetOrderForm()">Yeni Sipariş / Temizle</button></div>
+ <div class="actions"><button type="submit" id="orderSaveBtn" class="btn btn-primary">Siparişi Kaydet</button><button type="button" class="btn btn-light" onclick="exportDraftOrderPDF()">PDF Çıktı Al</button><button type="button" id="orderResetBtn" class="btn btn-light" onclick="resetOrderForm()">Yeni Sipariş / Temizle</button></div>
  </form>
 </div>
 <div class="card">
@@ -1537,6 +1537,7 @@ function resetOrderForm(){
  orderEditingId=null;orderEditingRevision=null;
  el('orderFormTitle').textContent='Sipariş Formu';
  el('orderEditingNotice').hidden=true;el('orderSaveBtn').textContent='Siparişi Kaydet';
+ el('orderResetBtn').textContent='Yeni Sipariş / Temizle';
  el('orderForm').reset();
  el('orderLineRows').innerHTML='<tr><td colspan="6" class="empty">Henüz ürün eklenmedi.</td></tr>';
  el('orderDate').value=localDateTimeValue().slice(0,10);
@@ -1592,6 +1593,7 @@ function editSavedOrder(id){
  el('orderFormTitle').textContent='Siparişi Düzenle · '+order.number;
  el('orderEditingNotice').hidden=false;
  el('orderSaveBtn').textContent='Sipariş Değişikliklerini Kaydet';
+ el('orderResetBtn').textContent='Düzenlemeyi İptal';
  el('orderSaveBtn').disabled=false;
  if(el('orderDetailsDialog').open)el('orderDetailsDialog').close();
  refreshOrderProductStock();updateOrderTotals();
@@ -1771,6 +1773,7 @@ function buildOrderApprovalData(original,plan,user){
 }
 function openOrderApproval(id){
  if(!requirePermission('approveOrders')||!requirePermission('orders'))return;
+ if(orderEditingId)return notify('Önce açık sipariş düzeltmesini kaydedin veya iptal edin.',true);
  if(orderApprovalBusy)return notify('Bir sipariş onay işlemi sürüyor.',true);
  if(secureMode&&!orderApprovalBackendEnabled&&!isAdmin())
   return notify('Çalışan hesabıyla sipariş onaylama için güncel Apps Script sunucusu gerekli. Yöneticiden sunucuyu güncellemesini isteyin.',true);
@@ -1883,6 +1886,7 @@ function renderOrders(){
  el('orderFormTitle').textContent=activeEdit?'Siparişi Düzenle · '+(editing?.number||''):'Sipariş Formu';
  el('orderEditingNotice').hidden=!activeEdit;
  el('orderSaveBtn').textContent=activeEdit?'Sipariş Değişikliklerini Kaydet':'Siparişi Kaydet';
+ el('orderResetBtn').textContent=activeEdit?'Düzenlemeyi İptal':'Yeni Sipariş / Temizle';
  const allowedSave=activeEdit?(hasPermission('editOrders')&&(isAdmin()||!secureMode||orderEditBackendEnabled)):
   (isAdmin()||!secureMode||ordersBackendEnabled);
  el('orderSaveBtn').disabled=!allowedSave;
@@ -2108,7 +2112,7 @@ function exportDraftOrderPDF(){
   return notify('Geçerli sipariş tarihi girin.',true);
  const quote=getOrderQuote(true);if(!quote)return;
  const order={
-  number:nextOrderNumber(),date,firmId:firm.id,firmName:firm.name,firmCode:firm.code||'',
+  number:(orderEditingId?db.orders.find(o=>o.id===orderEditingId)?.number:null)||nextOrderNumber(),date,firmId:firm.id,firmName:firm.name,firmCode:firm.code||'',
   lines:quote.lines,subtotalCents:quote.subtotalCents,
   discountBasisPoints:quote.discountBasisPoints,discountExpression:quote.discountExpression,
   discountCents:quote.discountCents,totalCents:quote.totalCents,
