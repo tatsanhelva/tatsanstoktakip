@@ -297,9 +297,9 @@
 <div class="card-head"><h3>Toplu Stok Sayımı</h3><span class="muted">Depo seç, ürünleri say, tek seferde kaydet</span></div>
 <form id="countForm"><div class="form-grid cols-3">
 <div class="field"><label>Sayım Yapılacak Depo *</label><select id="countWarehouse" required></select></div>
-<div class="field"><label>Sayımı Yapan</label><input id="countPerson" placeholder="Sayımı yapan kişi"></div>
-<div class="field"><label>İşlem Tarihi</label><input id="countDate" type="datetime-local"></div>
-<div class="field"><label>Sayım Tutanağı / Belge No</label><input id="countDoc" placeholder="İsteğe bağlı"></div>
+<div class="field"><label>Sayımı Yapan</label><input id="countPerson" readonly placeholder="Oturum açan kullanıcı"></div>
+<div class="field"><label>İşlem Tarihi</label><input id="countDate" type="datetime-local" readonly></div>
+<div class="field"><label>Sayım Tutanağı</label><input id="countDoc" readonly placeholder="Kaydedildiğinde otomatik oluşturulur"></div>
 <div class="field full"><label>Açıklama</label><textarea id="countNotes" placeholder="Sayım hakkında açıklama..."></textarea></div>
 </div>
 <div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="countProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
@@ -2541,6 +2541,16 @@ function saveTransfer(e){
  saveDB();e.target.reset();setUnitOptions('transferUnit',el('transferProduct').value);
  setDefaultDates();updateTransferCurrent();notify('Depo transferi kaydedildi.');
 }
+function refreshCountMetadata(){
+ if(!currentUser)return;
+ const now=new Date();
+ const person=currentUser.fullName||currentUser.username;
+ const date=now.toLocaleDateString('tr-TR').replaceAll('/','.');
+ const time=now.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+ el('countPerson').value=person;
+ el('countDate').value=localDateTimeValue();
+ el('countDoc').value=person+'-'+date+'-'+time;
+}
 function renderCountHistory(){
  const target=el('countHistoryRows');if(!target)return;
  const groups=new Map();
@@ -2589,7 +2599,7 @@ function saveCount(e){
  audit('Toplu stok sayımı','Stok Hareketi',warehouseById(warehouse).name+
    ' | '+items.length+' ürün sayıldı | '+differences+' stok farkı | '+(doc||'Belgesiz'));
  resetBatchForm('count',warehouse);
- saveDB();renderCountHistory();
+ saveDB();renderCountHistory();refreshCountMetadata();
  notify(items.length+' ürün sayıldı; '+differences+' ürünün stoku düzeltildi. Drive kaydı kuyruğa alındı.');
 }
 
@@ -3018,7 +3028,7 @@ function clearAllAuditLogs(){
 }
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderOrders();renderStock();renderCountHistory();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
