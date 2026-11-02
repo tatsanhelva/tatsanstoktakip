@@ -217,9 +217,9 @@
  </div>
  <p class="muted" style="font-size:12px;margin-top:12px">Stok çıkışı otomatik borç oluşturmaz; satış tutarı kayıtlı olmadığı için borcu burada ayrıca kaydedin. Hatalı finansal hareketi ters kayıtla düzeltin.</p>
  <div class="actions"><button class="btn btn-primary" type="submit">Cari Hareketi Kaydet</button></div>
- </form></div><div class="card" style="margin-top:16px"><div class="card-head"><h3>Gider Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Açıklama</th><th>Tutar</th><th>Ödeme</th><th>Kaydeden</th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
+ </form></div><div class="card" style="margin-top:16px"><div class="card-head"><h3>Gider Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Açıklama</th><th>Tutar</th><th>Ödeme</th><th>Kaydeden</th><th>İşlemler</th></tr></thead><tbody id="expenseRows"></tbody></table></div></div>
 <div class="card" style="margin-top:16px"><div class="card-head"><h3>Peşin Satış Kayıtları</h3></div><div class="table-wrap"><table><thead><tr><th>Tarih</th><th>Müşteri</th><th>Ödeme</th><th>Tutar</th><th>Kaydeden</th><th>İşlemler</th></tr></thead><tbody id="guestSalesRows"></tbody></table></div></div></div>
-<dialog id="guestSaleDialog" style="width:min(560px,96vw);border:0;border-radius:14px;padding:24px"><div class="card-head"><h3 id="guestSaleDialogTitle">Peşin Satış Kaydı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('guestSaleDialog').close()">Kapat</button></div><form id="guestSaleEditForm"><input type="hidden" id="guestSaleEditId"><div class="form-grid"><div class="field"><label>Müşteri</label><input id="guestSaleEditName" maxlength="120"></div><div class="field"><label>Tarih</label><input id="guestSaleEditDate" type="date" required></div><div class="field"><label>Tutar (₺)</label><input id="guestSaleEditAmount" type="number" min="0.01" step="0.01" required></div><div class="field"><label>Ödeme</label><select id="guestSaleEditPayment"><option value="CASH">Nakit</option><option value="POS">POS</option><option value="TRANSFER">Havale / EFT</option></select></div><div class="field"><label>Belge</label><input id="guestSaleEditDoc" maxlength="120"></div><div class="field"><label>Açıklama</label><input id="guestSaleEditNote" maxlength="500"></div></div><p class="muted" id="guestSaleEditMeta"></p>
+<dialog id="expenseDialog" style="width:min(560px,96vw);border:0;border-radius:14px;padding:24px"><div class="card-head"><h3 id="expenseDialogTitle">Gider Kaydı</h3><button class="btn btn-light btn-sm" type="button" onclick="el('expenseDialog').close()">Kapat</button></div><form id="expenseEditForm"><input type="hidden" id="expenseEditId"><div class="form-grid cols-3"><div class="field full"><label>Gider Açıklaması</label><input id="expenseEditDescription" maxlength="200" required></div><div class="field"><label>Tutar (₺)</label><input id="expenseEditAmount" type="number" min="0.01" step="0.01" required></div><div class="field"><label>Tarih</label><input id="expenseEditDate" type="date" required></div><div class="field"><label>Ödeme Yöntemi</label><select id="expenseEditPayment"><option value="CASH">Nakit</option><option value="POS">POS</option><option value="TRANSFER">Havale / EFT</option></select></div><div class="field"><label>Belge</label><input id="expenseEditDoc"></div><div class="field full"><label>Not</label><input id="expenseEditNote"></div></div><p class="muted" id="expenseEditMeta"></p><div class="actions"><button id="expenseEditSave" class="btn btn-primary" type="submit">Kaydet</button></div></form></dialog><dialog id="guestSaleDialog" style="width:min(560px,96vw);border:0;border-radius:14px;padding:24px"><div class="card-head"><h3 id="guestSaleDialogTitle">Peşin Satış Kaydı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('guestSaleDialog').close()">Kapat</button></div><form id="guestSaleEditForm"><input type="hidden" id="guestSaleEditId"><div class="form-grid"><div class="field"><label>Müşteri</label><input id="guestSaleEditName" maxlength="120"></div><div class="field"><label>Tarih</label><input id="guestSaleEditDate" type="date" required></div><div class="field"><label>Tutar (₺)</label><input id="guestSaleEditAmount" type="number" min="0.01" step="0.01" required></div><div class="field"><label>Ödeme</label><select id="guestSaleEditPayment"><option value="CASH">Nakit</option><option value="POS">POS</option><option value="TRANSFER">Havale / EFT</option></select></div><div class="field"><label>Belge</label><input id="guestSaleEditDoc" maxlength="120"></div><div class="field"><label>Açıklama</label><input id="guestSaleEditNote" maxlength="500"></div></div><p class="muted" id="guestSaleEditMeta"></p>
 <div class="card" style="margin-top:12px;padding:12px"><div class="card-head"><h3>Verilen Ürünler / Stok Çıkışları</h3></div><p class="muted" id="guestSaleProductInfo"></p><div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Miktar</th><th>Birim</th><th>Depo</th></tr></thead><tbody id="guestSaleDetailProducts"></tbody></table></div><small class="muted">Stok hareketi oluşturulmuş ürünler burada kayıt olarak görüntülenir. Düzenleme ekranında bu ürünler değiştirilemez; stok miktarını değiştirmek ayrıca güvenli bir düzeltme işlemi gerektirir.</small></div><div class="actions"><button type="submit" class="btn btn-primary" id="guestSaleEditSave">Değişiklikleri Kaydet</button><button type="button" class="btn btn-light" onclick="el('guestSaleDialog').close()">Kapat</button></div></form></dialog>
 <div class="page" id="page-orders">
 <div class="card">
@@ -2415,9 +2415,37 @@ function toggleLedgerCustomerType(){
  el('ledgerPaymentMethod').disabled=!guest&&!expense&&el('firmLedgerType').value==='DEBT';
  if(guest)renderGuestProductPicker();
 }
+function expenseAction(id,action){
+ if(!isAdmin())return notify('Yönetici yetkisi gerekli.',true);
+ const x=(db.expenses||[]).find(v=>v.id===id);if(!x)return notify('Gider bulunamadı.',true);
+ if(action==='delete'){
+  if(cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Drive kaydının tamamlanmasını bekleyin.',true);
+  if(!confirm(x.description+' gideri ('+firmMoney(x.amountCents)+') silinsin mi?'))return;
+  db.expenses=db.expenses.filter(v=>v.id!==id);audit('Gider silindi','Finans',x.id+' | '+x.description+' | '+firmMoney(x.amountCents));saveDB();notify('Gider silindi.');return;
+ }
+ el('expenseEditId').value=x.id;el('expenseEditDescription').value=x.description||'';
+ el('expenseEditAmount').value=(x.amountCents/100).toFixed(2);el('expenseEditDate').value=x.date||'';
+ el('expenseEditPayment').value=x.paymentMethod||'CASH';el('expenseEditDoc').value=x.doc||'';el('expenseEditNote').value=x.note||'';
+ el('expenseEditMeta').textContent='Kaydeden: '+(x.userName||'-')+' | Kayıt: '+dt(x.createdAt);
+ el('expenseDialogTitle').textContent=action==='edit'?'Gider Düzenle':'Gider Görüntüle';
+ el('expenseEditForm').querySelectorAll('input,select').forEach(n=>{if(n.id!=='expenseEditId')n.disabled=action!=='edit'});
+ el('expenseEditSave').hidden=action!=='edit';el('expenseDialog').showModal();
+}
+function saveExpenseEdit(e){
+ e.preventDefault();if(!isAdmin())return;
+ if(cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Drive kaydının tamamlanmasını bekleyin.',true);
+ const x=(db.expenses||[]).find(v=>v.id===el('expenseEditId').value);if(!x)return notify('Kayıt bulunamadı.',true);
+ const description=el('expenseEditDescription').value.trim(),amount=Number(el('expenseEditAmount').value),cents=Math.round(amount*100),date=el('expenseEditDate').value,paymentMethod=el('expenseEditPayment').value;
+ if(!description||!Number.isSafeInteger(cents)||cents<=0||cents>99999999999999)return notify('Açıklama ve geçerli tutar girin.',true);
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
+ if(!['CASH','POS','TRANSFER'].includes(paymentMethod))return notify('Ödeme yöntemi geçersiz.',true);
+ if(!confirm('Gider değişiklikleri kaydedilsin mi?'))return;
+ Object.assign(x,{description,amountCents:cents,date,paymentMethod,doc:el('expenseEditDoc').value.trim(),note:el('expenseEditNote').value.trim(),editedAt:new Date().toISOString(),editedBy:currentUser.id});
+ audit('Gider düzenlendi','Finans',x.id+' | '+description+' | '+firmMoney(cents));saveDB();el('expenseDialog').close();notify('Gider güncellendi.');
+}
 function renderExpenses(){
  const entries=[...(db.expenses||[])].sort((a,b)=>String(b.createdAt).localeCompare(String(a.createdAt)));
- el('expenseRows').innerHTML=entries.length?entries.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.description)+'</td><td>'+firmMoney(x.amountCents)+'</td><td>'+esc({CASH:'Nakit',POS:'POS',TRANSFER:'Havale/EFT'}[x.paymentMethod]||'-')+'</td><td>'+esc(x.userName||'-')+'</td></tr>').join(''):'<tr><td colspan="5" class="empty">Henüz gider kaydı yok.</td></tr>';
+ el('expenseRows').innerHTML=entries.length?entries.map(x=>'<tr><td>'+esc(x.date)+'</td><td>'+esc(x.description)+'</td><td>'+firmMoney(x.amountCents)+'</td><td>'+esc({CASH:'Nakit',POS:'POS',TRANSFER:'Havale/EFT'}[x.paymentMethod]||'-')+'</td><td>'+esc(x.userName||'-')+'</td><td><button type="button" class="btn btn-light btn-sm" data-expense-action="view" data-expense-id="'+esc(x.id)+'">Görüntüle</button> <button type="button" class="btn btn-light btn-sm" data-expense-action="edit" data-expense-id="'+esc(x.id)+'">Düzenle</button> <button type="button" class="btn btn-danger btn-sm" data-expense-action="delete" data-expense-id="'+esc(x.id)+'">Sil</button></td></tr>').join(''):'<tr><td colspan="6" class="empty">Henüz gider kaydı yok.</td></tr>';
 }
 function renderGuestProductPicker(){
  const w=el('guestWarehouse'),old=w.value;
@@ -3319,6 +3347,8 @@ el('orderListRows').addEventListener('click',e=>{
 });
 el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
 el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
+el('expenseEditForm').addEventListener('submit',saveExpenseEdit);
+el('expenseRows').addEventListener('click',e=>{const b=e.target.closest('[data-expense-action]');if(b)expenseAction(b.dataset.expenseId,b.dataset.expenseAction)});
 el('guestSaleEditForm').addEventListener('submit',saveGuestSaleEdit);
 el('guestSalesRows').addEventListener('click',e=>{const b=e.target.closest('[data-guest-action]');if(!b)return;const id=b.dataset.guestId;switch(b.dataset.guestAction){case 'view':openGuestSale(id);break;case 'edit':openGuestSale(id,true);break;case 'delete':deleteGuestSale(id);break;}});
 el('guestAddProduct').addEventListener('click',addGuestProduct);
