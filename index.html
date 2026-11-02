@@ -325,6 +325,7 @@
 <div class="field"><label>Teslim Alan Kişi</label><input id="exitReceiver" placeholder="Cari yetkilisi / teslim alan"></div>
 <div class="field"><label>Belge / İrsaliye No</label><input id="exitDoc"></div>
 <div class="field"><label>İşlem Tarihi</label><input id="exitDate" type="datetime-local"></div>
+<div class="field"><label>Cariye Yazılacak Borç (KDV Dahil, ₺) *</label><input id="exitDebtAmount" type="number" step="0.01" min="0.01" required placeholder="Örn. 15000"><small class="muted">Stok çıkışı fiyat içermez; kesin fatura tutarını girin. Cari borcu aynı işlemde kaydedilir.</small></div>
 <div class="field full"><label>Açıklama</label><textarea id="exitNotes"></textarea></div>
 </div>
 <div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="exitProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
@@ -377,7 +378,7 @@
 <div class="stat"><div class="label">Cari Tahsilat</div><div class="value" id="bizPayment">0 ₺</div></div>
 <div class="stat"><div class="label">Giderler</div><div class="value" id="bizExpense">0 ₺</div></div></div>
 <div class="card"><div class="card-head"><h3>Rapor Detayları</h3></div><div class="actions" id="bizTabs" style="flex-wrap:wrap">
-<button type="button" class="btn btn-primary btn-sm" data-biz-tab="exit">Stok Çıkışları</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="purchase">Satın Almalar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="guest">Peşin Satış</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="payment">Cari Tahsilat</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="expense">Giderler</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="user">Kullanıcı İşlemleri</button></div>
+<button type="button" class="btn btn-primary btn-sm" data-biz-tab="exit">Stok Çıkışları</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="purchase">Satın Almalar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="guest">Peşin Satış</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="debt">Cari Borçlar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="payment">Cari Tahsilat</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="expense">Giderler</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="user">Kullanıcı İşlemleri</button></div>
 <div class="table-wrap wide-table"><table><thead id="bizHead"></thead><tbody id="bizRows"></tbody></table></div><p class="muted" id="bizCount"></p></div>
 
 <div class="card"><div class="card-head"><h3>Tarih Bazlı Genel Stok Raporu</h3><div class="actions" style="margin-top:0"><button class="btn btn-ok btn-sm" onclick="exportGeneralReportExcel()">Excel Dosyası İndir</button><button class="btn btn-light btn-sm no-print" onclick="printReports()">Yazdır</button></div></div><div class="report-filter-grid"><div class="field"><label>Başlangıç Tarihi</label><input id="reportFrom" type="date"/></div><div class="field"><label>Bitiş Tarihi</label><input id="reportTo" type="date"/></div><div class="field"><label>Depo</label><select id="reportWarehouse"></select></div></div><div class="report-note">Giriş ve çıkış toplamları normal stok hareketlerini; transferler ise depolar arası hareketleri ayrı gösterir.</div></div>
@@ -2911,10 +2912,15 @@ function saveExit(e){
   e.preventDefault();if(!requirePermission('exit'))return;
   const warehouse=el('exitWarehouse').value,firm=firmById(el('exitFirm').value);
   if(!firm||firm.active===false){notify('Stok çıkışı için önce bir cari / firma seçin.',true);return}
+  if(secureMode&&!isAdmin())return notify('Cari borçlu stok çıkışı için mevcut güvenli sunucuda yönetici oturumu gereklidir.',true);
+  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
+  const amount=Number(el('exitDebtAmount').value),debtCents=Math.round(amount*100);
+  if(!Number.isSafeInteger(debtCents)||debtCents<=0||debtCents>99999999999999)return notify('KDV dahil geçerli borç tutarını girin.',true);
   const items=selectedBatchItems('exit');if(!items)return;
   const doc=el('exitDoc').value.trim(),date=el('exitDate').value||new Date().toISOString(),
     receiver=el('exitReceiver').value.trim(),reason=el('exitReason').value,
     notes=el('exitNotes').value.trim(),batchId=uid('batch');
+  if(!confirm(firm.name+' firmasına '+items.length+' ürün çıkışı ve '+firmMoney(debtCents)+' cari borcu birlikte kaydedilsin mi?'))return;
   items.forEach(({product,amount,unit,quantity,before,after})=>{
     setStock(warehouse,product.id,after);
     addMovement({type:'CIKIS',groupId:batchId,warehouseId:warehouse,productId:product.id,
@@ -2922,11 +2928,17 @@ function saveExit(e){
       firmId:firm.id,firmName:firm.name,reason,
       detail:`${reason} | Firma: ${firm.name}${receiver?' | Teslim alan: '+receiver:''}${notes?' | '+notes:''}`});
   });
+  db.firmLedger=Array.isArray(db.firmLedger)?db.firmLedger:[];
+  if(!db.firmLedger.some(x=>x.stockBatchId===batchId)){
+   db.firmLedger.push({id:uid('cari'),firmId:firm.id,type:'DEBT',amountCents:debtCents,date:String(date).slice(0,10),
+    doc,note:'Stok çıkışı | '+items.length+' ürün'+(notes?' | '+notes:''),stockBatchId:batchId,
+    userId:currentUser.id,userName:currentUser.fullName||currentUser.username,createdAt:new Date().toISOString()});
+  }
   audit('Toplu stok çıkışı','Stok Hareketi',
     warehouseById(warehouse).name+' | Cari: '+firm.name+' | '+items.length+' ürün | '+(doc||'Belgesiz'));
   resetBatchForm('exit',warehouse,firm.id);
   saveDB();
-  notify(items.length+' ürünün stok çıkışı kayda alındı. Drive senkronizasyonu başlatıldı.');
+  notify(items.length+' ürünün stok çıkışı ve '+firmMoney(debtCents)+' cari borç kaydı oluşturuldu. Drive eşitlemesini kontrol edin.');
 }
 function updateTransferCurrent(){
  const p=el('transferProduct').value;
@@ -3053,10 +3065,11 @@ function bizData(){
  const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&F.date(x.date)&&F.firm(x.firmId,x.firmName)&&F.product(x.productId,productById(x.productId)?.name)&&F.warehouse(x.warehouseId));
  const purchases=(db.purchases||[]).filter(x=>F.date(x.date)&&F.firm(x.firmId,x.firmName)&&(F.p==='all'||(F.p.startsWith('purchase:')?firmKey(F.p.slice(9))===firmKey(x.productName):firmKey(productById(F.p)?.name)===firmKey(x.productName)))&&F.w==='all');
  const guests=(db.guestSales||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.warehouse(x.warehouseId)&&(F.p==='all'||(x.items||[]).some(i=>i.productId===F.p)));
+ const debts=(db.firmLedger||[]).filter(x=>x.type==='DEBT'&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
  const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
  const expenses=(db.expenses||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
  const users=(db.auditLogs||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
- return {exits,purchases,guests,payments,expenses,users};
+ return {exits,purchases,guests,debts,payments,expenses,users};
 }
 function renderBizReport(){
  if(!el('bizRows'))return;
@@ -3075,6 +3088,7 @@ function renderBizReport(){
   exit:{headers:['Tarih','Firma','Ürün','Depo','Miktar','Kullanıcı','Belge'],rows:D.exits.map(x=>[fmtDate(x.date),esc(x.firmName||firmById(x.firmId)?.name||'-'),esc(productById(x.productId)?.name||'-'),esc(warehouseById(x.warehouseId)?.name||'-'),esc(formatMovementQuantity(x,true)),esc(x.userName||'-'),esc(x.doc||'')])},
   purchase:{headers:['Tarih','Tedarikçi','Ürün','KG','KDV Hariç','KDV %','KDV','Toplam'],rows:D.purchases.map(x=>[fmtDate(x.date),esc(x.firmName),esc(x.productName),esc(String(x.kg)),firmMoney(x.netCents),esc(String(x.vatRate)),firmMoney(x.vatCents),firmMoney(x.grossCents)])},
   guest:{headers:['Tarih','Müşteri','Ödeme','Tahsilat','Ürünler'],rows:D.guests.map(x=>[fmtDate(x.date),esc(x.customerName||'Perakende'),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc((x.items||[]).map(i=>(productById(i.productId)?.name||'-')+' '+i.inputQuantity+' '+i.unit).join(', '))])},
+  debt:{headers:['Tarih','Cari','Borç Tutarı','Belge','Kaynak'],rows:D.debts.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),firmMoney(x.amountCents),esc(x.doc||''),esc(x.stockBatchId?'Stok çıkışı':x.orderId?'Sipariş':'Manuel')])},
   payment:{headers:['Tarih','Cari','Ödeme','Tutar','Belge'],rows:D.payments.map(x=>[fmtDate(x.date),esc(firmById(x.firmId)?.name||'-'),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc(x.doc||'')])},
   expense:{headers:['Tarih','Açıklama','Ödeme','Tutar','Belge'],rows:D.expenses.map(x=>[fmtDate(x.date),esc(x.description),esc(x.paymentMethod||'-'),firmMoney(x.amountCents),esc(x.doc||'')])},
   user:{headers:['Tarih','Kullanıcı','Modül','İşlem','Detay'],rows:D.users.map(x=>[fmtDate(x.date),esc(x.userName||''),esc(x.module||''),esc(x.action||x.act||''),esc(x.detail||'')])}
