@@ -104,7 +104,8 @@
 <button data-page="stock">📋 Stok Durumu</button>
 <button data-page="movements">🕒 Hareketler</button>
 <button data-page="reports">📈 Raporlar</button>
-<button data-page="history">📅 Tarihsel İşlem Özeti</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
+<button data-page="history">📅 Tarihsel İşlem Özeti</button>
+<button data-page="daily">📊 Günlük Rapor</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
 <button data-admin-only="" data-page="settings">⚙️ Ayarlar</button>
 <button type="button" data-admin-only="" onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
 </nav>
@@ -365,6 +366,33 @@
 <button class="btn btn-danger btn-sm" type="button" id="clearAllMovementsBtn" data-admin-only onclick="clearAllStockMovements()">Tüm Hareketleri Sil</button>
 </div></div>
 <div class="movement-warning" data-admin-only style="margin-bottom:12px"><b>Önemli:</b> Tüm Hareketleri Sil işlemi geçmiş giriş, çıkış, transfer ve sayım kayıtlarını temizler; mevcut depo stok miktarlarına, ürünlere, carilere, siparişlere ve işlem denetim kayıtlarına dokunmaz. Geçmişe dayalı raporlar sıfırlanır. Önce JSON yedeği indirilir.</div><div class="filter-row wide"><div class="field"><label>İşlem</label><select id="movementType"><option value="all">Tümü</option><option value="GIRIS">Stok Girişi</option><option value="CIKIS">Stok Çıkışı</option><option value="TRANSFER">Transfer</option><option value="SAYIM">Sayım</option></select></div><div class="field"><label>Depo</label><select id="movementWarehouse"></select></div><div class="field"><label>Ürün</label><select id="movementProduct"></select></div><div class="field"><label>Firma</label><select id="movementFirm"></select></div><div class="field"><label>Kullanıcı</label><select id="movementUser"></select></div><div class="field"><label>Başlangıç</label><input id="movementFrom" type="date"/></div><div class="field"><label>Bitiş</label><input id="movementTo" type="date"/></div></div><div class="movement-warning" data-admin-only><b>Yönetici düzeltme alanı:</b> Hatalı giriş, çıkış, transfer veya sayım kaydını düzenlediğinizde stok bakiyeleri ve sonraki hareketlerin önceki/sonraki değerleri otomatik yeniden hesaplanır.</div><div class="table-wrap wide-table"><table><thead><tr><th>Tarih</th><th>İşlem</th><th>Depo</th><th>Ürün</th><th>Firma</th><th class="num">Miktar</th><th class="num">Önceki</th><th class="num">Sonraki</th><th>Kullanıcı</th><th>Belge</th><th>Detay</th><th data-admin-column>Yönetici İşlemi</th></tr></thead><tbody id="movementTable"></tbody></table></div></div></div>
+<div class="page" id="page-daily">
+<div class="card"><div class="card-head"><h3>Günlük Rapor</h3><span class="muted">Excel düzeninde ürün, firma, stok ve ödeme özeti</span></div>
+<div class="actions" style="flex-wrap:wrap">
+<button type="button" class="btn btn-primary btn-sm" data-daily-period="today">Günlük</button>
+<button type="button" class="btn btn-light btn-sm" data-daily-period="week">Haftalık</button>
+<button type="button" class="btn btn-light btn-sm" data-daily-period="month">Aylık</button>
+<button type="button" class="btn btn-light btn-sm" data-daily-period="year">Yıllık</button>
+<div class="field"><label>Başlangıç</label><input type="date" id="dailyFrom"></div>
+<div class="field"><label>Bitiş</label><input type="date" id="dailyTo"></div>
+<div class="field"><label>Firma / Müşteri</label><select id="dailyFirm"><option value="all">Tümü</option></select></div>
+<div class="field"><label>Depo</label><select id="dailyWarehouse"><option value="all">Tümü</option></select></div>
+<button type="button" class="btn btn-ok btn-sm" id="dailyExport">Excel / CSV İndir</button></div>
+<div class="report-note">Devreden ve kalan stok miktarları kayıtlı hareketlerden türetilir. Excel'deki ürün ve firma satırları canlı verilerle otomatik oluşur. Çek teslimi tahsilat olarak gösterilir; bankadan tahsil edilme durumu ayrıca takip edilmez.</div>
+<div class="table-wrap" style="max-height:620px;overflow:auto"><table style="min-width:100%;border-collapse:collapse" id="dailyMatrix"><thead id="dailyMatrixHead"></thead><tbody id="dailyMatrixBody"></tbody></table></div>
+<div class="grid stats" style="margin-top:15px">
+<div class="stat"><div class="label">NAKİT</div><div id="dailyCash" class="value">0 ₺</div></div>
+<div class="stat"><div class="label">KREDİ KARTI</div><div id="dailyCard" class="value">0 ₺</div></div>
+<div class="stat"><div class="label">HAVALE / EFT</div><div id="dailyTransfer" class="value">0 ₺</div></div>
+<div class="stat"><div class="label">ÇEK</div><div id="dailyCheck" class="value">0 ₺</div></div>
+<div class="stat"><div class="label">MASRAFLAR</div><div id="dailyExpenses" class="value">0 ₺</div></div>
+<div class="stat"><div class="label">GÜNLÜK / DÖNEM TOPLAM TAHSİLAT</div><div id="dailyCollected" class="value">0 ₺</div></div></div>
+<div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px">
+<div class="card"><h4>NAKİT</h4><div id="dailyCashRows"></div></div>
+<div class="card"><h4>KREDİ KARTI</h4><div id="dailyCardRows"></div></div>
+<div class="card"><h4>ÇEK</h4><div id="dailyCheckRows"></div></div>
+<div class="card"><h4>MASRAFLAR</h4><div id="dailyExpenseRows"></div></div>
+</div></div></div>
 <div class="page" id="page-history">
 <div class="card" id="historicalOverview">
 <div class="card-head"><h3>Tarihsel İşlem Özeti</h3><span class="muted">Satış, alış, borç, tahsilat ve sevkiyatlar tek ekranda</span></div>
@@ -469,7 +497,7 @@ const APP_VERSION='3.0';
 const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu781xw2F9Wy1Ru0oKxiKWQvalu_gJFga3DDVdCe01o5tp_ISlVPwDx/exec';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
-const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Hesap / Tahsilat / Peşin Satış / Gider',orders:'Sipariş Formu',purchasing:'Tedarik ve Satın Alma',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',history:'Tarihsel İşlem Özeti',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
+const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Hesap / Tahsilat / Peşin Satış / Gider',orders:'Sipariş Formu',purchasing:'Tedarik ve Satın Alma',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',history:'Tarihsel İşlem Özeti',daily:'Günlük Rapor',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
 const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['purchasing','Tedarik ve Satın Alma'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
 const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme'],['deleteOrders','Kayıtlı Sipariş Silme'],['editPurchases','Satın Alma Düzenleme'],['deletePurchases','Satın Alma Silme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
@@ -619,7 +647,7 @@ function isAdmin(){return currentUser?.role==='admin'}
 function requireAdminAction(){if(isAdmin())return true;notify('Düzenleme ve silme işlemleri yalnızca yöneticiye açıktır.',true);return false}
 function hasPermission(permission){return !!currentUser&&(isAdmin()||currentUser.permissions?.[permission]===true)}
 function requirePermission(permission){if(hasPermission(permission))return true;notify('Bu işlem için kullanıcı yetkiniz bulunmuyor.',true);return false}
-function canAccessPage(name){if(name==='history')return hasPermission('reports');if(['users','audit','settings','ledger'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
+function canAccessPage(name){if(name==='history'||name==='daily')return hasPermission('reports');if(['users','audit','settings','ledger'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
 function firstAllowedPage(){return PERMISSION_DEFS.find(([key])=>hasPermission(key))?.[0]||'dashboard'}
 function applyPermissionUI(){document.querySelectorAll('#nav button[data-page]').forEach(btn=>{btn.style.display=canAccessPage(btn.dataset.page)?'':'none'});document.querySelectorAll('[data-admin-only],[data-admin-column]').forEach(x=>x.style.display=isAdmin()?'':'none')}
 function notify(msg,error=false){const t=el('toast');t.textContent=msg;t.className='toast show'+(error?' error':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='toast',3000)}
@@ -3403,7 +3431,98 @@ function exportHistoricalOverview(){
  const csv='\uFEFF'+[headers,...historyVisibleRows].map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
  downloadFile('Tatsan-Tarihsel-Islem-Ozeti.csv',csv,'text/csv;charset=utf-8');
 }
-function renderReports(){renderBizReport();renderHistoricalOverview();const rows=allStockRows(),total=rows.reduce((sum,x)=>sum+x.value,0),critical=rows.filter(x=>x.current>0&&x.current<=num(x.product.minStock)),zero=rows.filter(x=>x.current<=0),soon=[...db.movements].filter(m=>m.type==='GIRIS'&&m.expiry).map(m=>({...m,days:Math.ceil((new Date(m.expiry+'T23:59:59')-new Date())/86400000)})).filter(m=>m.days>=0&&m.days<=90).sort((a,b)=>a.days-b.days),r=generalReportData();
+let dailyExportMatrix=[];
+function setDailyPeriod(period){
+ const now=new Date(),start=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ if(period==='week')start.setDate(start.getDate()-(start.getDay()+6)%7);
+ else if(period==='month')start.setDate(1);
+ else if(period==='year')start.setMonth(0,1);
+ else if(period!=='today')return;
+ el('dailyFrom').value=historyDateLocal(start);
+ el('dailyTo').value=historyDateLocal(now);
+ renderDailyReport();
+}
+function renderDailyReport(){
+ if(!el('dailyFrom'))return;
+ const fromField=el('dailyFrom'),toField=el('dailyTo');
+ if(!fromField.value)fromField.value=historyDateLocal(new Date());
+ if(!toField.value)toField.value=historyDateLocal(new Date());
+ const from=fromField.value,to=toField.value;
+ const firmSelect=el('dailyFirm'),warehouseSelect=el('dailyWarehouse');
+ const priorFirm=firmSelect.value,priorWarehouse=warehouseSelect.value;
+ firmSelect.innerHTML='<option value="all">Tümü</option>'+db.firms.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+'</option>').join('');
+ warehouseSelect.innerHTML='<option value="all">Tümü</option>'+db.warehouses.map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join('');
+ if(db.firms.some(f=>f.id===priorFirm))firmSelect.value=priorFirm;
+ if(db.warehouses.some(w=>w.id===priorWarehouse))warehouseSelect.value=priorWarehouse;
+ const firmId=firmSelect.value,warehouseId=warehouseSelect.value,within=d=>{const day=String(d||'').slice(0,10);return day>=from&&day<=to};
+ const selectedFirm=m=>firmId==='all'||m.firmId===firmId;
+ const selectedWarehouse=m=>warehouseId==='all'||m.warehouseId===warehouseId;
+ const products=db.products.filter(p=>p.active!==false);
+ const movements=(db.movements||[]).filter(m=>selectedWarehouse(m));
+ const stocked=products.map(p=>{
+  const productMoves=movements.filter(m=>m.productId===p.id);
+  const stockNow=db.warehouses.filter(w=>warehouseId==='all'||w.id===warehouseId).reduce((n,w)=>n+Number(getStock(w.id,p.id)||0),0);
+  const signed=m=>Number(m.after)-Number(m.before);
+  const afterToNow=productMoves.filter(m=>String(m.date||'').slice(0,10)>to).reduce((n,m)=>n+signed(m),0);
+  const beforePeriod=productMoves.filter(m=>String(m.date||'').slice(0,10)>=from).reduce((n,m)=>n+signed(m),0);
+  const closing=stockNow-afterToNow,opening=stockNow-beforePeriod;
+  const received=productMoves.filter(m=>within(m.date)&&m.type==='GIRIS').reduce((n,m)=>n+Math.max(0,signed(m)),0);
+  const issued=productMoves.filter(m=>within(m.date)&&m.type==='CIKIS'&&selectedFirm(m)).reduce((n,m)=>n+Math.abs(Number(m.quantity)||0),0);
+  return {p,opening,received,closing,issued};
+ });
+ const included=stocked.filter(x=>Math.abs(x.opening)>1e-9||Math.abs(x.received)>1e-9||Math.abs(x.issued)>1e-9||Math.abs(x.closing)>1e-9);
+ const saleMoves=movements.filter(m=>m.type==='CIKIS'&&within(m.date)&&selectedFirm(m));
+ const customers=new Map();
+ for(const m of saleMoves){
+  const name=m.firmName||firmById(m.firmId)?.name||'Peşin / Diğer',key=m.firmId||name;
+  if(!customers.has(key))customers.set(key,{name,amounts:new Map()});
+  const group=customers.get(key);group.amounts.set(m.productId,(group.amounts.get(m.productId)||0)+Math.abs(Number(m.quantity)||0));
+ }
+ const fmt=n=>Number(n||0).toLocaleString('tr-TR',{maximumFractionDigits:3});
+ const header=['','...'];
+ const productHeaders=included.map(x=>x.p.code?x.p.code+' — '+x.p.name:x.p.name);
+ dailyExportMatrix=[['',...productHeaders]];
+ const row=(label,vals,css='')=>{
+  dailyExportMatrix.push([label,...vals.map(v=>Number.isFinite(v)?v:'')]);
+  return '<tr'+(css?' style="'+css+'"':'')+'><th style="position:sticky;left:0;z-index:1;background:inherit;min-width:175px;text-align:left;white-space:nowrap">'+esc(label)+'</th>'+vals.map(v=>'<td style="text-align:center;border:1px solid #dae0e7;min-width:95px">'+(v===null||v===undefined||v===''?'':esc(fmt(v)))+'</td>').join('')+'</tr>';
+ };
+ el('dailyMatrixHead').innerHTML='<tr><th style="position:sticky;left:0;background:#f2f6fc;z-index:2;min-width:175px">ÜRÜN / MÜŞTERİ</th>'+included.map(x=>'<th style="min-width:105px;max-width:155px;white-space:normal;background:#eef1ff">'+esc(x.p.name)+'</th>').join('')+'</tr>';
+ let body=row('DEVREDEN',included.map(x=>x.opening),'background:#d4f7f8');
+ body+=row('GELEN',included.map(x=>x.received),'background:#d4f7f8');
+ body+=row('TOPLAM',included.map(x=>x.opening+x.received),'background:#d4f7f8;font-weight:700');
+ for(const c of [...customers.values()].sort((a,b)=>a.name.localeCompare(b.name,'tr'))){
+  body+=row(c.name,included.map(x=>c.amounts.get(x.p.id)||null),'background:#f6f7fa');
+ }
+ body+=row('DÖNEM SATIŞ',included.map(x=>x.issued),'background:#c8f4f4;font-weight:700');
+ body+=row('KALAN',included.map(x=>x.closing),'background:#c8f4f4;font-weight:700');
+ el('dailyMatrixBody').innerHTML=body;
+ const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&within(x.date)&&(firmId==='all'||x.firmId===firmId));
+ const guests=(db.guestSales||[]).filter(x=>within(x.date)&&firmId==='all'&&(warehouseId==='all'||x.warehouseId===warehouseId));
+ const expenses=(db.expenses||[]).filter(x=>within(x.date)&&firmId==='all');
+ const buckets={CASH:[],POS:[],TRANSFER:[],CHECK:[]};
+ for(const p of payments){const method=buckets[p.paymentMethod]?p.paymentMethod:'CASH';buckets[method].push({name:firmById(p.firmId)?.name||'Cari',amount:Number(p.amountCents||0)})}
+ for(const p of guests){const method=buckets[p.paymentMethod]?p.paymentMethod:'CASH';buckets[method].push({name:p.customerName||'Peşin Satış',amount:Number(p.amountCents||0)})}
+ const sum=items=>items.reduce((n,x)=>n+Number(x.amount||0),0);
+ const cash=sum(buckets.CASH),card=sum(buckets.POS),transfer=sum(buckets.TRANSFER),check=sum(buckets.CHECK);
+ el('dailyCash').textContent=firmMoney(cash);el('dailyCard').textContent=firmMoney(card);
+ el('dailyTransfer').textContent=firmMoney(transfer);el('dailyCheck').textContent=firmMoney(check);
+ el('dailyCollected').textContent=firmMoney(cash+card+transfer+check);
+ el('dailyExpenses').textContent=firmMoney(expenses.reduce((n,x)=>n+Number(x.amountCents||0),0));
+ const details=(items)=>items.length?'<table style="min-width:0;width:100%"><tbody>'+items.map(x=>'<tr><td style="white-space:normal">'+esc(x.name)+'</td><td style="text-align:right">'+esc(firmMoney(x.amount))+'</td></tr>').join('')+'</tbody></table>':'<p class="muted">Bu dönemde işlem yok.</p>';
+ el('dailyCashRows').innerHTML=details(buckets.CASH);
+ el('dailyCardRows').innerHTML=details(buckets.POS);
+ el('dailyCheckRows').innerHTML=details(buckets.CHECK);
+ el('dailyExpenseRows').innerHTML=details(expenses.map(x=>({name:x.description||'Gider',amount:Number(x.amountCents||0)})));
+ const now=new Date(),today=historyDateLocal(now),week=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+ week.setDate(week.getDate()-(week.getDay()+6)%7);
+ const selected=to===today?(from===today?'today':from===historyDateLocal(week)?'week':from===historyDateLocal(new Date(now.getFullYear(),now.getMonth(),1))?'month':from===historyDateLocal(new Date(now.getFullYear(),0,1))?'year':''):'';
+ document.querySelectorAll('[data-daily-period]').forEach(b=>{b.className='btn btn-sm '+(b.dataset.dailyPeriod===selected?'btn-primary':'btn-light')});
+}
+function exportDailyReport(){
+ const csv='\uFEFF'+dailyExportMatrix.map(r=>r.map(v=>'"'+String(v??'').replace(/"/g,'""')+'"').join(';')).join('\r\n');
+ downloadFile('Tatsan-Gunluk-Rapor.csv',csv,'text/csv;charset=utf-8');
+}
+function renderReports(){renderBizReport();renderHistoricalOverview();renderDailyReport();const rows=allStockRows(),total=rows.reduce((sum,x)=>sum+x.value,0),critical=rows.filter(x=>x.current>0&&x.current<=num(x.product.minStock)),zero=rows.filter(x=>x.current<=0),soon=[...db.movements].filter(m=>m.type==='GIRIS'&&m.expiry).map(m=>({...m,days:Math.ceil((new Date(m.expiry+'T23:59:59')-new Date())/86400000)})).filter(m=>m.days>=0&&m.days<=90).sort((a,b)=>a.days-b.days),r=generalReportData();
   el('reportEntryQty').textContent=qty(r.entry);el('reportExitQty').textContent=qty(r.exit);el('reportTransferInQty').textContent=qty(r.transferIn);el('reportTransferOutQty').textContent=qty(r.transferOut);el('reportEntrySub').textContent=`Koli eşdeğeri • ${qty(r.entryPieces)} adet`;el('reportExitSub').textContent=`Koli eşdeğeri • ${qty(r.exitPieces)} adet`;el('reportTransferInSub').textContent=`Koli eşdeğeri • ${qty(r.transferInPieces)} adet`;el('reportTransferOutSub').textContent=`Koli eşdeğeri • ${qty(r.transferOutPieces)} adet`;el('reportRangeLabel').textContent=`${new Date(r.range.from+'T00:00:00').toLocaleDateString('tr-TR')} - ${new Date(r.range.to+'T00:00:00').toLocaleDateString('tr-TR')}`;
   el('reportProductTable').innerHTML=r.products.length?r.products.map(x=>{const net=x.entry-x.exit+x.transferIn-x.transferOut+x.countDiff,p=x.product;return `<tr><td>${esc(p.code)}</td><td><b>${esc(p.name)}</b></td><td>${esc(p.category)}</td><td class="num">${formatStockAmount(p.id,x.entry)}</td><td class="num">${formatStockAmount(p.id,x.exit)}</td><td class="num">${formatStockAmount(p.id,x.transferIn)}</td><td class="num">${formatStockAmount(p.id,x.transferOut)}</td><td class="num">${formatStockAmount(p.id,x.countDiff)}</td><td class="num"><b>${formatStockAmount(p.id,net)}</b></td></tr>`}).join(''):'<tr><td colspan="9" class="empty">Seçilen tarih aralığında ürün hareketi yok.</td></tr>';
   el('reportFirmTable').innerHTML=r.firms.length?r.firms.map(x=>`<tr><td><b>${esc(x.firm)}</b></td><td>${esc(x.product.code)}</td><td>${esc(x.product.name)}</td><td class="num"><b>${formatStockAmount(x.product.id,x.qty)}</b></td><td class="num">${qty(x.pieces)}</td><td class="num">${x.count}</td><td>${dt(x.lastDate)}</td></tr>`).join(''):'<tr><td colspan="7" class="empty">Seçilen tarih aralığında firmaya yapılan stok çıkışı yok.</td></tr>';
@@ -3948,6 +4067,9 @@ el('bizExport').addEventListener('click',exportBizCSV);
 document.querySelectorAll('[data-history-period]').forEach(b=>b.addEventListener('click',()=>applyHistoryPeriod(b.dataset.historyPeriod)));
 el('historyReset').addEventListener('click',()=>{el('historyFrom').value='';el('historyTo').value='';renderHistoricalOverview()});
 el('historyExport').addEventListener('click',exportHistoricalOverview);
+document.querySelectorAll('[data-daily-period]').forEach(b=>b.addEventListener('click',()=>setDailyPeriod(b.dataset.dailyPeriod)));
+['dailyFrom','dailyTo','dailyFirm','dailyWarehouse'].forEach(id=>el(id).addEventListener('change',renderDailyReport));
+el('dailyExport').addEventListener('click',exportDailyReport);
 el('bizRows').addEventListener('click',e=>{const btn=e.target.closest('[data-biz-view]');if(btn)viewBizReportItem(Number(btn.dataset.bizView))});
 el('syncOrderDebtsBtn').addEventListener('click',syncMissingOrderDebts);
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
