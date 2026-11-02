@@ -1548,6 +1548,137 @@ function resetOrderForm(){
  updateOrderTotals();
 }
 
+
+function editSavedOrder(id){
+ if(!requirePermission('orders')||!requirePermission('editOrders'))return;
+ if(orderEditBusy||orderApprovalBusy)return notify('Devam eden bir sipariş işlemi var.',true);
+ if(secureMode&&!isAdmin()&&!orderEditBackendEnabled)
+  return notify('Sipariş düzeltme yetkisi için merkezi Apps Script sunucusu güncellenmelidir.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||
+    syncPushInProgress||syncPullInProgress)
+  return notify('Siparişi düzenlemek için Drive kayıt kuyruğunun tamamlanmasını bekleyin.',true);
+ const order=db.orders.find(o=>o.id===id);
+ if(!order||order.status&&order.status!=='Yeni')
+  return notify('Yalnızca henüz onaylanmamış siparişler düzenlenebilir.',true);
+ if((db.movements||[]).some(m=>m.orderId===id))
+  return notify('Stok çıkışı yapılmış sipariş düzenlenemez.',true);
+ if(!db.firms.some(f=>f.id===order.firmId&&f.active!==false))
+  return notify('Bu siparişin carisi pasif veya bulunamadı.',true);
+ if(!(order.lines||[]).length||(order.lines||[]).some(l=>!productById(l.productId)||productById(l.productId).active===false))
+  return notify('Siparişte pasif veya silinmiş ürün var; önce ürün kartlarını kontrol edin.',true);
+ resetOrderForm();
+ orderEditingId=id;orderEditingRevision=cloudState.revision;
+ el('orderNumber').value=order.number||'';
+ el('orderFirm').value=order.firmId;
+ el('orderDate').value=order.date||localDateTimeValue().slice(0,10);
+ el('orderNotes').value=order.note||'';
+ el('orderDiscount').value=order.discountExpression||String((Number(order.discountBasisPoints||0)/100));
+ el('orderVatRate').value=storedOrderVat(order).hasVat?String(order.vatRateBasisPoints/100):'1';
+ el('orderFirmDiscountHint').textContent='Bu kayıt için uygulanan iskonto yüklendi. Değişiklik firma kartını etkilemez.';
+ for(const line of order.lines){
+  const product=productById(line.productId);
+  el('orderProductPicker').value=product.id;
+  addOrderProduct();
+  const row=orderEditableRows().find(row=>row.dataset.orderProductId===product.id);
+  if(!row)continue;
+  const display=String(line.displayUnit||line.unit||'Koli');
+  const unit=stockUnitOptions(product.id).includes(display)?display:
+    display==='Paket'?'Koli':isKgProduct(product)&&line.unit==='Adet'?'Kg':'Koli';
+  row.querySelector('.order-unit').value=unit;
+  row.querySelector('.order-quantity').value=line.quantity;
+  row.querySelector('.order-price').value=(Number(line.unitPriceCents)/100).toFixed(2);
+  row.dataset.previousUnit=unit;
+ }
+ el('orderFormTitle').textContent='Siparişi Düzenle · '+order.number;
+ el('orderEditingNotice').hidden=false;
+ el('orderSaveBtn').textContent='Sipariş Değişikliklerini Kaydet';
+ el('orderSaveBtn').disabled=false;
+ if(el('orderDetailsDialog').open)el('orderDetailsDialog').close();
+ refreshOrderProductStock();updateOrderTotals();
+ document.getElementById('page-orders').scrollIntoView({behavior:'smooth',block:'start'});
+ notify(order.number+' düzenleme için açıldı. Kaydedilince stok miktarı değişmeyecek.');
+}
+async function saveEditedOrder(){
+ if(orderEditBusy||orderApprovalBusy)return;
+ if(!requirePermission('orders')||!requirePermission('editOrders'))return;
+ if(secureMode&&!isAdmin()&&!orderEditBackendEnabled)
+  return notify('Bu işlem için güncel Apps Script sunucusu gerekli.',true);
+ if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||
+    syncPushInProgress||syncPullInProgress)
+  return notify('Bekleyen Drive kaydı varken sipariş düzenlenemez.',true);
+ const order=db.orders.find(o=>o.id===orderEditingId);
+ if(!order||order.status&&order.status!=='Yeni')
+  return notify('Sipariş onaylanmış veya artık bulunamıyor.',true);
+ const firm=firmById(el('orderFirm').value);
+ if(!firm||firm.active===false)return notify('Geçerli cari seçiniz.',true);
+ const date=el('orderDate').value;
+ if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))
+  return notify('Geçerli sipariş tarihi girin.',true);
+ const quote=getOrderQuote(true);if(!quote)return;
+ const note=el('orderNotes').value.trim();
+ if(note.length>1000)return notify('Sipariş notu 1000 karakteri geçemez.',true);
+ const patch={
+  firmId:firm.id,date,note,lines:quote.lines,
+  subtotalCents:quote.subtotalCents,discountBasisPoints:quote.discountBasisPoints,
+  discountExpression:quote.discountExpression,discountCents:quote.discountCents,
+  totalCents:quote.totalCents,vatRateBasisPoints:quote.vatRateBasisPoints,
+  vatCents:quote.vatCents,grandTotalCents:quote.grandTotalCents
+ };
+ if(!Number.isInteger(orderEditingRevision)||orderEditingRevision!==cloudState.revision)
+  return notify('Bu sipariş düzenlenirken Drive sürümü değişmiş. Yeniden açın.',true);
+ if(!confirm((order.number||'')+' siparişindeki değişiklikler kaydedilsin mi?\n'+
+   'Onaylanmadığı için stok miktarı değişmeyecek.'))return;
+ orderEditBusy=true;syncPullInProgress=true;
+ const button=el('orderSaveBtn');button.disabled=true;
+ try{
+  let result;
+  const requestId=uid('ord-edit');
+  if(secureMode&&orderEditBackendEnabled){
+   result=await rpc('orderUpdate',{orderId:order.id,expectedRevision:orderEditingRevision,
+    requestId,patch});
+   if(!result?.ok)throw new Error(result?.error||'Sunucu sipariş düzeltmeyi reddetti.');
+  }else{
+   if(!isAdmin())throw new Error('Bu sunucuda düzenleme işlemi sadece yönetici için kullanılabilir.');
+   const latest=cloudResultCheck(await rpc('cloudRead'));
+   if(!latest?.data||latest.revision!==orderEditingRevision)
+    throw new Error('Başka kullanıcı Drive verisini değiştirdi. Siparişi yeniden açın.');
+   const original=latest.data.orders?.find(o=>o.id===order.id);
+   if(!original||original.status&&original.status!=='Yeni'||
+      latest.data.movements?.some(m=>m.orderId===order.id))
+    throw new Error('Sipariş artık düzenlenebilir durumda değil.');
+   const updated=JSON.parse(JSON.stringify(latest.data));
+   const target=updated.orders.find(o=>o.id===order.id);
+   Object.assign(target,patch,{firmName:firm.name,firmCode:firm.code||'',
+    editedAt:new Date().toISOString(),editedById:currentUser.id,
+    editedByName:currentUser.fullName||currentUser.username});
+   updated.auditLogs.push({id:uid('log'),date:new Date().toISOString(),userId:currentUser.id,
+    userName:currentUser.fullName||currentUser.username,username:currentUser.username,
+    module:'Sipariş Formu',action:'Sipariş güncellendi',detail:order.number+' | '+firm.name});
+   result=await rpc('cloudWrite',{revision:latest.revision,requestId,data:updated});
+   if(result?.conflict)throw new Error('Drive sürüm çakışması. Siparişi yeniden açın.');
+   if(!result?.ok||!Number.isInteger(result.revision))
+    throw new Error('Drive sipariş düzeltme kaydını onaylamadı.');
+  }
+  const latest=cloudResultCheck(await rpc('cloudRead'));
+  const newOrder=latest.data?.orders?.find(o=>o.id===order.id);
+  if(!newOrder||newOrder.status&&newOrder.status!=='Yeni'||!newOrder.editedAt)
+   throw new Error('Düzenlemenin Drive kaydı doğrulanamadı. Önce kayıtları yenileyin.');
+  db=normalizeDB(latest.data);
+  localStorage.setItem(DB_KEY,JSON.stringify(db));
+  currentUser=userById(currentUser.id);
+  cloudState.dirty=false;cloudState.pending=null;cloudConflict=false;
+  markSyncedBase(latest.data,latest.revision);rememberCloud();
+  resetOrderForm();showApp();
+  el('syncIndicator').textContent='Drive: kaydedildi · v'+latest.revision;
+  notify((newOrder.number||'Sipariş')+' güncellendi. Stok miktarı değiştirilmedi.');
+ }catch(err){
+  notify('Sipariş düzeltilemedi: '+(err.message||err),true);
+ }finally{
+  orderEditBusy=false;syncPullInProgress=false;
+  el('orderSaveBtn').disabled=false;
+ }
+}
+
 let selectedOrderForApproval=null;
 function orderEditButton(order){
  if(!hasPermission('orders')||!hasPermission('editOrders'))return '';
