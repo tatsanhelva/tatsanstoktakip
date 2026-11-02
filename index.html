@@ -1775,8 +1775,8 @@ function openOrderApproval(id){
  if(!requirePermission('approveOrders')||!requirePermission('orders'))return;
  if(orderEditingId)return notify('Önce açık sipariş düzeltmesini kaydedin veya iptal edin.',true);
  if(orderApprovalBusy)return notify('Bir sipariş onay işlemi sürüyor.',true);
- if(secureMode&&!orderApprovalBackendEnabled&&!isAdmin())
-  return notify('Çalışan hesabıyla sipariş onaylama için güncel Apps Script sunucusu gerekli. Yöneticiden sunucuyu güncellemesini isteyin.',true);
+ if(!secureMode||!orderApprovalBackendEnabled)
+  return notify('Sipariş onayı için güncel merkezi Apps Script sunucusunu dağıtmanız gerekir. Eski sunucuda onay kapalıdır.',true);
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
   return notify('Onaylamadan önce bekleyen Drive kayıtları tamamlanmalı.',true);
  const order=db.orders.find(o=>o.id===id);
@@ -1816,8 +1816,8 @@ function renderOrderApprovalPreview(){
 async function confirmOrderApproval(){
  if(orderApprovalBusy)return;
  if(!requirePermission('approveOrders')||!requirePermission('orders'))return;
- if(secureMode&&!orderApprovalBackendEnabled&&!isAdmin())
-  return notify('Bu kullanıcının sipariş onayı için güncel sunucu sürümü gerekli.',true);
+ if(!secureMode||!orderApprovalBackendEnabled)
+  return notify('Sipariş onayı için güncel merkezi Apps Script sunucusunu dağıtmanız gerekir.',true);
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
   return notify('Önce Drive kuyruğunu tamamlayın.',true);
  const orderId=selectedOrderForApproval,warehouseId=el('orderApproveWarehouse').value;
@@ -1832,22 +1832,8 @@ async function confirmOrderApproval(){
  el('orderApproveStockMessage').textContent='Drive üzerinde sipariş ve stok hareketleri birlikte kaydediliyor…';
  try{
   let result;
-  if(secureMode&&orderApprovalBackendEnabled){
-   result=await rpc('orderApprove',{orderId,warehouseId,requestId:uid('ord-approve')});
-   if(!result?.ok)throw new Error(result?.error||'Sunucu sipariş onayını doğrulamadı.');
-  }else{
-   if(!isAdmin())throw new Error('Bu sunucu sürümünde sipariş onayı yalnızca yönetici tarafından yapılabilir.');
-   const latest=cloudResultCheck(await rpc('cloudRead'));
-   if(!latest?.data||!Number.isInteger(latest.revision))throw new Error('Drive verisi okunamadı.');
-   const current=orderApprovalPlan(latest.data,orderId,warehouseId);
-   if(!current.ok)throw new Error(current.errors?.join(' ')||current.error||'Sipariş başka kullanıcı tarafından onaylandı.');
-   if(current.items.some((item,i)=>Math.abs(item.before-preview.items[i]?.before)>0.000001))
-    throw new Error('Onay sırasında stok miktarı değişti. Depoyu yeniden kontrol edin.');
-   const data=buildOrderApprovalData(latest.data,current,currentUser);
-   result=await rpc('cloudWrite',{revision:latest.revision,requestId:uid('ord-approve'),data});
-   if(result?.conflict)throw new Error('Başka bilgisayar aynı anda kayıt yaptı. Sipariş onayını yeniden kontrol edin.');
-   if(!result?.ok||!Number.isInteger(result.revision))throw new Error('Drive onay kaydını doğrulamadı.');
-  }
+  result=await rpc('orderApprove',{orderId,warehouseId,requestId:uid('ord-approve')});
+  if(!result?.ok)throw new Error(result?.error||'Sunucu sipariş onayını doğrulamadı.');
   const refreshed=cloudResultCheck(await rpc('cloudRead'));
   const approved=refreshed.data?.orders?.find(o=>o.id===orderId);
   if(!approved||approved.status!=='Onaylandı')throw new Error('Kaydın onay durumu doğrulanamadı; yeniden onaylamadan önce Drive verilerini yenileyin.');
