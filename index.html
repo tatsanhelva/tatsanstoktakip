@@ -379,7 +379,7 @@
 <div class="stat"><div class="label">Giderler</div><div class="value" id="bizExpense">0 ₺</div></div></div>
 <div class="card"><div class="card-head"><h3>Rapor Detayları</h3></div><div class="actions" id="bizTabs" style="flex-wrap:wrap">
 <button type="button" class="btn btn-primary btn-sm" data-biz-tab="exit">Stok Çıkışları</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="purchase">Satın Almalar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="guest">Peşin Satış</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="debt">Cari Borçlar</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="payment">Cari Tahsilat</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="expense">Giderler</button><button type="button" class="btn btn-light btn-sm" data-biz-tab="user">Kullanıcı İşlemleri</button></div>
-<div class="table-wrap wide-table"><table><thead id="bizHead"></thead><tbody id="bizRows"></tbody></table></div><p class="muted" id="bizCount"></p></div>
+<div class="table-wrap wide-table"><table><thead id="bizHead"></thead><tbody id="bizRows"></tbody></table></div><div id="bizDebtAudit" class="inline-info danger-info" hidden style="margin:10px 0"></div><p class="muted" id="bizCount"></p></div>
 
 <div class="card"><div class="card-head"><h3>Tarih Bazlı Genel Stok Raporu</h3><div class="actions" style="margin-top:0"><button class="btn btn-ok btn-sm" onclick="exportGeneralReportExcel()">Excel Dosyası İndir</button><button class="btn btn-light btn-sm no-print" onclick="printReports()">Yazdır</button></div></div><div class="report-filter-grid"><div class="field"><label>Başlangıç Tarihi</label><input id="reportFrom" type="date"/></div><div class="field"><label>Bitiş Tarihi</label><input id="reportTo" type="date"/></div><div class="field"><label>Depo</label><select id="reportWarehouse"></select></div></div><div class="report-note">Giriş ve çıkış toplamları normal stok hareketlerini; transferler ise depolar arası hareketleri ayrı gösterir.</div></div>
 <div class="grid stats"><div class="stat"><div class="label">Toplam Giriş</div><div class="value" id="reportEntryQty">0</div><div class="sub" id="reportEntrySub">Koli eşdeğeri</div></div><div class="stat"><div class="label">Toplam Çıkış</div><div class="value" id="reportExitQty">0</div><div class="sub" id="reportExitSub">Koli eşdeğeri</div></div><div class="stat"><div class="label">Transfer Giriş</div><div class="value" id="reportTransferInQty">0</div><div class="sub" id="reportTransferInSub">Koli eşdeğeri</div></div><div class="stat"><div class="label">Transfer Çıkış</div><div class="value" id="reportTransferOutQty">0</div><div class="sub" id="reportTransferOutSub">Koli eşdeğeri</div></div></div>
@@ -3112,6 +3112,9 @@ function renderBizReport(){
  bizOptions('bizProduct',[...products,...extras]);
  if(existingProduct==='all')el('bizProduct').value='all';
  const D=bizData(),sum=arr=>arr.reduce((a,x)=>a+Number(x.amountCents||x.grossCents||0),0);
+ const posted=new Set((db.firmLedger||[]).filter(x=>x.type==='DEBT'&&x.stockBatchId).map(x=>x.stockBatchId));
+ const missing=new Set(D.exits.filter(m=>m.firmId&&!m.orderId&&m.groupId&&!posted.has(m.groupId)).map(m=>m.groupId));
+ const debtAlert=el('bizDebtAudit');if(debtAlert){debtAlert.hidden=!missing.size;debtAlert.textContent=missing.size+' stok çıkışı grubunda eşleşen cari borç bulunamadı. Geçmiş fiyatlar değişmiş olabileceğinden otomatik borç eklenmedi.';}
  el('bizPurchase').textContent=firmMoney(D.purchases.reduce((a,x)=>a+Number(x.grossCents||0),0));
  el('bizGuest').textContent=firmMoney(sum(D.guests));el('bizPayment').textContent=firmMoney(sum(D.payments));el('bizExpense').textContent=firmMoney(sum(D.expenses));
  const fmtDate=x=>esc(String(x||'').slice(0,10));
@@ -3268,6 +3271,8 @@ function rebaseQueuedStockMovements(latest){
  const baseMoves=cloudState.baseMovementCount,baseAudit=cloudState.baseAuditCount,baseOrders=cloudState.baseOrderCount;
  if(!Number.isInteger(baseMoves)||!Number.isInteger(baseAudit)||!Number.isInteger(baseOrders)||cloudState.ownerId!==currentUser.id)return false;
  const local=db,remote=normalizeDB(JSON.parse(JSON.stringify(latest.data)));
+ // Finans kayıtları birleşmeden revizyon çakışmasında cari borç kaybolmamalı.
+ if(JSON.stringify(local.firmLedger||[])!==JSON.stringify(remote.firmLedger||[]))return false;
  if(!sameStockStructure(local,remote))return false;
  if(local.movements.length<baseMoves||remote.movements.length<baseMoves||
     local.auditLogs.length<baseAudit||remote.auditLogs.length<baseAudit||
