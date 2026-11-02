@@ -3336,27 +3336,27 @@ function renderHistoricalOverview(){
  const from=el('historyFrom').value,to=el('historyTo').value,firmId=f.value;
  const pass=(date,id)=>{const d=historyDate(date);return (!from||d>=from)&&(!to||d<=to)&&(firmId==='all'||id===firmId)};
  const sums={sales:0,purchase:0,payment:0,guest:0,expense:0,exits:0},rows=[];
- const add=(date,kind,firm,desc,quantity,incoming,outgoing)=>rows.push([historyDate(date),kind,firm,desc,quantity,incoming,outgoing]);
+ const add=(date,kind,firm,desc,quantity,incoming,outgoing,source)=>{const row=[historyDate(date),kind,firm,desc,quantity,incoming,outgoing];row.sortTime=Date.parse(source?.createdAt||source?.date||date)||0;row.sortIndex=rows.length;rows.push(row)};
  for(const x of db.firmLedger||[]){
   if(!pass(x.date,x.firmId))continue;
   const amount=Number(x.amountCents||0),name=firmById(x.firmId)?.name||'-';
-  if(x.type==='DEBT'){sums.sales+=amount;add(x.date,'Cari Borç / Satış',name,x.note||x.doc||'Cari borç','',amount,0)}
-  if(x.type==='PAYMENT'){sums.payment+=amount;add(x.date,'Cari Tahsilat',name,x.note||x.doc||'Tahsilat','',0,amount)}
+  if(x.type==='DEBT'){sums.sales+=amount;add(x.date,'Cari Borç / Satış',name,x.note||x.doc||'Cari borç','',amount,0,x)}
+  if(x.type==='PAYMENT'){sums.payment+=amount;add(x.date,'Cari Tahsilat',name,x.note||x.doc||'Tahsilat','',0,amount,x)}
  }
  for(const x of db.purchases||[]){
   if(!pass(x.date,x.firmId))continue;
   const amount=Number(x.grossCents||0);sums.purchase+=amount;
-  add(x.date,'Satın Alma',x.firmName||firmById(x.firmId)?.name||'-',x.productName||'-',String(x.kg??'')+' kg',0,amount);
+  add(x.date,'Satın Alma',x.firmName||firmById(x.firmId)?.name||'-',x.productName||'-',String(x.kg??'')+' kg',0,amount,x);
  }
  for(const x of db.guestSales||[]){
   if(!pass(x.date,null))continue;
   const amount=Number(x.amountCents||0);sums.guest+=amount;
-  add(x.date,'Peşin Satış',x.customerName||'Perakende', (x.items||[]).map(i=>productById(i.productId)?.name||i.productId).join(', '), '',amount,0);
+  add(x.date,'Peşin Satış',x.customerName||'Perakende', (x.items||[]).map(i=>productById(i.productId)?.name||i.productId).join(', '), '',amount,0,x);
  }
  for(const x of db.expenses||[]){
   if(!pass(x.date,null))continue;
   const amount=Number(x.amountCents||0);sums.expense+=amount;
-  add(x.date,'Gider','-',x.description||'-','',0,amount);
+  add(x.date,'Gider','-',x.description||'-','',0,amount,x);
  }
  const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&pass(x.date,x.firmId||null));
  const groups=new Map();
@@ -3364,9 +3364,9 @@ function renderHistoricalOverview(){
  sums.exits=exits.length;
  for(const batch of groups.values()){
   const x=batch[0],description=batch.map(m=>(productById(m.productId)?.name||m.productId)+' ('+formatMovementQuantity(m,true)+')').join(', ');
-  add(x.date,'Stok Çıkışı',x.firmName||firmById(x.firmId)?.name||'-',description,batch.length+' ürün',0,0);
+  add(x.date,'Stok Çıkışı',x.firmName||firmById(x.firmId)?.name||'-',description,batch.length+' ürün',0,0,x);
  }
- rows.sort((a,b)=>b[0].localeCompare(a[0]));
+ rows.sort((a,b)=>b.sortTime-a.sortTime||b.sortIndex-a.sortIndex);
  historyVisibleRows=rows;
  el('historySales').textContent=firmMoney(sums.sales);
  el('historyPurchase').textContent=firmMoney(sums.purchase);
