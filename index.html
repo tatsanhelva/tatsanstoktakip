@@ -308,7 +308,12 @@
 <div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Sistem Stoku</th><th>Sayılan Miktar</th><th>Birim</th><th>Sayım Farkı</th></tr></thead><tbody id="countBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
 <div id="countBatchSummary" class="inline-info" style="margin-top:12px">Depo seçtikten sonra sayılan miktarları girin. Sıfır stok için 0 yazabilirsiniz.</div>
 <div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Sayımını Kaydet ve Stokları Düzelt</button></div>
-</form></div></div>
+</form></div>
+<div class="card" style="margin-top:16px"><div class="card-head"><h3>Geçmiş Sayım Tutanakları</h3><span class="muted">Kaydedilen sayımları ve ürün farklarını inceleyin</span></div>
+<div class="table-wrap"><table><thead><tr><th>Sayım Tutanağı</th><th>Depo</th><th>Ürün Sayısı</th><th>Farklı Ürün</th><th>İşlem</th></tr></thead><tbody id="countHistoryRows"></tbody></table></div></div></div>
+<dialog id="countHistoryDialog" style="width:min(960px,96vw);max-height:90vh;border:0;border-radius:14px;padding:24px">
+<div class="card-head"><h3 id="countHistoryTitle">Sayım Tutanağı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('countHistoryDialog').close()">Kapat</button></div>
+<p id="countHistoryInfo" class="muted"></p><div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Önceki Stok</th><th>Sayılan Stok</th><th>Fark</th></tr></thead><tbody id="countHistoryDetails"></tbody></table></div></dialog>
 <div class="page" id="page-stock"><div class="card"><div class="card-head"><h3>Stok Durumu</h3><div class="actions" style="margin:0"><button type="button" class="btn btn-primary btn-sm" onclick="exportStockPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light btn-sm" onclick="exportStockCSV()">Excel/CSV İndir</button></div></div><div class="filter-row"><div class="field"><label>Depo</label><select id="stockWarehouseFilter"></select></div><div class="field"><label>Arama</label><input id="stockSearch" placeholder="Kod, barkod, ürün..."/></div><div class="field"><label>Durum</label><select id="stockStatusFilter"><option value="all">Tümü</option><option value="positive">Stokta Var</option><option value="critical">Kritik</option><option value="zero">Stok Bitti</option></select></div></div><div class="table-wrap"><table><thead><tr><th>Depo</th><th>Kod</th><th>Barkod</th><th>Ürün</th><th>Birim</th><th class="num">Mevcut Stok</th><th class="num">Min.</th><th class="num">Stok Satış Değeri (KDV Hariç)</th><th>Durum</th></tr></thead><tbody id="stockTable"></tbody></table></div></div></div>
 <div class="page" id="page-movements"><div class="card"><div class="card-head"><h3>Stok Hareketleri</h3><div class="actions" style="margin-top:0">
 <button class="btn btn-light btn-sm" type="button" onclick="exportMovementsCSV()">Excel/CSV İndir</button>
@@ -344,7 +349,7 @@
  <div id="orderDetailsHeader" style="margin-bottom:14px"></div>
  <div class="table-wrap"><table style="min-width:650px"><thead><tr><th>Ürün</th><th class="num">Miktar</th><th>Birim</th><th class="num">Birim Fiyat</th><th class="num">Tutar</th></tr></thead><tbody id="orderDetailsLines"></tbody></table></div>
  <div id="orderDetailsTotals" class="order-details-totals"></div>
- <div class="actions"><button type="button" id="orderDetailsEditBtn" class="btn btn-light" onclick="editSavedOrder(orderCurrentlyViewed)">Siparişi Düzenle</button><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
+ <div class="actions"><button type="button" id="orderDetailsApproveBtn" class="btn btn-ok" onclick="approveViewedOrder()">Onayla</button><button type="button" id="orderDetailsEditBtn" class="btn btn-light" onclick="editSavedOrder(orderCurrentlyViewed)">Siparişi Düzenle</button><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
 </dialog>
 <dialog id="firmStatementDialog" style="width:min(900px,96vw);max-height:88vh;border:0;border-radius:14px;padding:22px">
   <div class="card-head"><h3 id="firmStatementTitle">Cari Ekstresi</h3><button class="btn btn-light btn-sm" type="button" onclick="el('firmStatementDialog').close()">Kapat</button></div>
@@ -1921,10 +1926,17 @@ function saveOrder(e){
  notify(number+' siparişi oluşturuldu. Drive kayıt kuyruğuna alındı.');
 }
 let orderCurrentlyViewed=null;
+function approveViewedOrder(){
+ const id=orderCurrentlyViewed;
+ if(!id||!requirePermission('approveOrders'))return;
+ el('orderDetailsDialog').close();
+ openOrderApproval(id);
+}
 function showOrderDetails(id){
  if(!requirePermission('orders'))return;
  const order=db.orders.find(o=>o.id===id);if(!order)return notify('Sipariş bulunamadı.',true);
  orderCurrentlyViewed=id;
+ el('orderDetailsApproveBtn').style.display=hasPermission('approveOrders')&&(!order.status||order.status==='Yeni')?'':'none';
  el('orderDetailsEditBtn').style.display=hasPermission('editOrders')&&(!order.status||order.status==='Yeni')?'':'none';
  el('orderDetailsTitle').textContent=order.number+' - Sipariş Formu';
  el('orderDetailsHeader').innerHTML='<p><b>Cari:</b> '+esc(order.firmName||'')+
@@ -2529,13 +2541,42 @@ function saveTransfer(e){
  saveDB();e.target.reset();setUnitOptions('transferUnit',el('transferProduct').value);
  setDefaultDates();updateTransferCurrent();notify('Depo transferi kaydedildi.');
 }
+function renderCountHistory(){
+ const target=el('countHistoryRows');if(!target)return;
+ const groups=new Map();
+ for(const m of db.movements||[]){
+  if(m.type!=='SAYIM')continue;
+  const id=m.groupId||m.id;
+  if(!groups.has(id))groups.set(id,{id,rows:[],date:m.date,doc:m.doc,warehouseId:m.warehouseId,person:m.userName||''});
+  groups.get(id).rows.push(m);
+ }
+ const entries=[...groups.values()].sort((a,b)=>new Date(b.date)-new Date(a.date));
+ target.innerHTML=entries.length?entries.map(g=>{
+  const person=g.person||((g.rows[0]?.detail||'').match(/Sayımı yapan: ([^|]+)/)||[])[1]||'Kullanıcı';
+  const time=new Date(g.date);
+  const title=g.doc||person+'-'+time.toLocaleDateString('tr-TR').replaceAll('/','.')+'-'+time.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
+  const changed=g.rows.filter(m=>Math.abs(Number(m.after)-Number(m.before))>1e-9).length;
+  return '<tr><td>'+esc(title)+'</td><td>'+esc(warehouseById(g.warehouseId)?.name||'-')+'</td><td>'+g.rows.length+'</td><td>'+changed+'</td><td><button type="button" class="btn btn-light btn-sm" data-count-history="'+esc(g.id)+'">Görüntüle</button></td></tr>';
+ }).join(''):'<tr><td colspan="5" class="empty">Henüz kayıtlı sayım bulunmuyor.</td></tr>';
+}
+function showCountHistory(id){
+ if(!requirePermission('count'))return;
+ const records=(db.movements||[]).filter(m=>m.type==='SAYIM'&&(m.groupId||m.id)===id);
+ if(!records.length)return notify('Sayım tutanağı bulunamadı.',true);
+ const first=records[0],person=first.userName||((first.detail||'').match(/Sayımı yapan: ([^|]+)/)||[])[1]||'Kullanıcı';
+ el('countHistoryTitle').textContent=first.doc||person+'-'+dt(first.date);
+ el('countHistoryInfo').textContent='Depo: '+(warehouseById(first.warehouseId)?.name||'-')+' | Tarih: '+dt(first.date)+' | Yapan: '+person;
+ el('countHistoryDetails').innerHTML=records.map(m=>'<tr><td>'+esc(productById(m.productId)?.name||'-')+'</td><td>'+formatStockAmount(m.productId,m.before)+'</td><td>'+formatStockAmount(m.productId,m.after)+'</td><td>'+formatStockAmount(m.productId,Number(m.after)-Number(m.before))+'</td></tr>').join('');
+ el('countHistoryDialog').showModal();
+}
 function saveCount(e){
  e.preventDefault();if(!requirePermission('count'))return;
  const items=selectedBatchItems('count');if(!items)return;
  const warehouse=el('countWarehouse').value,
-   person=el('countPerson').value.trim()||currentUser.fullName||currentUser.username,
-   date=el('countDate').value||new Date().toISOString(),
-   notes=el('countNotes').value.trim(),doc=el('countDoc').value.trim(),batchId=uid('batch');
+   person=currentUser.fullName||currentUser.username,
+   date=new Date().toISOString(),
+   notes=el('countNotes').value.trim(),batchId=uid('batch'),
+   stamp=new Date(date),doc=person+'-'+stamp.toLocaleDateString('tr-TR').replaceAll('/','.')+'-'+stamp.toLocaleTimeString('tr-TR',{hour:'2-digit',minute:'2-digit'});
  let differences=0;
  items.forEach(({product,amount,unit,before,after})=>{
    if(Math.abs(after-before)>0.000000001)differences++;
@@ -2548,7 +2589,7 @@ function saveCount(e){
  audit('Toplu stok sayımı','Stok Hareketi',warehouseById(warehouse).name+
    ' | '+items.length+' ürün sayıldı | '+differences+' stok farkı | '+(doc||'Belgesiz'));
  resetBatchForm('count',warehouse);
- saveDB();
+ saveDB();renderCountHistory();
  notify(items.length+' ürün sayıldı; '+differences+' ürünün stoku düzeltildi. Drive kaydı kuyruğa alındı.');
 }
 
@@ -2977,7 +3018,7 @@ function clearAllAuditLogs(){
 }
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderOrders();renderStock();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderOrders();renderStock();renderCountHistory();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
@@ -3001,6 +3042,7 @@ el('orderSearch').addEventListener('input',renderOrders);
 el('orderLineRows').addEventListener('input',handleOrderLineEvent);
 el('orderLineRows').addEventListener('change',handleOrderLineEvent);
 el('orderLineRows').addEventListener('click',handleOrderLineEvent);
+el('countHistoryRows').addEventListener('click',e=>{const b=e.target.closest('[data-count-history]');if(b)showCountHistory(b.dataset.countHistory)});
 el('orderListRows').addEventListener('click',e=>{
  const pdf=e.target.closest('button[data-order-pdf]');if(pdf){exportSavedOrderPDF(pdf.dataset.orderPdf);return}
  const edit=e.target.closest('button[data-order-edit]');if(edit){editSavedOrder(edit.dataset.orderEdit);return}
