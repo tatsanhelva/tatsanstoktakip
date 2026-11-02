@@ -1842,7 +1842,7 @@ async function saveEditedOrder(){
 let selectedOrderForApproval=null;
 function orderDeleteButton(order){
  if(!hasPermission('orders')||!hasPermission('deleteOrders'))return '';
- if(order.status&&order.status!=='Yeni')return '';
+ if(orderIsApproved(order)||order.status&&order.status!=='Yeni')return '';
  if((db.movements||[]).some(m=>m.orderId===order.id))return '';
  return ' <button type="button" class="btn btn-danger btn-sm" data-order-delete="'+esc(order.id)+'">Sil</button>';
 }
@@ -1871,8 +1871,14 @@ function orderEditButton(order){
  if(order.status&&order.status!=='Yeni')return '';
  return ' <button type="button" class="btn btn-light btn-sm" data-order-edit="'+esc(order.id)+'">Düzenle</button>';
 }
+function orderIsApproved(order,data=db){
+ if(!order)return false;
+ const status=String(order.status||'');
+ return status==='Onaylandı'||status==='OnaylandÄ±'||status==='OnaylandÃ„Â±'||
+  (Array.isArray(data?.movements)&&data.movements.some(m=>m.orderId===order.id&&m.type==='CIKIS'));
+}
 function orderApproveButton(order){
- if(order.status==='Onaylandı')return ' <span class="muted" title="Stok çıkışı tamamlandı">Stoktan Düşüldü</span>';
+ if(orderIsApproved(order))return ' <span class="muted" title="Stok çıkışı tamamlandı">Stoktan Düşüldü</span>';
  if(order.status&&order.status!=='Yeni')return '';
  if(!hasPermission('approveOrders'))return '';
  return ' <button type="button" class="btn btn-ok btn-sm" data-order-approve="'+esc(order.id)+'">Onayla</button>';
@@ -1888,7 +1894,7 @@ function orderApprovalUnit(line,product){
 function orderApprovalPlan(data,orderId,warehouseId){
  const order=(data.orders||[]).find(o=>o.id===orderId);
  if(!order)return {ok:false,error:'Sipariş bulunamadı.'};
- if(order.status&&order.status!=='Yeni')return {ok:false,error:'Sipariş zaten onaylanmış veya artık yeni değil.'};
+ if(orderIsApproved(order,data)||order.status&&order.status!=='Yeni')return {ok:false,error:'Sipariş zaten onaylanmış veya artık yeni değil.'};
  if((data.movements||[]).some(m=>m.orderId===orderId))
   return {ok:false,error:'Bu sipariş için stok çıkışı hareketi zaten var; çift çıkış engellendi.'};
  const warehouse=(data.warehouses||[]).find(w=>w.id===warehouseId);
@@ -2020,7 +2026,7 @@ async function confirmOrderApproval(){
   if(!result?.ok)throw new Error(result?.error||'Sunucu sipariş onayını doğrulamadı.');
   const refreshed=cloudResultCheck(await rpc('cloudRead'));
   const approved=refreshed.data?.orders?.find(o=>o.id===orderId);
-  if(!approved||approved.status!=='Onaylandı')throw new Error('Kaydın onay durumu doğrulanamadı; yeniden onaylamadan önce Drive verilerini yenileyin.');
+  if(!orderIsApproved(approved,refreshed.data))throw new Error('Kaydın onay durumu doğrulanamadı; yeniden onaylamadan önce Drive verilerini yenileyin.');
   db=normalizeDB(refreshed.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
   currentUser=userById(currentUser.id);
   cloudState.dirty=false;cloudState.pending=null;cloudConflict=false;
