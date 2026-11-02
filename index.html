@@ -177,6 +177,7 @@
  <form id="firmForm"><input id="firmId" type="hidden"><div class="form-grid cols-3">
   <div class="field"><label>Firma Kodu (Otomatik)</label><input id="firmCode" readonly placeholder="Otomatik"></div>
   <div class="field"><label>Firma Adı *</label><input id="firmName" required maxlength="200"></div>
+  <div class="field"><label>Cari Türü *</label><select id="firmType"><option value="both">Müşteri ve Tedarikçi</option><option value="customer">Müşteri</option><option value="supplier">Tedarikçi</option></select></div>
   <div class="field"><label>Yetkili Kişi</label><input id="firmContact" maxlength="150"></div>
   <div class="field"><label>Telefon</label><input id="firmPhone" type="tel" maxlength="50"></div>
   <div class="field"><label>E-posta</label><input id="firmEmail" type="email" maxlength="200"></div>
@@ -196,7 +197,7 @@
   <input id="firmExcelInput" type="file" accept=".xlsx,.xls,.csv" hidden>
  </div>
  <p class="muted" style="font-size:12px;margin:0 0 12px">Excel dosyasında kod, vergi/TC veya firma adı eşleşirse mevcut kart güncellenir. Borç bakiyeleri Excel ile değiştirilmez.</p>
- <div class="table-wrap"><table style="min-width:1100px"><thead><tr><th>Kod</th><th>Firma Adı / Adres</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Vergi / TC</th><th>Varsayılan İskonto</th><th>Borç Durumu</th><th class="num">Bakiye (₺)</th><th>Durum</th><th>İşlemler</th></tr></thead><tbody id="firmTable"></tbody></table></div>
+ <div class="table-wrap"><table style="min-width:1100px"><thead><tr><th>Kod</th><th>Firma Adı / Adres</th><th>Cari Türü</th><th>Yetkili</th><th>Telefon</th><th>E-posta</th><th>Vergi / TC</th><th>Varsayılan İskonto</th><th>Borç Durumu</th><th class="num">Bakiye (₺)</th><th>Durum</th><th>İşlemler</th></tr></thead><tbody id="firmTable"></tbody></table></div>
 </div>
 </div>
 <div class="page" id="page-ledger"><div class="card">
@@ -448,7 +449,7 @@ function normalizeDB(x){
   d.guestSales=Array.isArray(d.guestSales)?d.guestSales:[];
   d.expenses=Array.isArray(d.expenses)?d.expenses:[];
   d.purchases=Array.isArray(d.purchases)?d.purchases:[];
-  d.firms=Array.isArray(d.firms)?d.firms:[];d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
+  d.firms=(Array.isArray(d.firms)?d.firms:[]).map(f=>({...f,firmType:['customer','supplier','both'].includes(f.firmType)?f.firmType:'both'}));d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
   d.movements=Array.isArray(d.movements)?d.movements:[];d.auditLogs=Array.isArray(d.auditLogs)?d.auditLogs:[];
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
   d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true,editOrders:role==='admin'||u.permissions?.editOrders===true,deleteOrders:role==='admin'||u.permissions?.deleteOrders===true},createdAt:u.createdAt||new Date().toISOString()}});
@@ -1982,7 +1983,7 @@ async function confirmOrderApproval(){
 function renderOrderFirmMatches(){
  const input=el('orderFirmSearch'),list=el('orderFirmMatches'),chosen=el('orderFirm').value;
  const search=firmKey(input.value);
- const firms=search?db.firms.filter(f=>f.active!==false&&firmKey((f.code||'')+' '+f.name).includes(search)).slice(0,20):[];
+ const firms=search?db.firms.filter(f=>f.active!==false&&f.firmType!=='supplier'&&firmKey((f.code||'')+' '+f.name).includes(search)).slice(0,20):[];
  list.innerHTML=firms.map(f=>'<button type="button" class="btn btn-light btn-sm" data-order-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(search?'<span class="muted">Eşleşen cari bulunamadı.</span>':'');
  const selected=firmById(chosen);
  el('orderFirmSelected').textContent=selected?'Seçilen cari: '+(selected.code||'')+' - '+selected.name:'Cari seçilmedi.';
@@ -1990,7 +1991,7 @@ function renderOrderFirmMatches(){
 function renderOrders(){
  if(!currentUser||!hasPermission('orders'))return;
  const beforeFirm=el('orderFirm').value,beforeProduct=el('orderProductPicker').value;
- const firms=db.firms.filter(f=>f.active!==false).map(f=>({id:f.id,label:(f.code?f.code+' - ':'')+f.name}));
+ const firms=db.firms.filter(f=>f.active!==false&&f.firmType!=='supplier').map(f=>({id:f.id,label:(f.code?f.code+' - ':'')+f.name}));
  const products=db.products.filter(p=>p.active!==false).map(p=>({id:p.id,label:(p.code?p.code+' - ':'')+p.name}));
  fillSelect('orderFirm',firms,'Cari / firma seçiniz');
  fillSelect('orderProductPicker',products,'Ürün seçiniz');
@@ -2349,10 +2350,10 @@ function renderFirms(){
    const actions=(isAdmin()?'<button class="btn btn-light btn-sm" data-firm-action="edit" data-firm-id="'+esc(f.id)+'">Düzenle</button> <button class="btn btn-danger btn-sm" data-firm-action="delete" data-firm-id="'+esc(f.id)+'">Sil</button> ':'')+
     '<button class="btn btn-light btn-sm" data-firm-action="statement" data-firm-id="'+esc(f.id)+'">Ekstre</button>';
    return '<tr><td><b>'+esc(f.code||'—')+'</b></td><td><b>'+esc(f.name)+'</b><div class="muted" style="max-width:250px;white-space:normal">'+esc(f.address||'')+'</div></td>'+
-    '<td>'+esc(f.contact||'—')+'</td><td>'+esc(f.phone||'—')+'</td><td>'+esc(f.email||'—')+'</td><td>'+esc(f.taxNo||'—')+'</td>'+
+    '<td>'+esc(({customer:'Müşteri',supplier:'Tedarikçi',both:'Müşteri ve Tedarikçi'}[f.firmType]||'Müşteri ve Tedarikçi'))+'</td><td>'+esc(f.contact||'—')+'</td><td>'+esc(f.phone||'—')+'</td><td>'+esc(f.email||'—')+'</td><td>'+esc(f.taxNo||'—')+'</td>'+
     '<td>'+esc(f.discountExpression||'—')+'</td><td><span class="badge '+bal.css+'">'+bal.label+'</span></td><td class="num"><b>'+esc(firmMoney(bal.amount))+'</b></td>'+
     '<td>'+(f.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td><td>'+actions+'</td></tr>';
- }).join(''):'<tr><td colspan="11" class="empty">Firma bulunamadı.</td></tr>';
+ }).join(''):'<tr><td colspan="12" class="empty">Firma bulunamadı.</td></tr>';
  if(isAdmin()){
   renderLedgerFirmMatches();
   if(!el('firmLedgerDate').value)el('firmLedgerDate').value=localDateTimeValue().slice(0,10);
@@ -2390,7 +2391,7 @@ function saveFirm(e){
  if(!validFirmTax(taxNo))return notify('Vergi No 10, TC Kimlik No 11 rakam olmalıdır.',true);
  if(db.firms.some(f=>firmKey(f.code)===firmKey(code)&&f.id!==id))return notify('Firma kodu kullanılıyor.',true);
  if(taxNo&&db.firms.some(f=>firmTax(f.taxNo)===taxNo&&f.id!==id))return notify('Vergi / TC numarası başka firmaya ait.',true);
- const obj={...(previous||{}),id:id||uid('frm'),code,name,contact:el('firmContact').value.trim(),
+ const obj={...(previous||{}),id:id||uid('frm'),code,name,firmType:el('firmType').value,contact:el('firmContact').value.trim(),
   phone:el('firmPhone').value.trim(),email:el('firmEmail').value.trim(),taxNo,
   address:el('firmAddress').value.trim(),active:el('firmActive').value==='true',notes:el('firmNotes').value.trim(),
   discountExpression};
@@ -2405,13 +2406,13 @@ function editFirm(id){
  el('firmName').value=f.name||'';el('firmContact').value=f.contact||'';
  el('firmPhone').value=f.phone||'';el('firmEmail').value=f.email||'';
  el('firmTaxNo').value=f.taxNo||'';el('firmAddress').value=f.address||'';
- el('firmDiscount').value=f.discountExpression||'';
+ el('firmDiscount').value=f.discountExpression||'';el('firmType').value=f.firmType||'both';
  el('firmActive').value=String(f.active!==false);el('firmNotes').value=f.notes||'';
  el('page-firms').scrollIntoView({behavior:'smooth',block:'start'});
 }
 function resetFirmForm(){
  el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmCode').value=nextFirmCode();
- el('firmDiscount').value='';
+ el('firmDiscount').value='';el('firmType').value='both';
 }
 function deleteFirm(id){
  if(!requirePermission('firms')||!requireAdminAction())return;
@@ -3341,7 +3342,7 @@ function clearAllAuditLogs(){
 function exportAuditCSV(){const rows=[...db.auditLogs].sort((a,b)=>new Date(b.date)-new Date(a.date)).map(a=>[dt(a.date),a.userName,a.username,a.module,a.action,a.detail]);exportCSV(`Islem_Kayitlari_${new Date().toISOString().slice(0,10)}.csv`,['Tarih','Kullanıcı','Kullanıcı Adı','Modül','İşlem','Detay'],rows)}
 function setDefaultDates(){['entryUnit','exitUnit','transferUnit','countUnit'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value='Koli'});['entry','exit','transfer','count'].forEach(updateUnitLabel);['entryDate','exitDate','transferDate','countDate'].forEach(id=>{const node=el(id);if(node&&!node.value)node.value=localDateTimeValue()});const now=new Date(),first=`${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}-01`,today=now.toISOString().slice(0,10);if(el('reportFrom')&&!el('reportFrom').value)el('reportFrom').value=first;if(el('reportTo')&&!el('reportTo').value)el('reportTo').value=today;if(el('countPerson')&&!el('countPerson').value&&currentUser)el('countPerson').value=currentUser.fullName}
 function renderPurchaseFirms(){
- const q=firmKey(el('purchaseFirmSearch').value),matches=q?db.firms.filter(f=>f.active!==false&&firmKey((f.code||'')+' '+f.name).includes(q)).slice(0,20):[];
+ const q=firmKey(el('purchaseFirmSearch').value),matches=q?db.firms.filter(f=>f.active!==false&&f.firmType!=='customer'&&firmKey((f.code||'')+' '+f.name).includes(q)).slice(0,20):[];
  el('purchaseFirmMatches').innerHTML=matches.map(f=>'<button type="button" class="btn btn-light btn-sm" data-purchase-firm="'+esc(f.id)+'" style="display:block;width:100%;text-align:left;margin:3px 0">'+esc((f.code||'')+' - '+f.name)+'</button>').join('')||(q?'<span class="muted">Firma bulunamadı.</span>':'');
  const firm=firmById(el('purchaseFirmId').value);
  el('purchaseFirmChosen').textContent=firm?'Seçilen: '+firm.name:'Tedarikçi seçilmedi.';
@@ -3364,7 +3365,7 @@ function savePurchase(e){
  e.preventDefault();if(!requirePermission('purchasing'))return;
  if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
  const firm=firmById(el('purchaseFirmId').value),productName=el('purchaseProduct').value.trim(),kg=Number(el('purchaseKg').value),amount=Number(el('purchaseAmount').value),vatRate=Number(el('purchaseVat').value),date=el('purchaseDate').value;
- if(!firm||firm.active===false)return notify('Geçerli tedarikçi seçin.',true);
+ if(!firm||firm.active===false||firm.firmType==='customer')return notify('Geçerli tedarikçi seçin.',true);
  if(!productName||!Number.isFinite(kg)||kg<=0||kg>100000000||!Number.isFinite(amount)||amount<=0||amount>999999999999||!Number.isFinite(vatRate)||vatRate<0||vatRate>100)return notify('Ürün, KG, tutar veya KDV geçersiz.',true);
  if(!/^\\d{4}-\\d{2}-\\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))return notify('Tarih geçersiz.',true);
  const netCents=Math.round(amount*100),vatCents=Math.round(netCents*vatRate/100);
