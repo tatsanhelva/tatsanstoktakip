@@ -3484,9 +3484,9 @@ function renderDailyReport(){
  dailyExportMatrix=[['',...productHeaders]];
  const row=(label,vals,css='')=>{
   dailyExportMatrix.push([label,...vals.map(v=>Number.isFinite(v)?v:'')]);
-  return '<tr'+(css?' style="'+css+'"':'')+'><th style="position:sticky;left:0;z-index:1;background:inherit;min-width:175px;text-align:left;white-space:nowrap">'+esc(label)+'</th>'+vals.map(v=>'<td style="text-align:center;border:1px solid #dae0e7;min-width:95px">'+(v===null||v===undefined||v===''?'':esc(fmt(v)))+'</td>').join('')+'</tr>';
+  return '<tr'+(css?' style="'+css+'"':'')+'><th style="position:sticky;left:0;z-index:1;background:inherit;min-width:175px;text-align:left;white-space:nowrap">'+esc(label)+'</th>'+vals.map(v=>'<td style="text-align:center;border:1px solid #dae0e7;min-width:78px;width:78px;padding:6px 3px">'+(v===null||v===undefined||v===''?'':esc(fmt(v)))+'</td>').join('')+'</tr>';
  };
- el('dailyMatrixHead').innerHTML='<tr><th style="position:sticky;left:0;background:#f2f6fc;z-index:2;min-width:175px">ÜRÜN / MÜŞTERİ</th>'+included.map(x=>'<th style="min-width:105px;max-width:155px;white-space:normal;background:#eef1ff">'+esc(x.p.name)+'</th>').join('')+'</tr>';
+ el('dailyMatrixHead').innerHTML='<tr><th style="position:sticky;left:0;background:#f2f6fc;z-index:2;min-width:175px">ÜRÜN / MÜŞTERİ</th>'+included.map(x=>'<th title="'+esc(x.p.name)+'" style="width:78px;min-width:78px;max-width:78px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;background:#eef1ff;text-align:center;padding:8px 4px;font-size:11px" aria-label="'+esc(x.p.name)+'">'+esc(x.p.name)+'</th>').join('')+'</tr>';
  let body=row('DEVREDEN',included.map(x=>x.opening),'background:#d4f7f8');
  body+=row('GELEN',included.map(x=>x.received),'background:#d4f7f8');
  body+=row('TOPLAM',included.map(x=>x.opening+x.received),'background:#d4f7f8;font-weight:700');
