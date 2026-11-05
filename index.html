@@ -472,6 +472,17 @@
  <div id="orderDetailsTotals" class="order-details-totals"></div>
  <div class="actions"><button type="button" id="orderDetailsDeleteBtn" class="btn btn-danger" onclick="deleteSavedOrder(orderCurrentlyViewed)">Siparişi Sil</button><button type="button" id="orderDetailsApproveBtn" class="btn btn-ok" onclick="approveViewedOrder()">Onayla</button><button type="button" id="orderDetailsEditBtn" class="btn btn-light" onclick="editSavedOrder(orderCurrentlyViewed)">Siparişi Düzenle</button><button type="button" class="btn btn-primary" onclick="exportCurrentOrderPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light" onclick="printCurrentOrder()">Siparişi Yazdır</button><button type="button" class="btn btn-light" onclick="el('orderDetailsDialog').close()">Kapat</button></div>
 </dialog>
+<dialog id="firmBalanceDialog" style="width:min(620px,96vw);max-height:90vh;overflow:auto;border:0;border-radius:14px;padding:22px">
+ <div class="card-head"><h3 id="firmBalanceTitle">Cari Bakiye</h3><button type="button" class="btn btn-light btn-sm" onclick="el('firmBalanceDialog').close()">Kapat</button></div>
+ <p class="muted" id="firmBalanceCompany"></p>
+ <div class="grid" style="grid-template-columns:repeat(auto-fit,minmax(150px,1fr));gap:10px;margin-bottom:15px">
+  <div class="stat"><div class="label">Oluşan Borç</div><div class="value" id="firmBalanceTotalDebt" style="font-size:20px">0 ₺</div></div>
+  <div class="stat"><div class="label">Tahsil Edilen</div><div class="value" id="firmBalanceTotalPaid" style="font-size:20px">0 ₺</div></div>
+  <div class="stat"><div class="label" id="firmBalanceNetLabel">Güncel Borç Bakiyesi</div><div class="value" id="firmBalanceNet" style="font-size:20px">0 ₺</div></div>
+ </div>
+ <p class="muted" id="firmBalanceDescription"></p>
+ <div class="actions"><button type="button" class="btn btn-primary" id="firmBalanceStatementBtn">Cari Ekstresini Gör</button><button type="button" class="btn btn-light" onclick="el('firmBalanceDialog').close()">Kapat</button></div>
+</dialog>
 <dialog id="firmStatementDialog" style="width:min(900px,96vw);max-height:88vh;border:0;border-radius:14px;padding:22px">
   <div class="card-head"><h3 id="firmStatementTitle">Cari Ekstresi</h3><button class="btn btn-light btn-sm" type="button" onclick="el('firmStatementDialog').close()">Kapat</button></div>
   <div id="firmStatementSummary" class="inline-info" style="margin-bottom:12px"></div>
@@ -2576,7 +2587,7 @@ function renderFirms(){
    const bal=firmBalanceStatus(f.id);
    const actions=(isAdmin()?'<button class="btn btn-light btn-sm" data-firm-action="edit" data-firm-id="'+esc(f.id)+'">Düzenle</button> <button class="btn btn-danger btn-sm" data-firm-action="delete" data-firm-id="'+esc(f.id)+'">Sil</button> ':'')+
     '<button class="btn btn-light btn-sm" data-firm-action="statement" data-firm-id="'+esc(f.id)+'">Ekstre</button>';
-   return '<tr><td><b>'+esc(f.code||'—')+'</b></td><td><b>'+esc(f.name)+'</b><div class="muted" style="max-width:250px;white-space:normal">'+esc(f.address||'')+'</div></td>'+
+   return '<tr><td><b>'+esc(f.code||'—')+'</b></td><td><button type="button" class="btn btn-light btn-sm" data-firm-action="balance" data-firm-id="'+esc(f.id)+'" style="font-weight:700;text-align:left;white-space:normal;color:#174ea6;text-decoration:underline;text-underline-offset:2px">'+esc(f.name)+'</button><div class="muted" style="max-width:250px;white-space:normal">'+esc(f.address||'')+'</div></td>'+
     '<td>'+esc(({customer:'Müşteri',supplier:'Tedarikçi',both:'Müşteri ve Tedarikçi'}[f.firmType]||'Müşteri ve Tedarikçi'))+'</td><td>'+esc(f.contact||'—')+'</td><td>'+esc(f.phone||'—')+'</td><td>'+esc(f.email||'—')+'</td><td>'+esc(f.taxNo||'—')+'</td>'+
     '<td>'+esc(f.discountExpression||'—')+'</td><td><span class="badge '+bal.css+'">'+bal.label+'</span></td><td class="num"><b>'+esc(firmMoney(bal.amount))+'</b></td>'+
     '<td>'+(f.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-gray">Pasif</span>')+'</td><td>'+actions+'</td></tr>';
@@ -2893,6 +2904,23 @@ function saveFirmLedger(e){
  audit(type==='DEBT'?'Cari borç eklendi':'Cari tahsilat kaydedildi','Firmalar',firm.name+' | '+firmMoney(cents));
  saveDB();el('firmLedgerForm').reset();updateLedgerCheckFields();el('firmLedgerFirm').value=firm.id;el('firmLedgerSearch').value=(firm.code||'')+' - '+firm.name;renderLedgerFirmMatches();toggleLedgerCustomerType();
  notify('Cari hareketi kaydedildi: '+firm.name+' - '+firmMoney(cents));
+}
+function showFirmBalance(id){
+ if(!requirePermission('firms'))return;
+ const firm=firmById(id);if(!firm)return notify('Firma bulunamadı.',true);
+ const records=(db.firmLedger||[]).filter(m=>m.firmId===firm.id);
+ const debt=records.filter(m=>m.type==='DEBT').reduce((sum,m)=>sum+Number(m.amountCents||0),0);
+ const paid=records.filter(m=>m.type==='PAYMENT').reduce((sum,m)=>sum+Number(m.amountCents||0),0);
+ const net=debt-paid;
+ el('firmBalanceTitle').textContent=firm.name+' — Cari Bakiye';
+ el('firmBalanceCompany').textContent=(firm.code||'')+' · '+({customer:'Müşteri',supplier:'Tedarikçi',both:'Müşteri ve Tedarikçi'}[firm.firmType]||'Cari');
+ el('firmBalanceTotalDebt').textContent=firmMoney(debt);
+ el('firmBalanceTotalPaid').textContent=firmMoney(paid);
+ el('firmBalanceNet').textContent=firmMoney(Math.abs(net));
+ el('firmBalanceNetLabel').textContent=net>0?'Kalan Borç':net<0?'Cari Alacak Bakiyesi':'Güncel Bakiye';
+ el('firmBalanceDescription').textContent=net>0?'Bu firmanın ödemesi gereken güncel tutar.':net<0?'Bu caride tahsilatlar borç tutarını aşıyor.':'Bu carinin açık borç bakiyesi bulunmuyor.';
+ el('firmBalanceStatementBtn').onclick=()=>{el('firmBalanceDialog').close();showFirmStatement(firm.id)};
+ el('firmBalanceDialog').showModal();
 }
 function showFirmStatement(id){
  if(!requirePermission('firms'))return;
@@ -4179,7 +4207,7 @@ el('firmExcelInput').addEventListener('change',importFirmsExcel);
 el('firmTable').addEventListener('click',e=>{
  const btn=e.target.closest('button[data-firm-action]');if(!btn)return;
  const id=btn.dataset.firmId,action=btn.dataset.firmAction;
- if(action==='edit')editFirm(id);else if(action==='delete')deleteFirm(id);else if(action==='statement')showFirmStatement(id);
+ if(action==='edit')editFirm(id);else if(action==='delete')deleteFirm(id);else if(action==='statement')showFirmStatement(id);else if(action==='balance')showFirmBalance(id);
 });
 el('movementEditForm').addEventListener('submit',saveMovementEdit);el('movementEditModal').addEventListener('click',e=>{if(e.target===el('movementEditModal'))closeMovementEditor()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&el('movementEditModal').classList.contains('show'))closeMovementEditor()});
 el('exitFirm').addEventListener('change',updateExitPriceSummary);el('exitVatRate').addEventListener('change',updateExitPriceSummary);
