@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v3.9</title>
+<title>Tatsan Stok Takip v4.0</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -563,7 +563,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.9';
+const APP_VERSION='4.0';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -3980,7 +3980,44 @@ function editUser(id){const u=userById(id);if(!u)return;el('userId').value=u.id;
 function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'&&k!=='deleteOrders'&&k!=='editPurchases'&&k!=='deletePurchases'])))}
 
 function renderSettings(){if(!isAdmin())return;el('settingCompany').value=db.settings.companyName||'Tatsan Stok Takip';el('settingNegative').value=String(!!db.settings.allowNegative);el('settingCurrency').value=db.settings.currency||'TRY';document.querySelectorAll('[data-dashboard-setting]').forEach(input=>{input.checked=db.settings.dashboardSections?.[input.dataset.dashboardSetting]!==false});el('settingSheetsUrl').value=DEFAULT_SHEETS_URL;el('settingSheetsToken').value=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;el('settingAutoSync').value='true';el('brandName').textContent=db.settings.companyName||'Tatsan Stok Takip';el('appVersionLabel').textContent=APP_VERSION_LABEL;document.title=(db.settings.companyName||'Tatsan Stok Takip')+' v'+APP_VERSION;el('sheetSyncStatus').innerHTML=`Son gönderme: <b>${db.settings.lastPush?dt(db.settings.lastPush):'Yok'}</b> &nbsp; | &nbsp; Son çekme: <b>${db.settings.lastPull?dt(db.settings.lastPull):'Yok'}</b>`}
-function saveSettings(e){e.preventDefault();db.settings.companyName=el('settingCompany').value.trim()||'Tatsan Stok Takip';db.settings.allowNegative=el('settingNegative').value==='true';db.settings.currency=el('settingCurrency').value;db.settings.dashboardSections=Object.fromEntries([...document.querySelectorAll('[data-dashboard-setting]')].map(input=>[input.dataset.dashboardSetting,input.checked]));applyDashboardVisibility();audit('Genel ayarlar güncellendi','Ayarlar',`Firma: ${db.settings.companyName}, negatif stok: ${db.settings.allowNegative?'açık':'kapalı'}`);saveDB();notify('Ayarlar kaydedildi.')}
+async function saveSettings(e){
+ e.preventDefault();
+ if(!isAdmin())return notify('Ana panel ayarlarını yalnızca yönetici değiştirebilir.',true);
+ if(!syncBootstrapComplete||cloudConflict||syncPullInProgress||syncPushInProgress||cloudState.dirty||cloudState.pending){
+  return notify('Drive işlemleri devam ediyor veya bekleyen kayıt var. Önce Drive senkronizasyonunu tamamlayın, ardından ayarları kaydedin.',true);
+ }
+ const button=el('settingsForm').querySelector('button[type="submit"]');
+ const desired=Object.fromEntries([...document.querySelectorAll('[data-dashboard-setting]')].map(input=>[input.dataset.dashboardSetting,input.checked]));
+ button.disabled=true;button.textContent='Drive’a kaydediliyor…';
+ try{
+  // Eski cihaz görünümü güncel bulut sürümünün üzerine yazılmasın.
+  const latest=await rpc('cloudRead');
+  if(!latest?.data||!Number.isInteger(latest.revision))throw new Error('Güncel Drive verileri okunamadı.');
+  if(latest.revision!==cloudState.revision){
+   throw new Error('Başka cihazdan yeni kayıt yapılmış. Önce sayfayı yenileyin, sonra panel seçeneklerini tekrar kaydedin.');
+  }
+  db.settings.companyName=el('settingCompany').value.trim()||'Tatsan Stok Takip';
+  db.settings.allowNegative=el('settingNegative').value==='true';
+  db.settings.currency=el('settingCurrency').value;
+  db.settings.dashboardSections=desired;
+  applyDashboardVisibility();
+  audit('Genel ayarlar güncellendi','Ayarlar',`Firma: ${db.settings.companyName}, ana panel bölümleri güncellendi.`);
+  saveDB({render:true,sync:true});
+  await pushToSheets(true);
+  if(cloudState.dirty||cloudState.pending||cloudConflict)throw new Error('Drive kaydı henüz tamamlanmadı; bu cihazdaki seçimler korunuyor.');
+  const verification=await rpc('cloudRead');
+  const actual=verification?.data?.settings?.dashboardSections;
+  if(!actual||DASHBOARD_SECTION_KEYS.some(key=>actual[key]!==desired[key])){
+   throw new Error('Sunucu ana panel görünümünü doğrulamadı. Farklı cihazlarda aynı görünüm henüz garanti edilemiyor.');
+  }
+  notify('Ana panel ayarları Drive’da doğrulandı. Diğer cihazlarda da uygulanacak.');
+ }catch(err){
+  notify('Ana panel ayarları bulutta doğrulanamadı: '+(err.message||err),true);
+  el('sheetSyncStatus').textContent='⚠ Ana panel ayarları Drive’da doğrulanamadı. '+(err.message||err);
+ }finally{
+  button.disabled=false;button.textContent='Ayarları Kaydet';
+ }
+}
 function saveSheetsSettings(e){e.preventDefault();db.settings.sheetsUrl=DEFAULT_SHEETS_URL;db.settings.sheetsToken=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;audit('Google Drive ayarları güncellendi','Google Drive','Sabit bağlantı korundu, otomatik senkronizasyon sürekli açık.');saveDB();notify('Google Drive bağlantısı kaydedildi. Otomatik gönderme sürekli açık.')}
 function sheetsConfigured(){const cfg=connection();return !!(cfg.url&&sessionStorage.getItem('tatsanCloudKey'))}
 const CLOUD_CONFIG_KEY='tatsanPagesConnection';
