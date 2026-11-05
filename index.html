@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v3.1</title>
+<title>Tatsan Stok Takip v3.2</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -86,7 +86,7 @@
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
-<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.1</small></div>
+<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.2</small></div>
 <nav class="nav" id="nav">
 <button class="active" data-page="dashboard">📊 Ana Panel</button>
 <button data-page="products">📦 Ürünler</button>
@@ -504,7 +504,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.1';
+const APP_VERSION='3.2';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -557,7 +557,7 @@ function normalizeDB(x){
   d.firms=(Array.isArray(d.firms)?d.firms:[]).map(f=>({...f,firmType:['customer','supplier','both'].includes(f.firmType)?f.firmType:'both'}));d.firmLedger=Array.isArray(d.firmLedger)?d.firmLedger:[];d.orders=Array.isArray(d.orders)?d.orders:[];d.stocks=d.stocks&&typeof d.stocks==='object'?d.stocks:{};
   d.movements=Array.isArray(d.movements)?d.movements:[];d.auditLogs=Array.isArray(d.auditLogs)?d.auditLogs:[];
   d.users=Array.isArray(d.users)&&d.users.length?d.users:defaultDB().users;
-  d.users=d.users.map(u=>{const role=u.role==='admin'?'admin':'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true,editOrders:role==='admin'||u.permissions?.editOrders===true,deleteOrders:role==='admin'||u.permissions?.deleteOrders===true,editPurchases:role==='admin'||u.permissions?.editPurchases===true,deletePurchases:role==='admin'||u.permissions?.deletePurchases===true},createdAt:u.createdAt||new Date().toISOString()}});
+  d.users=d.users.map(u=>{const role=['admin','depo','sales','accounting'].includes(u.role)?u.role:'depo';const defaults=Object.fromEntries(PERMISSION_DEFS.map(([k])=>[k,true]));return {id:u.id||uid('usr'),username:String(u.username||'').trim(),fullName:u.fullName||u.username||'Kullanıcı',role,active:u.active!==false,passwordHash:u.passwordHash||'',permissions:{...defaults,...(u.permissions||{}),orders:role==='admin'?true:(u.permissions&&typeof u.permissions.orders==='boolean'?u.permissions.orders:u.permissions?.exit===true),approveOrders:role==='admin'||u.permissions?.approveOrders===true,editOrders:role==='admin'||u.permissions?.editOrders===true,deleteOrders:role==='admin'||u.permissions?.deleteOrders===true,editPurchases:role==='admin'||u.permissions?.editPurchases===true,deletePurchases:role==='admin'||u.permissions?.deletePurchases===true},createdAt:u.createdAt||new Date().toISOString()}});
   if(!d._restricted&&!d.users.some(u=>u.role==='admin'))d.users.unshift(defaultDB().users[0]);
   d.movements=d.movements.map(m=>{const inputUnit=['Koli','Adet','Kg','Paket'].includes(m.inputUnit)?m.inputUnit:'Koli';const fallback=m.type==='SAYIM'?num(m.countedValue??m.after):Math.abs(num(m.quantity));return {...m,userId:m.userId||'',userName:m.userName||'',firmId:m.firmId||'',firmName:m.firmName||'',reason:m.reason||'',inputUnit,inputQuantity:num(m.inputQuantity??fallback),countedValue:m.type==='SAYIM'?num(m.countedValue??m.after):m.countedValue}});
   return d;
@@ -4163,7 +4163,7 @@ async function savePurchase(e){
  audit(editId?'Satın alma düzenlendi':'Satın alma kaydedildi','Tedarik',record.firmName+' | '+record.productName+' | '+kg+' KG | '+firmMoney(record.grossCents));saveDB();
  resetPurchaseEdit();notify(editId?'Satın alma düzenlendi.':'Satın alma kaydedildi. Stok değişmedi.');
 }
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=currentUser?.role==='sales'?(el('firmCode').value||newFirmCodeForType()):nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=currentUser?.role==='sales'?(el('firmCode').value||newFirmCodeForType()):nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=({admin:'Yönetici',sales:'Satışçı',accounting:'Muhasebe',depo:'Depo Kullanıcısı'}[currentUser.role]||'Kullanıcı');if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
 ['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).addEventListener('change',renderBizReport));
