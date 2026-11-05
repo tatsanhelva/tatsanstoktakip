@@ -2137,12 +2137,25 @@ async function confirmOrderApproval(){
  el('orderApproveConfirmBtn').disabled=true;
  el('orderApproveStockMessage').textContent='Drive üzerinde sipariş ve stok hareketleri birlikte kaydediliyor…';
  try{
-  let result;
-  result=await rpc('orderApprove',{orderId,warehouseId,requestId:uid('ord-approve')});
+  const result=await rpc('orderApprove',{orderId,warehouseId,requestId:uid('ord-approve')});
   if(!result?.ok)throw new Error(result?.error||'Sunucu sipariş onayını doğrulamadı.');
-  const refreshed=cloudResultCheck(await rpc('cloudRead'));
-  const approved=refreshed.data?.orders?.find(o=>o.id===orderId);
-  if(!orderIsApproved(approved,refreshed.data))throw new Error('Kaydın onay durumu doğrulanamadı; yeniden onaylamadan önce Drive verilerini yenileyin.');
+  // Sunucu tam güncel veri ve revizyon döndürdüyse fazladan Drive okuması gerekmez.
+  // Eski sunucularla uyumluluk için eksik yanıtta güvenli doğrulama okumaya devam eder.
+  const hasSnapshot=Number.isInteger(result.revision)&&result.revision>=0&&
+   result.data&&Array.isArray(result.data.orders)&&Array.isArray(result.data.movements)&&
+   result.data.stocks&&typeof result.data.stocks==='object'&&
+   Array.isArray(result.data.products)&&Array.isArray(result.data.warehouses)&&
+   Array.isArray(result.data.firmLedger)&&Array.isArray(result.data.auditLogs)&&
+   Array.isArray(result.data.users);
+  let refreshed=hasSnapshot?result:null;
+  let approved=refreshed?.data?.orders?.find(o=>o.id===orderId);
+  if(!refreshed||!orderIsApproved(approved,refreshed.data)){
+   el('orderApproveStockMessage').textContent='Onay sunucudan alındı. Güncel stok ve sipariş kayıtları doğrulanıyor…';
+   refreshed=cloudResultCheck(await rpc('cloudRead'));
+   approved=refreshed.data?.orders?.find(o=>o.id===orderId);
+  }
+  if(!orderIsApproved(approved,refreshed.data))
+   throw new Error('Kaydın onay durumu doğrulanamadı; yeniden onaylamadan önce Drive verilerini yenileyin.');
   db=normalizeDB(refreshed.data);localStorage.setItem(DB_KEY,JSON.stringify(db));
   currentUser=userById(currentUser.id);
   cloudState.dirty=false;cloudState.pending=null;cloudConflict=false;
