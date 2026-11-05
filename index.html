@@ -815,28 +815,48 @@ async function secureResume(){
     loadSecureCloudView(r);
     showApp();
   }catch(e){
-    sessionStorage.removeItem('tatsanSecureSession');
-    if(!cloudState.dirty&&!cloudState.pending)localStorage.removeItem(DB_KEY);
+    // İletişim hatası oturumun iptal edildiği anlamına gelmez. Yalnızca
+    // sunucunun açıkça geçersiz saydığı oturumlarda kimlik bilgisi temizlenir.
+    const message=String(e?.message||e||'');
+    const invalid=/oturum.{0,30}(geçersiz|süresi dol|sonlandırıl|bulunamadı)|invalid.session|session.expired|unauthorized|yetkisiz|token.{0,25}(expired|invalid)/i.test(message);
+    if(invalid){
+      sessionStorage.removeItem('tatsanSecureSession');
+      if(!cloudState.dirty&&!cloudState.pending)localStorage.removeItem(DB_KEY);
+    }
     currentUser=null;syncBootstrapComplete=false;showLogin();
+    el('loginError').textContent=invalid?
+      'Oturumunuz sona erdi. Güvenliğiniz için tekrar giriş yapın.':
+      'Drive ile oturum doğrulanamadı; mevcut oturum korunuyor. Bağlantıyı kontrol edip sayfayı yenileyin. '+message;
     if(cloudState.dirty||cloudState.pending)
-      el('loginError').textContent='Bekleyen stok kaydı korunuyor. Aynı kullanıcıyla yeniden giriş yapın. '+(e.message||'');
+      el('loginError').textContent+=' Bekleyen stok kayıtlarınız korunuyor.';
   }finally{setLoginBusy(false,'')}
 }
 async function initializeApplication(){
-  try{
-    const probe=await rpc('authProbe',null,{url:DEFAULT_SERVER_URL,key:''});
+  const existingSecureToken=!!sessionStorage.getItem('tatsanSecureSession');
+  let probe=null;
+  try{probe=await rpc('authProbe',null,{url:DEFAULT_SERVER_URL,key:''})}catch(e){
+    // Yenileme sırasında probe geçici olarak başarısız olursa mevcut güvenli
+    // oturumu eski (anahtarlı) sisteme düşürme.
+    if(!existingSecureToken){
+      secureMode=true;currentUser=null;showLogin();
+      el('loginError').textContent='Güvenli sunucuya bağlanılamadı. Bağlantınızı kontrol edip sayfayı yenileyin. '+(e.message||'');
+      return;
+    }
+  }
+  if(probe?.mode==='secure'||existingSecureToken){
+    secureMode=true;
     if(probe?.mode==='secure'){
-      secureMode=true;
       ordersBackendEnabled=probe?.features?.orders===true;
       orderApprovalBackendEnabled=probe?.features?.orderApproval===true;
       orderEditBackendEnabled=probe?.features?.orderEdit===true;
-      if(cloudState.dirty&&localStorage.getItem(DB_KEY))localStorage.setItem('tatsanPreSecureMigrationBackup',localStorage.getItem(DB_KEY));
-      localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url:DEFAULT_SERVER_URL}));
-      sessionStorage.removeItem('tatsanCloudKey');
-      await secureResume();
-      return;
     }
-  }catch(e){}
+    if(cloudState.dirty&&localStorage.getItem(DB_KEY))
+      localStorage.setItem('tatsanPreSecureMigrationBackup',localStorage.getItem(DB_KEY));
+    localStorage.setItem(CLOUD_CONFIG_KEY,JSON.stringify({url:DEFAULT_SERVER_URL}));
+    sessionStorage.removeItem('tatsanCloudKey');
+    await secureResume();
+    return;
+  }
   await bootstrapSheetsBeforeLogin();
   initSession();
 }
