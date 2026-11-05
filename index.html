@@ -824,7 +824,7 @@ function loadSecureCloudView(response){
   currentUser=userById(response.user.id);
   if(!currentUser)throw new Error('Kullanıcı yetkileri yüklenemedi.');
   cloudState={revision:response.revision,dirty:false,pending:null,
-   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,baseOrderCount:db.orders.length,ownerId:currentUser.id};
+   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,baseOrderCount:db.orders.length,baseFirmCount:db.firms.length,ownerId:currentUser.id};
   cloudConflict=false;rememberCloud();syncBootstrapComplete=true;
   el('syncIndicator').textContent='Drive: güvenli bağlantı · v'+response.revision;
  }
@@ -2283,8 +2283,8 @@ function saveOrder(e){
  e.preventDefault();if(orderEditingId)return saveEditedOrder();if(!requirePermission('orders'))return;
  if(secureMode&&!isAdmin()&&!ordersBackendEnabled)
   return notify('Çalışan hesabıyla sipariş kaydı için Google Apps Script sunucu güncellemesi gerekiyor.',true);
- if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)
-  return notify('Sipariş kaydetmeden önce bekleyen Drive kayıtları tamamlanmalı.',true);
+ if(!canQueueNewRecord())
+  return notify('Drive bağlı değil, başka kullanıcıya ait kuyruk var veya kayıt kuyruğu dolu. Mevcut kayıtlar korunuyor.',true);
  const firm=firmById(el('orderFirm').value);
  if(!firm||firm.active===false||!canViewFirm(firm))return notify('Bu cariye sipariş kaydı oluşturma yetkiniz yok.',true);
  const quote=getOrderQuote(true);if(!quote)return;
@@ -2644,7 +2644,8 @@ function applySelectedFirmDiscount(){
 function saveFirm(e){
  e.preventDefault();if(!requirePermission('firms'))return;
  const id=el('firmId').value;if(id&&!requireAdminAction())return;
- if(cloudState.dirty||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce bekleyen Drive kaydı tamamlanmalı.',true);
+ if(id&&(cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress))return notify('Firma düzenlemek için önce bekleyen Drive kaydını tamamlayın.',true);
+ if(!id&&!canQueueNewRecord())return notify('Drive bağlı değil, başka kullanıcıya ait kuyruk var veya kayıt kuyruğu dolu. Mevcut kayıtlar korunuyor.',true);
  const previous=id?firmById(id):null;
  if(id&&!previous)return notify('Firma bulunamadı.',true);
  const code=previous?(previous.code||newFirmCodeForType()):newFirmCodeForType();
@@ -2663,7 +2664,7 @@ function saveFirm(e){
   discountExpression};
  if(id)db.firms[db.firms.findIndex(x=>x.id===id)]=obj;else db.firms.push(obj);
  audit(id?'Firma güncellendi':'Firma oluşturuldu','Firmalar',obj.code+' - '+obj.name);
- saveDB();resetFirmForm();notify('Firma kaydedildi: '+obj.code);
+ saveDB();resetFirmForm();notify('Firma kayıt kuyruğuna alındı: '+obj.code+'. Drive durumunu kontrol edin.');
 }
 function editFirm(id){
  if(!requirePermission('firms')||!requireAdminAction())return;
@@ -3722,13 +3723,14 @@ function rpc(name,arg,credentials){return new Promise((resolve,reject)=>{
  try{form.submit()}catch(err){cleanup();reject(err)}
 })}
 function readCloudState(){
- const empty={revision:0,dirty:false,pending:null,baseMovementCount:null,baseAuditCount:null,baseOrderCount:0,ownerId:null};
+ const empty={revision:0,dirty:false,pending:null,baseMovementCount:null,baseAuditCount:null,baseOrderCount:0,baseFirmCount:null,ownerId:null};
  try{
   const x=JSON.parse(localStorage.getItem(CLOUD_STATE_KEY)||'{}');
   return {revision:Number.isInteger(x.revision)?x.revision:0,dirty:!!x.dirty,pending:x.pending||null,
    baseMovementCount:Number.isInteger(x.baseMovementCount)?x.baseMovementCount:null,
    baseAuditCount:Number.isInteger(x.baseAuditCount)?x.baseAuditCount:null,
    baseOrderCount:Number.isInteger(x.baseOrderCount)?x.baseOrderCount:0,
+   baseFirmCount:Number.isInteger(x.baseFirmCount)?x.baseFirmCount:null,
    ownerId:x.ownerId||null};
  }catch(e){return empty}
 }
@@ -3740,6 +3742,7 @@ function markSyncedBase(data,revision){
  cloudState.baseMovementCount=Array.isArray(data?.movements)?data.movements.length:0;
  cloudState.baseAuditCount=Array.isArray(data?.auditLogs)?data.auditLogs.length:0;
  cloudState.baseOrderCount=Array.isArray(data?.orders)?data.orders.length:0;
+ cloudState.baseFirmCount=Array.isArray(data?.firms)?data.firms.length:0;
  cloudState.ownerId=currentUser?.id||null;
 }
 function sameStockStructure(a,b){
@@ -3860,9 +3863,11 @@ function queuedMovementCount(){
 function queuedOrderCount(){
  return Number.isInteger(cloudState.baseOrderCount)?Math.max(0,db.orders.length-cloudState.baseOrderCount):0;
 }
+function queuedFirmCount(){return Number.isInteger(cloudState.baseFirmCount)?Math.max(0,db.firms.length-cloudState.baseFirmCount):0}
+function canQueueNewRecord(){return syncBootstrapComplete&&!cloudConflict&&!syncPullInProgress&&(!cloudState.ownerId||cloudState.ownerId===currentUser?.id)&&(queuedOrderCount()+queuedFirmCount()<20)}
 function queueStatusLabel(){
- const n=queuedMovementCount(),orders=queuedOrderCount();
- if(n||orders)return 'Drive: kuyrukta'+(n?' · '+n+' stok hareketi':'')+(orders?' · '+orders+' sipariş':'');
+ const n=queuedMovementCount(),orders=queuedOrderCount(),firms=queuedFirmCount();
+ if(n||orders||firms)return 'Drive: kuyrukta'+(n?' · '+n+' stok hareketi':'')+(orders?' · '+orders+' sipariş':'')+(firms?' · '+firms+' firma':'');
  return 'Drive: değişiklik gönderim kuyruğunda';
 }
 function scheduleAutoSync(){
@@ -3928,7 +3933,7 @@ async function pushToSheets(manual=true){
   syncPushInProgress=false;
   if(cloudState.dirty&&!cloudConflict&&syncBootstrapComplete){
    clearTimeout(autoSyncTimer);
-   autoSyncTimer=setTimeout(()=>pushToSheets(false),6000);
+   autoSyncTimer=setTimeout(()=>pushToSheets(false),saved?150:6000);
   }
  }
 }
