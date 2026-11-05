@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v4.1</title>
+<title>Tatsan Stok Takip v4.0</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -563,7 +563,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.1';
+const APP_VERSION='4.0';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -3318,7 +3318,7 @@ async function startEntryCamera(){
  }
 }
 function saveEntry(e){
-  e.preventDefault();if(!requirePermission('entry')||!requireCards()||!canQueueStockTransaction())return;
+  e.preventDefault();if(!requirePermission('entry')||!requireCards())return;
   const items=selectedBatchItems('entry');if(!items)return;
   const warehouse=el('entryWarehouse').value,doc=el('entryDoc').value.trim(),
     date=el('entryDate').value||new Date().toISOString(),
@@ -3407,7 +3407,7 @@ function updateTransferCurrent(){
  updateUnitLabel('transfer');
 }
 function saveTransfer(e){
- e.preventDefault();if(!requirePermission('transfer')||!canQueueStockTransaction())return;
+ e.preventDefault();if(!requirePermission('transfer'))return;
  const from=el('transferFrom').value,to=el('transferTo').value,p=el('transferProduct').value;
  const unit=el('transferUnit').value||defaultStockUnit(p),text=el('transferQty').value.trim(),amount=Number(text);
  if(!from||!to||!p||!warehouseById(from)||!warehouseById(to)||!productById(p))
@@ -3579,7 +3579,7 @@ async function startCountCamera(){
  }
 }
 function saveCount(e){
- e.preventDefault();if(!requirePermission('count')||!canQueueStockTransaction())return;
+ e.preventDefault();if(!requirePermission('count'))return;
  const items=selectedBatchItems('count');if(!items)return;
  const warehouse=el('countWarehouse').value,
    person=currentUser.fullName||currentUser.username,
@@ -4235,28 +4235,9 @@ function queuedOrderCount(){
 }
 function queuedFirmCount(){return Number.isInteger(cloudState.baseFirmCount)?Math.max(0,db.firms.length-cloudState.baseFirmCount):0}
 function canQueueNewRecord(){return syncBootstrapComplete&&!cloudConflict&&!syncPullInProgress&&(!cloudState.ownerId||cloudState.ownerId===currentUser?.id)&&(queuedOrderCount()+queuedFirmCount()<20)}
-const MAX_STOCK_QUEUE_TRANSACTIONS=20;
-const STOCK_QUEUE_BATCH_DELAY=1400;
-function queuedStockTransactionCount(){
- if(!Number.isInteger(cloudState.baseMovementCount))return 0;
- const movements=db.movements.slice(cloudState.baseMovementCount);
- return new Set(movements.map(m=>m.groupId||m.id)).size;
-}
-function canQueueStockTransaction(){
- if(!syncBootstrapComplete||cloudConflict||syncPullInProgress||
-   (cloudState.ownerId&&cloudState.ownerId!==currentUser?.id)){
-  notify('Drive bağlantısı veya işlem kuyruğu hazır değil. Mevcut kayıtları silmeyin.',true);return false;
- }
- if(queuedStockTransactionCount()>=MAX_STOCK_QUEUE_TRANSACTIONS){
-  notify('20 stok işlemi Drive kuyruğunda. Önce bu kayıtların gönderilmesi gerekiyor.',true);
-  if(!syncPushInProgress)pushToSheets(false);
-  return false;
- }
- return true;
-}
 function queueStatusLabel(){
- const n=queuedMovementCount(),transactions=queuedStockTransactionCount(),orders=queuedOrderCount(),firms=queuedFirmCount();
- if(n||orders||firms)return 'Drive: kuyrukta'+(transactions?' · '+transactions+'/20 stok işlemi':'')+(n?' · '+n+' hareket':'')+(orders?' · '+orders+' sipariş':'')+(firms?' · '+firms+' firma':'');
+ const n=queuedMovementCount(),orders=queuedOrderCount(),firms=queuedFirmCount();
+ if(n||orders||firms)return 'Drive: kuyrukta'+(n?' · '+n+' stok hareketi':'')+(orders?' · '+orders+' sipariş':'')+(firms?' · '+firms+' firma':'');
  return 'Drive: değişiklik gönderim kuyruğunda';
 }
 function scheduleAutoSync(){
@@ -4264,7 +4245,7 @@ function scheduleAutoSync(){
  if(currentUser&&!cloudState.ownerId)cloudState.ownerId=currentUser.id;
  rememberCloud();el('syncIndicator').textContent=queueStatusLabel();
  clearTimeout(autoSyncTimer);
- if(!syncPushInProgress&&!cloudConflict&&syncBootstrapComplete)autoSyncTimer=setTimeout(()=>pushToSheets(false),queuedStockTransactionCount()>=MAX_STOCK_QUEUE_TRANSACTIONS?0:STOCK_QUEUE_BATCH_DELAY);
+ if(!syncPushInProgress&&!cloudConflict&&syncBootstrapComplete)autoSyncTimer=setTimeout(()=>pushToSheets(false),900);
 }
 async function pushToSheets(manual=true){
  if(syncPushInProgress||syncPullInProgress||cloudConflict){
