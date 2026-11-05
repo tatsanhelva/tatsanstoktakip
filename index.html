@@ -708,6 +708,7 @@ function closeSidebar(){el('sidebar').classList.remove('open');el('overlay').cla
 function goPage(name){
   if(!canAccessPage(name)){notify('Bu bölüme erişim yetkiniz bulunmuyor.',true);return}
   const page=el('page-'+name);if(!page)return;
+  if(activePage==='entry'&&name!=='entry')closeEntryCamera();
   activePage=name;document.querySelectorAll('.page').forEach(x=>x.classList.remove('active'));page.classList.add('active');
   document.querySelectorAll('#nav button[data-page]').forEach(x=>x.classList.toggle('active',x.dataset.page===name));el('pageTitle').textContent=PAGE_TITLES[name]||name;closeSidebar();renderAll();
 }
@@ -3162,10 +3163,11 @@ function addScannedEntryBarcode(raw){
  const existing=Number.isFinite(prior)&&prior>=0?toCartons(product.id,prior,unit.value):NaN;
  if(!Number.isFinite(existing)||existing<0||existing>=999999998)
   return entryBarcodeStatus('Mevcut ürün miktarı geçersiz veya çok büyük.',true),false;
+ const next=String(Math.round((existing+1)*1e9)/1e9);
+ if(!isValidStockInput(next,product.id,'Koli'))
+  return entryBarcodeStatus('Miktar tam koliye denk gelmiyor. Ürünün mevcut miktarını kontrol edin.',true),false;
  unit.value='Koli';unit.dispatchEvent(new Event('change',{bubbles:true}));
- input.value=String(Math.round((existing+1)*1e9)/1e9);
- if(!isValidStockInput(input.value,product.id,'Koli'))
-  return entryBarcodeStatus('Koli miktarı geçersiz. Ürün miktarını kontrol edin.',true),false;
+ input.value=next;
  row.querySelector('.batch-check').checked=true;
  input.dispatchEvent(new Event('input',{bubbles:true}));
  el('entryProductSearch').value='';
@@ -3216,8 +3218,11 @@ async function startEntryCamera(){
   const reader=new window.ZXing.BrowserMultiFormatReader();
   entryScanner=reader;
   entryScannerStarting=false;
-  const devices=await window.ZXing.BrowserCodeReader.listVideoInputDevices();
-  const back=devices.find(d=>/back|rear|environment|arka/i.test(d.label||''));
+  let back=null;
+  try{
+   const devices=await window.ZXing.BrowserCodeReader.listVideoInputDevices();
+   back=devices.find(d=>/back|rear|environment|arka/i.test(d.label||''));
+  }catch(e){/* Kamera listesi alınamadığında varsayılan kamera denenir. */}
   await reader.decodeFromVideoDevice(back?.deviceId||null,el('entryCameraVideo'),(result,error)=>{
    if(!result||entryScanner!==reader)return;
    const code=result.getText();
