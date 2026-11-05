@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v3.3</title>
+<title>Tatsan Stok Takip v3.4</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -86,7 +86,7 @@
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
-<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.3</small></div>
+<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.4</small></div>
 <nav class="nav" id="nav">
 <button class="active" data-page="dashboard">📊 Ana Panel</button>
 <button data-page="products">📦 Ürünler</button>
@@ -311,6 +311,19 @@
 <div class="field"><label>Son Kullanma Tarihi (isteğe bağlı)</label><input id="entryExpiry" type="date"></div>
 <div class="field full"><label>Açıklama</label><textarea id="entryNotes"></textarea></div>
 </div>
+<div class="inline-info" id="entryBarcodePanel" style="margin:12px 0">
+ <div class="actions" style="flex-wrap:wrap;align-items:end">
+  <div class="field" style="min-width:170px"><label>Barkodla Stok Girişi</label><input id="entryBarcodeManual" type="text" inputmode="numeric" autocomplete="off" placeholder="Barkod, örn. 65156156" aria-label="Barkod numarası"></div>
+  <button type="button" class="btn btn-primary btn-sm" id="entryBarcodeAdd">Barkodu Ekle (+1 Koli)</button>
+  <button type="button" class="btn btn-light btn-sm" id="entryCameraStart">📷 Telefon Kamerasıyla Okut</button>
+  <button type="button" class="btn btn-light btn-sm" id="entryCameraStop" hidden style="display:none">Kamerayı Kapat</button>
+ </div>
+ <div id="entryCameraArea" hidden style="display:none;margin:12px 0">
+  <video id="entryCameraVideo" autoplay muted playsinline style="width:100%;max-width:460px;max-height:300px;object-fit:cover;border-radius:10px;background:#111"></video>
+  <p class="muted">Barkodu kameranın ortasına tutun. Her başarılı okutmada 1 koli eklenir; aynı barkodu tekrar okutmak için kamerayı yeniden açın.</p>
+ </div>
+ <div id="entryBarcodeStatus" role="status" aria-live="polite" class="muted">Kameradan veya elle barkod girin. Barkod ürün kartındaki kayıtla eşleştirilir. Stok yalnızca “Stok Girişini Kaydet” ile değişir.</div>
+ </div>
 <div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="entryProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
 <button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',true)">Görünenleri Seç</button>
 <button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',false)">Görünen Seçimleri Kaldır</button></div>
@@ -511,7 +524,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.3';
+const APP_VERSION='3.4';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -3122,6 +3135,103 @@ function resetBatchForm(prefix,warehouse,firmId=''){
   filterBatchRows(prefix);
   setDefaultDates();
 }
+let entryScanner=null;
+let entryScannerStarting=false;
+function entryBarcodeStatus(message,isError=false){
+ const box=el('entryBarcodeStatus');
+ if(box){box.textContent=message;box.style.color=isError?'#b42318':''}
+}
+function addScannedEntryBarcode(raw){
+ const code=String(raw||'').trim();
+ if(!code)return entryBarcodeStatus('Barkod girin veya kameradan okutun.',true),false;
+ if(!hasPermission('entry'))return entryBarcodeStatus('Stok girişi yetkiniz yok.',true),false;
+ const warehouse=el('entryWarehouse').value;
+ if(!warehouse||!warehouseById(warehouse))return entryBarcodeStatus('Önce giriş yapılacak depoyu seçin.',true),false;
+ const found=db.products.filter(p=>p.active!==false&&String(p.barcode||'').trim()===code);
+ if(found.length!==1){
+  entryBarcodeStatus(found.length?'Aynı barkod birden fazla ürüne kayıtlı. Ürün kartlarını düzeltin.':'Barkodla eşleşen aktif ürün bulunamadı: '+code,true);
+  return false;
+ }
+ const product=found[0];
+ const row=[...el('entryBatchRows').querySelectorAll('tr[data-product-id]')].find(r=>r.dataset.productId===product.id);
+ if(!row)return entryBarcodeStatus('Ürün giriş listesinde bulunamadı. Depoyu tekrar seçin.',true),false;
+ const unit=row.querySelector('.batch-unit');
+ const input=row.querySelector('.batch-qty');
+ const prior=Number(input.value||0);
+ // Kamera her başarılı okutmayı +1 koli olarak hesaplar. Mevcut adet/KG girdisi önce koliye çevrilir.
+ const existing=Number.isFinite(prior)&&prior>=0?toCartons(product.id,prior,unit.value):NaN;
+ if(!Number.isFinite(existing)||existing<0||existing>=999999998)
+  return entryBarcodeStatus('Mevcut ürün miktarı geçersiz veya çok büyük.',true),false;
+ unit.value='Koli';unit.dispatchEvent(new Event('change',{bubbles:true}));
+ input.value=String(Math.round((existing+1)*1e9)/1e9);
+ if(!isValidStockInput(input.value,product.id,'Koli'))
+  return entryBarcodeStatus('Koli miktarı geçersiz. Ürün miktarını kontrol edin.',true),false;
+ row.querySelector('.batch-check').checked=true;
+ input.dispatchEvent(new Event('input',{bubbles:true}));
+ el('entryProductSearch').value='';
+ filterBatchRows('entry');
+ entryBarcodeStatus('✓ '+product.name+' · '+code+' · giriş listesinde '+input.value+' Koli. Henüz Drive’a kaydedilmedi.');
+ el('entryBarcodeManual').value='';
+ return true;
+}
+function closeEntryCamera(){
+ const scanner=entryScanner;entryScanner=null;entryScannerStarting=false;
+ if(scanner){try{scanner.reset()}catch(e){}}
+ const video=el('entryCameraVideo');
+ if(video){
+  const stream=video.srcObject;
+  if(stream&&stream.getTracks)stream.getTracks().forEach(t=>t.stop());
+  video.srcObject=null;
+ }
+ const box=el('entryCameraArea'),stop=el('entryCameraStop');
+ if(box){box.hidden=true;box.style.display='none'}
+ if(stop){stop.hidden=true;stop.style.display='none'}
+}
+function loadEntryBarcodeLibrary(){
+ if(window.ZXing?.BrowserMultiFormatReader)return Promise.resolve();
+ if(window.entryBarcodeLibPromise)return window.entryBarcodeLibPromise;
+ window.entryBarcodeLibPromise=new Promise((resolve,reject)=>{
+  const script=document.createElement('script');
+  script.src='https://unpkg.com/@zxing/library@0.21.3/umd/index.min.js';
+  script.async=true;
+  script.onload=()=>window.ZXing?.BrowserMultiFormatReader?resolve():reject(new Error('Barkod okuyucu yüklenemedi.'));
+  script.onerror=()=>reject(new Error('Barkod kütüphanesi yüklenemedi; bağlantınızı kontrol edin.'));
+  document.head.appendChild(script);
+ }).catch(e=>{window.entryBarcodeLibPromise=null;throw e});
+ return window.entryBarcodeLibPromise;
+}
+async function startEntryCamera(){
+ if(entryScanner||entryScannerStarting)return;
+ if(!hasPermission('entry'))return entryBarcodeStatus('Stok girişi yetkiniz yok.',true);
+ if(!el('entryWarehouse').value)return entryBarcodeStatus('Önce depoyu seçin.',true);
+ if(!navigator.mediaDevices?.getUserMedia||!window.isSecureContext)
+  return entryBarcodeStatus('Kamera için HTTPS ve kamera erişim izni gerekir. Telefon tarayıcısından güvenli bağlantıyı açın.',true);
+ entryScannerStarting=true;
+ entryBarcodeStatus('Kamera hazırlanıyor; izin sorulursa onaylayın…');
+ const box=el('entryCameraArea'),stop=el('entryCameraStop');
+ box.hidden=false;box.style.display='block';stop.hidden=false;stop.style.display='';
+ try{
+  await loadEntryBarcodeLibrary();
+  if(!entryScannerStarting)return;
+  const reader=new window.ZXing.BrowserMultiFormatReader();
+  entryScanner=reader;
+  entryScannerStarting=false;
+  const devices=await window.ZXing.BrowserCodeReader.listVideoInputDevices();
+  const back=devices.find(d=>/back|rear|environment|arka/i.test(d.label||''));
+  await reader.decodeFromVideoDevice(back?.deviceId||null,el('entryCameraVideo'),(result,error)=>{
+   if(!result||entryScanner!==reader)return;
+   const code=result.getText();
+   // Her kamera oturumunda tek okutma: sabit duran barkodun yanlışlıkla defalarca eklenmesini engeller.
+   closeEntryCamera();
+   const ok=addScannedEntryBarcode(code);
+   if(ok)entryBarcodeStatus(el('entryBarcodeStatus').textContent+' Yeni koli için tekrar kamera düğmesine basın.');
+  });
+  entryBarcodeStatus('Kamera açık. Barkodu kadraja yaklaştırın.');
+ }catch(e){
+  closeEntryCamera();
+  entryBarcodeStatus('Kamera açılamadı: '+(e?.message||e)+'. Barkodu elle girebilirsiniz.',true);
+ }
+}
 function saveEntry(e){
   e.preventDefault();if(!requirePermission('entry')||!requireCards())return;
   const items=selectedBatchItems('entry');if(!items)return;
@@ -4188,6 +4298,10 @@ async function savePurchase(e){
 }
 function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=currentUser?.role==='sales'?(el('firmCode').value||newFirmCodeForType()):nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=({admin:'Yönetici',sales:'Satışçı',accounting:'Muhasebe',depo:'Depo Kullanıcısı'}[currentUser.role]||'Kullanıcı');if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
+el('entryBarcodeAdd').addEventListener('click',()=>addScannedEntryBarcode(el('entryBarcodeManual').value));
+el('entryBarcodeManual').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addScannedEntryBarcode(e.target.value)}});
+el('entryCameraStart').addEventListener('click',startEntryCamera);
+el('entryCameraStop').addEventListener('click',()=>{closeEntryCamera();entryBarcodeStatus('Kamera kapatıldı. Henüz kaydedilmemiş girişler listede duruyor.')});
 el('stockTable').addEventListener('click',e=>{const b=e.target.closest('[data-stock-product]');if(b)showStockProductDetail(b.dataset.stockProduct)});
 el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
 ['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).addEventListener('change',renderBizReport));
