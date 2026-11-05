@@ -1007,7 +1007,7 @@ function dashboardExitFirmRows(){
  const warehouse=el('dashboardWarehouseFilter')?.value||'all';
  const groups=new Map();
  for(const m of db.movements||[]){
-  if(m.type!=='CIKIS'||(warehouse!=='all'&&m.warehouseId!==warehouse))continue;
+  if(m.type!=='CIKIS'||!canViewSalesRecord(m)||(warehouse!=='all'&&m.warehouseId!==warehouse))continue;
   const firm=firmById(m.firmId);
   const name=firm?.name||String(m.firmName||'').trim();
   if(!name)continue;
@@ -2923,7 +2923,7 @@ function saveFirmLedger(e){
 }
 function showFirmBalance(id){
  if(!requirePermission('firms'))return;
- const firm=firmById(id);if(!firm)return notify('Firma bulunamadı.',true);
+ const firm=firmById(id);if(!canViewFirm(firm))return notify('Bu cariye erişim yetkiniz bulunmuyor.',true);
  const records=(db.firmLedger||[]).filter(m=>m.firmId===firm.id);
  const debt=records.filter(m=>m.type==='DEBT').reduce((sum,m)=>sum+Number(m.amountCents||0),0);
  const paid=records.filter(m=>m.type==='PAYMENT').reduce((sum,m)=>sum+Number(m.amountCents||0),0);
@@ -2940,7 +2940,7 @@ function showFirmBalance(id){
 }
 function showFirmStatement(id){
  if(!requirePermission('firms'))return;
- const firm=firmById(id);if(!firm)return;
+ const firm=firmById(id);if(!canViewFirm(firm))return notify('Bu cariye erişim yetkiniz bulunmuyor.',true);
  const movements=(db.firmLedger||[]).filter(m=>m.firmId===id)
   .sort((a,b)=>String(b.date).localeCompare(String(a.date))||String(b.createdAt).localeCompare(String(a.createdAt)));
  const bal=firmBalanceStatus(id);
@@ -3149,7 +3149,7 @@ function updateExitPriceSummary(){
 function saveExit(e){
   e.preventDefault();if(!requirePermission('exit'))return;
   const warehouse=el('exitWarehouse').value,firm=firmById(el('exitFirm').value);
-  if(!firm||firm.active===false){notify('Stok çıkışı için önce bir cari / firma seçin.',true);return}
+  if(!firm||firm.active===false||!canViewFirm(firm)){notify('Stok çıkışı için yetkili olduğunuz bir cari seçin.',true);return}
   if(secureMode&&!isAdmin())return notify('Cari borçlu stok çıkışı için mevcut güvenli sunucuda yönetici oturumu gereklidir.',true);
   if(!syncBootstrapComplete||cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress||syncPullInProgress)return notify('Önce Drive senkronizasyonunu tamamlayın.',true);
   const items=selectedBatchItems('exit');if(!items)return;
@@ -3328,18 +3328,18 @@ function newestFirst(a,b){
 }
 function bizData(){
  const F=bizFilter();
- const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&F.date(x.date)&&F.firm(x.firmId,x.firmName)&&F.product(x.productId,productById(x.productId)?.name)&&F.warehouse(x.warehouseId));
- const purchases=(db.purchases||[]).filter(x=>F.date(x.date)&&F.firm(x.firmId,x.firmName)&&(F.p==='all'||(F.p.startsWith('purchase:')?firmKey(F.p.slice(9))===firmKey(x.productName):firmKey(productById(F.p)?.name)===firmKey(x.productName)))&&F.w==='all');
- const guests=(db.guestSales||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.warehouse(x.warehouseId)&&(F.p==='all'||(x.items||[]).some(i=>i.productId===F.p)));
- const debts=(db.firmLedger||[]).filter(x=>x.type==='DEBT'&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
- const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
- const expenses=(db.expenses||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
- const users=(db.auditLogs||[]).filter(x=>F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
+ const exits=(db.movements||[]).filter(x=>x.type==='CIKIS'&&canViewSalesRecord(x)&&F.date(x.date)&&F.firm(x.firmId,x.firmName)&&F.product(x.productId,productById(x.productId)?.name)&&F.warehouse(x.warehouseId));
+ const purchases=(db.purchases||[]).filter(x=>canViewSalesRecord(x)&&F.date(x.date)&&F.firm(x.firmId,x.firmName)&&(F.p==='all'||(F.p.startsWith('purchase:')?firmKey(F.p.slice(9))===firmKey(x.productName):firmKey(productById(F.p)?.name)===firmKey(x.productName)))&&F.w==='all');
+ const guests=(db.guestSales||[]).filter(x=>currentUser?.role!=='sales'&&F.date(x.date)&&F.f==='all'&&F.warehouse(x.warehouseId)&&(F.p==='all'||(x.items||[]).some(i=>i.productId===F.p)));
+ const debts=(db.firmLedger||[]).filter(x=>x.type==='DEBT'&&canViewSalesRecord(x)&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
+ const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&canViewSalesRecord(x)&&F.date(x.date)&&F.firm(x.firmId,'')&&F.p==='all'&&F.w==='all');
+ const expenses=(db.expenses||[]).filter(x=>currentUser?.role!=='sales'&&F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
+ const users=(db.auditLogs||[]).filter(x=>(currentUser?.role!=='sales'||x.userId===currentUser.id)&&F.date(x.date)&&F.f==='all'&&F.p==='all'&&F.w==='all');
  return {exits:exits.sort(newestFirst),purchases:purchases.sort(newestFirst),guests:guests.sort(newestFirst),debts:debts.sort(newestFirst),payments:payments.sort(newestFirst),expenses:expenses.sort(newestFirst),users:users.sort(newestFirst)};
 }
 function renderBizReport(){
  if(!el('bizRows'))return;
- const firms=db.firms.map(x=>({id:x.id,label:x.name})),products=db.products.map(x=>({id:x.id,label:x.code+' - '+x.name})),wh=db.warehouses.map(x=>({id:x.id,label:x.name}));
+ const firms=visibleFirms().map(x=>({id:x.id,label:x.name})),products=db.products.map(x=>({id:x.id,label:x.code+' - '+x.name})),wh=db.warehouses.map(x=>({id:x.id,label:x.name}));
  const existingProduct=el('bizProduct').value;
  bizOptions('bizFirm',firms);bizOptions('bizWarehouse',wh);
  const purchaseNames=[...new Set((db.purchases||[]).map(x=>String(x.productName||'').trim()).filter(Boolean))];
@@ -3467,10 +3467,10 @@ function applyHistoryPeriod(period){
 }
 function renderHistoricalOverview(){
  const f=el('historyFirm'),old=f.value;
- f.innerHTML='<option value="all">Tüm Firmalar</option>'+db.firms.map(x=>'<option value="'+esc(x.id)+'">'+esc((x.code||'')+' - '+x.name)+'</option>').join('');
+ f.innerHTML='<option value="all">Tüm Firmalar</option>'+visibleFirms().map(x=>'<option value="'+esc(x.id)+'">'+esc((x.code||'')+' - '+x.name)+'</option>').join('');
  if(db.firms.some(x=>x.id===old))f.value=old;
  const from=el('historyFrom').value,to=el('historyTo').value,firmId=f.value;
- const pass=(date,id)=>{const d=historyDate(date);return (!from||d>=from)&&(!to||d<=to)&&(firmId==='all'||id===firmId)};
+ const pass=(date,id)=>{const d=historyDate(date);return (!from||d>=from)&&(!to||d<=to)&&(firmId==='all'||id===firmId)&&(currentUser?.role!=='sales'||canViewFirmId(id))};
  const sums={sales:0,purchase:0,payment:0,guest:0,expense:0,exits:0},rows=[];
  const add=(date,kind,firm,desc,quantity,incoming,outgoing,source)=>{const row=[historyDate(date),kind,firm,desc,quantity,incoming,outgoing];row.sortTime=Date.parse(source?.createdAt||source?.date||date)||0;row.sortIndex=rows.length;rows.push(row)};
  for(const x of db.firmLedger||[]){
@@ -3538,15 +3538,15 @@ function renderDailyReport(){
  const from=fromField.value,to=toField.value;
  const firmSelect=el('dailyFirm'),warehouseSelect=el('dailyWarehouse');
  const priorFirm=firmSelect.value,priorWarehouse=warehouseSelect.value;
- firmSelect.innerHTML='<option value="all">Tümü</option>'+db.firms.map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+'</option>').join('');
+ firmSelect.innerHTML='<option value="all">Tümü</option>'+visibleFirms().map(f=>'<option value="'+esc(f.id)+'">'+esc(f.name)+'</option>').join('');
  warehouseSelect.innerHTML='<option value="all">Tümü</option>'+db.warehouses.map(w=>'<option value="'+esc(w.id)+'">'+esc(w.name)+'</option>').join('');
  if(db.firms.some(f=>f.id===priorFirm))firmSelect.value=priorFirm;
  if(db.warehouses.some(w=>w.id===priorWarehouse))warehouseSelect.value=priorWarehouse;
  const firmId=firmSelect.value,warehouseId=warehouseSelect.value,within=d=>{const day=String(d||'').slice(0,10);return day>=from&&day<=to};
- const selectedFirm=m=>firmId==='all'||m.firmId===firmId;
+ const selectedFirm=m=>(firmId==='all'||m.firmId===firmId)&&canViewSalesRecord(m);
  const selectedWarehouse=m=>warehouseId==='all'||m.warehouseId===warehouseId;
  const products=db.products.filter(p=>p.active!==false);
- const movements=(db.movements||[]).filter(m=>selectedWarehouse(m));
+ const movements=(db.movements||[]).filter(m=>selectedWarehouse(m)&&(currentUser?.role!=='sales'||m.type!=='CIKIS'||canViewSalesRecord(m)));
  const stocked=products.map(p=>{
   const productMoves=movements.filter(m=>m.productId===p.id);
   const stockNow=db.warehouses.filter(w=>warehouseId==='all'||w.id===warehouseId).reduce((n,w)=>n+Number(getStock(w.id,p.id)||0),0);
@@ -3584,9 +3584,9 @@ function renderDailyReport(){
  body+=row('DÖNEM SATIŞ',included.map(x=>x.issued),'background:#c8f4f4;font-weight:700');
  body+=row('KALAN',included.map(x=>x.closing),'background:#c8f4f4;font-weight:700');
  el('dailyMatrixBody').innerHTML=body;
- const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&within(x.date)&&(firmId==='all'||x.firmId===firmId));
- const guests=(db.guestSales||[]).filter(x=>within(x.date)&&firmId==='all'&&(warehouseId==='all'||x.warehouseId===warehouseId));
- const expenses=(db.expenses||[]).filter(x=>within(x.date)&&firmId==='all');
+ const payments=(db.firmLedger||[]).filter(x=>x.type==='PAYMENT'&&canViewSalesRecord(x)&&within(x.date)&&(firmId==='all'||x.firmId===firmId));
+ const guests=(db.guestSales||[]).filter(x=>currentUser?.role!=='sales'&&within(x.date)&&firmId==='all'&&(warehouseId==='all'||x.warehouseId===warehouseId));
+ const expenses=(db.expenses||[]).filter(x=>currentUser?.role!=='sales'&&within(x.date)&&firmId==='all');
  const buckets={CASH:[],POS:[],TRANSFER:[],CHECK:[]};
  for(const p of payments){const method=buckets[p.paymentMethod]?p.paymentMethod:'CASH';buckets[method].push({name:firmById(p.firmId)?.name||'Cari',amount:Number(p.amountCents||0)})}
  for(const p of guests){const method=buckets[p.paymentMethod]?p.paymentMethod:'CASH';buckets[method].push({name:p.customerName||'Peşin Satış',amount:Number(p.amountCents||0)})}
