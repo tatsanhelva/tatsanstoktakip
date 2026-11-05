@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v3.7</title>
+<title>Tatsan Stok Takip v3.8</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -324,6 +324,14 @@
  </div>
  <div id="entryBarcodeStatus" role="status" aria-live="polite" class="muted">Barkodu okutun veya elle yazın; ürünü bulunca giriş miktarını belirtin. Stok yalnızca “Stok Girişini Kaydet” ile değişir.</div>
  </div>
+
+<div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="entryProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',true)">Görünenleri Seç</button>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',false)">Görünen Seçimleri Kaldır</button></div>
+<div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Mevcut Stok</th><th>Miktar Gir</th><th>Birim</th><th>İşlem Sonrası</th></tr></thead><tbody id="entryBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
+<div id="entryBatchSummary" class="inline-info" style="margin-top:12px">Ürün seçmek için depo seçin.</div>
+<div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Stok Girişini Kaydet</button></div>
+</form></div></div>
 <dialog id="entryBarcodeQuantityDialog" style="width:min(440px,94vw);border:0;border-radius:14px;padding:22px">
 <form id="entryBarcodeQuantityForm">
 <div class="card-head"><h3>Barkoddan Stok Girişi</h3><button class="btn btn-light btn-sm" type="button" id="entryBarcodeCancelTop">Kapat</button></div>
@@ -335,13 +343,6 @@
 <p id="entryBarcodeQtyError" role="alert" style="color:#b42318"></p>
 <div class="actions"><button class="btn btn-primary" type="submit">Miktarı Listeye Ekle</button><button class="btn btn-light" type="button" id="entryBarcodeCancel">Vazgeç</button></div>
 </form></dialog>
-<div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="entryProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
-<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',true)">Görünenleri Seç</button>
-<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('entry',false)">Görünen Seçimleri Kaldır</button></div>
-<div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Mevcut Stok</th><th>Miktar Gir</th><th>Birim</th><th>İşlem Sonrası</th></tr></thead><tbody id="entryBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
-<div id="entryBatchSummary" class="inline-info" style="margin-top:12px">Ürün seçmek için depo seçin.</div>
-<div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Stok Girişini Kaydet</button></div>
-</form></div></div>
 <div class="page" id="page-exit"><div class="card">
 <div class="card-head"><h3>Toplu Stok Çıkışı</h3><span class="muted">Cari ve depo seç, birden fazla ürünü tek işlemde çıkar</span></div>
 <form id="exitForm">
@@ -385,6 +386,16 @@
  </div>
  <div id="countBarcodeStatus" role="status" aria-live="polite" class="muted">Barkodu okutun veya yazın. Miktar, fiziksel sayım sonucu olarak kaydedilir; sistemdeki stoğa eklenmez.</div>
 </div>
+
+<div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="countProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('count',true)">Görünenleri Seç</button>
+<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('count',false)">Görünen Seçimleri Kaldır</button></div>
+<div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Sistem Stoku</th><th>Sayılan Miktar</th><th>Birim</th><th>Sayım Farkı</th></tr></thead><tbody id="countBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
+<div id="countBatchSummary" class="inline-info" style="margin-top:12px">Depo seçtikten sonra sayılan miktarları girin. Sıfır stok için 0 yazabilirsiniz.</div>
+<div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Sayımını Kaydet ve Stokları Düzelt</button></div>
+</form></div>
+<div class="card" style="margin-top:16px"><div class="card-head"><h3>Geçmiş Sayım Tutanakları</h3><span class="muted">Kaydedilen sayımları ve ürün farklarını inceleyin</span></div>
+<div class="table-wrap"><table><thead><tr><th>Sayım Tutanağı</th><th>Depo</th><th>Ürün Sayısı</th><th>Farklı Ürün</th><th>İşlem</th></tr></thead><tbody id="countHistoryRows"></tbody></table></div></div></div>
 <dialog id="countBarcodeQuantityDialog" style="width:min(460px,94vw);border:0;border-radius:14px;padding:22px">
  <form id="countBarcodeQuantityForm">
   <div class="card-head"><h3>Barkodla Stok Sayımı</h3><button class="btn btn-light btn-sm" type="button" id="countBarcodeCancelTop">Kapat</button></div>
@@ -398,15 +409,6 @@
   <div class="actions"><button type="submit" class="btn btn-primary">Sayımı Listeye Yaz</button><button type="button" class="btn btn-light" id="countBarcodeCancel">Vazgeç</button></div>
  </form>
 </dialog>
-<div class="batch-toolbar"><div class="field batch-search"><label>Ürün Ara</label><input id="countProductSearch" placeholder="Ürün adı, kodu veya barkod..." autocomplete="off"></div>
-<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('count',true)">Görünenleri Seç</button>
-<button type="button" class="btn btn-light btn-sm" onclick="toggleBatchVisible('count',false)">Görünen Seçimleri Kaldır</button></div>
-<div class="table-wrap batch-table-wrap"><table class="batch-table"><thead><tr><th>Seç</th><th>Ürün Kodu</th><th>Ürün</th><th>Sistem Stoku</th><th>Sayılan Miktar</th><th>Birim</th><th>Sayım Farkı</th></tr></thead><tbody id="countBatchRows"><tr><td colspan="7" class="empty">Önce depo seçin.</td></tr></tbody></table></div>
-<div id="countBatchSummary" class="inline-info" style="margin-top:12px">Depo seçtikten sonra sayılan miktarları girin. Sıfır stok için 0 yazabilirsiniz.</div>
-<div class="actions"><button class="btn btn-primary" type="submit">Seçilen Ürünlerin Sayımını Kaydet ve Stokları Düzelt</button></div>
-</form></div>
-<div class="card" style="margin-top:16px"><div class="card-head"><h3>Geçmiş Sayım Tutanakları</h3><span class="muted">Kaydedilen sayımları ve ürün farklarını inceleyin</span></div>
-<div class="table-wrap"><table><thead><tr><th>Sayım Tutanağı</th><th>Depo</th><th>Ürün Sayısı</th><th>Farklı Ürün</th><th>İşlem</th></tr></thead><tbody id="countHistoryRows"></tbody></table></div></div></div>
 <dialog id="countHistoryDialog" style="width:min(960px,96vw);max-height:90vh;border:0;border-radius:14px;padding:24px">
 <div class="card-head"><h3 id="countHistoryTitle">Sayım Tutanağı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('countHistoryDialog').close()">Kapat</button></div>
 <p id="countHistoryInfo" class="muted"></p><div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Önceki Stok</th><th>Sayılan Stok</th><th>Fark</th></tr></thead><tbody id="countHistoryDetails"></tbody></table></div></dialog>
@@ -561,7 +563,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.7';
+const APP_VERSION='3.8';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
