@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v2.0</title>
+<title>Tatsan Stok Takip v3.1</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -86,7 +86,7 @@
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
-<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small>Stok ve depo yönetimi v2.0</small></div>
+<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.1</small></div>
 <nav class="nav" id="nav">
 <button class="active" data-page="dashboard">📊 Ana Panel</button>
 <button data-page="products">📦 Ürünler</button>
@@ -184,7 +184,7 @@
  <form id="firmForm"><input id="firmId" type="hidden"><div class="form-grid cols-3">
   <div class="field"><label>Firma Kodu (Otomatik)</label><input id="firmCode" readonly placeholder="Otomatik"></div>
   <div class="field"><label>Firma Adı *</label><input id="firmName" required maxlength="200"></div>
-  <div class="field"><label>Cari Türü *</label><select id="firmType"><option value="both">Müşteri ve Tedarikçi</option><option value="customer">Müşteri</option><option value="supplier">Tedarikçi</option></select></div>
+  <div class="field"><label>Cari Türü *</label><select id="firmType"><option value="customer" selected>Müşteri</option><option value="both">Müşteri ve Tedarikçi</option><option value="supplier">Tedarikçi</option></select></div>
   <div class="field"><label>Satış Sorumlusu</label><select id="firmOwner"><option value="">Atanmamış</option></select><small class="muted">Satışçının açtığı cariler otomatik kendisine atanır.</small></div><div class="field"><label>Yetkili Kişi</label><input id="firmContact" maxlength="150"></div>
   <div class="field"><label>Telefon</label><input id="firmPhone" type="tel" maxlength="50"></div>
   <div class="field"><label>E-posta</label><input id="firmEmail" type="email" maxlength="200"></div>
@@ -504,7 +504,10 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.0';
+const APP_VERSION='3.1';
+// Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
+// Sekme başlığı ve sol menü bu değerden otomatik beslenir.
+const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
 const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu781xw2F9Wy1Ru0oKxiKWQvalu_gJFga3DDVdCe01o5tp_ISlVPwDx/exec';
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
@@ -2685,7 +2688,7 @@ function toggleFirmDiscountField(){
  if(!el('firmId').value)el('firmCode').value=newFirmCodeForType();
 }
 function resetFirmForm(){
- el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmType').value='both';el('firmCode').value=newFirmCodeForType();
+ el('firmForm').reset();el('firmId').value='';el('firmActive').value='true';el('firmType').value='customer';el('firmCode').value=newFirmCodeForType();
  el('firmDiscount').value='';updateFirmOwnerPicker();toggleFirmDiscountField();
 }
 function deleteFirm(id){
@@ -3646,7 +3649,7 @@ async function saveUser(e){e.preventDefault();if(!isAdmin())return;const id=el('
 function editUser(id){const u=userById(id);if(!u)return;el('userId').value=u.id;el('userFullName').value=u.fullName;el('userUsername').value=u.username;el('userRole').value=u.role;el('userActive').value=String(u.active!==false);el('userPassword').value='';renderPermissionEditor(u.permissions||{});window.scrollTo({top:0,behavior:'smooth'})}
 function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'&&k!=='deleteOrders'&&k!=='editPurchases'&&k!=='deletePurchases'])))}
 
-function renderSettings(){if(!isAdmin())return;el('settingCompany').value=db.settings.companyName||'Tatsan Stok Takip';el('settingNegative').value=String(!!db.settings.allowNegative);el('settingCurrency').value=db.settings.currency||'TRY';el('settingSheetsUrl').value=DEFAULT_SHEETS_URL;el('settingSheetsToken').value=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;el('settingAutoSync').value='true';el('brandName').textContent=db.settings.companyName||'Tatsan Stok Takip';document.title=(db.settings.companyName||'Tatsan Stok Takip')+' v'+APP_VERSION;el('sheetSyncStatus').innerHTML=`Son gönderme: <b>${db.settings.lastPush?dt(db.settings.lastPush):'Yok'}</b> &nbsp; | &nbsp; Son çekme: <b>${db.settings.lastPull?dt(db.settings.lastPull):'Yok'}</b>`}
+function renderSettings(){if(!isAdmin())return;el('settingCompany').value=db.settings.companyName||'Tatsan Stok Takip';el('settingNegative').value=String(!!db.settings.allowNegative);el('settingCurrency').value=db.settings.currency||'TRY';el('settingSheetsUrl').value=DEFAULT_SHEETS_URL;el('settingSheetsToken').value=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;el('settingAutoSync').value='true';el('brandName').textContent=db.settings.companyName||'Tatsan Stok Takip';el('appVersionLabel').textContent=APP_VERSION_LABEL;document.title=(db.settings.companyName||'Tatsan Stok Takip')+' v'+APP_VERSION;el('sheetSyncStatus').innerHTML=`Son gönderme: <b>${db.settings.lastPush?dt(db.settings.lastPush):'Yok'}</b> &nbsp; | &nbsp; Son çekme: <b>${db.settings.lastPull?dt(db.settings.lastPull):'Yok'}</b>`}
 function saveSettings(e){e.preventDefault();db.settings.companyName=el('settingCompany').value.trim()||'Tatsan Stok Takip';db.settings.allowNegative=el('settingNegative').value==='true';db.settings.currency=el('settingCurrency').value;audit('Genel ayarlar güncellendi','Ayarlar',`Firma: ${db.settings.companyName}, negatif stok: ${db.settings.allowNegative?'açık':'kapalı'}`);saveDB();notify('Ayarlar kaydedildi.')}
 function saveSheetsSettings(e){e.preventDefault();db.settings.sheetsUrl=DEFAULT_SHEETS_URL;db.settings.sheetsToken=DEFAULT_SHEETS_TOKEN;db.settings.autoSync=true;audit('Google Drive ayarları güncellendi','Google Drive','Sabit bağlantı korundu, otomatik senkronizasyon sürekli açık.');saveDB();notify('Google Drive bağlantısı kaydedildi. Otomatik gönderme sürekli açık.')}
 function sheetsConfigured(){const cfg=connection();return !!(cfg.url&&sessionStorage.getItem('tatsanCloudKey'))}
