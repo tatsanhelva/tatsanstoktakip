@@ -2835,7 +2835,18 @@ function renderLedgerFirmMatches(){
  if(!firm){summary.textContent='Cari seçildiğinde güncel toplam borcu gösterilir.';return}
  const debt=firmBalanceCents(firm.id),rows=(db.firmLedger||[]).filter(x=>x.firmId===firm.id);
  const totalPayment=rows.filter(x=>x.type==='PAYMENT').reduce((s,x)=>s+Number(x.amountCents||0),0);
- summary.innerHTML='<b>Güncel bakiye: '+esc(firmMoney(debt))+'</b> · Tahsil edilen: '+esc(firmMoney(totalPayment))+(debt<0?' · Cari alacaklı':'');
+ summary.innerHTML='<span><b>Güncel bakiye: '+esc(firmMoney(debt))+'</b> · Tahsil edilen: '+esc(firmMoney(totalPayment))+(debt<0?' · Cari alacaklı':'')+'</span>'+(debt>0?'<button type="button" class="btn btn-primary btn-sm" id="ledgerFillBalance" style="margin-left:10px;padding:5px 10px" title="Güncel bakiyeyi tahsilat tutarına yaz">Tutara Aktar</button>':'');
+}
+function fillLedgerAmountFromBalance(){
+ if(el('ledgerCustomerType').value!=='registered')return;
+ const firm=firmById(el('firmLedgerFirm').value);
+ if(!firm)return notify('Önce kayıtlı cari seçin.',true);
+ const cents=firmBalanceCents(firm.id);
+ if(!Number.isSafeInteger(cents)||cents<=0)return notify('Aktarılacak pozitif cari borç bulunmuyor.',true);
+ const amount=el('firmLedgerAmount');
+ amount.value=(cents/100).toFixed(2);
+ amount.dispatchEvent(new Event('input',{bubbles:true}));
+ amount.focus();
 }
 function saveFirmLedger(e){
  e.preventDefault();if(!isAdmin())return notify('Cari borçlarını yalnızca yönetici kaydedebilir.',true);
@@ -4162,6 +4173,7 @@ el('ledgerCustomerType').addEventListener('change',toggleLedgerCustomerType);
 el('firmLedgerType').addEventListener('change',toggleLedgerCustomerType);
 el('ledgerPaymentMethod').addEventListener('change',updateLedgerCheckFields);
 el('firmLedgerSearch').addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
+el('firmLedgerBalance').addEventListener('click',e=>{if(e.target.closest('#ledgerFillBalance'))fillLedgerAmountFromBalance()});
 el('firmLedgerMatches').addEventListener('click',e=>{const b=e.target.closest('[data-ledger-firm]');if(!b)return;const f=firmById(b.dataset.ledgerFirm);if(!f)return;el('firmLedgerFirm').value=f.id;el('firmLedgerSearch').value=(f.code||'')+' - '+f.name;renderLedgerFirmMatches()});
 el('firmExcelInput').addEventListener('change',importFirmsExcel);
 el('firmTable').addEventListener('click',e=>{
