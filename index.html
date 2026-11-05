@@ -522,6 +522,7 @@ let secureMode=false;
 let ordersBackendEnabled=false;
 let orderApprovalBackendEnabled=false;
 let orderEditBackendEnabled=false;
+let portfolioIsolationBackendEnabled=false;
 let orderEditingId=null;
 let orderEditingRevision=null;
 let orderEditBusy=false;
@@ -799,6 +800,8 @@ async function bootstrapSheetsBeforeLogin(){
 }
 window.addEventListener('online',async()=>{if(!syncBootstrapComplete)await bootstrapSheetsBeforeLogin();else pushToSheets(false)});
 function loadSecureCloudView(response){
+ if(response?.user?.role==='sales'&&!portfolioIsolationBackendEnabled)
+  throw new Error('Satışçı portföy güvenliği sunucuda henüz etkin değil. Yönetici güvenli Apps Script sürümünü dağıtmalıdır.');
  if(!response?.data||!response?.user||!Number.isInteger(response.revision))
   throw new Error('Drive kullanıcı ve sürüm bilgileri eksik.');
  const unsent=cloudState.dirty||!!cloudState.pending;
@@ -873,6 +876,7 @@ async function initializeApplication(){
       ordersBackendEnabled=probe?.features?.orders===true;
       orderApprovalBackendEnabled=probe?.features?.orderApproval===true;
       orderEditBackendEnabled=probe?.features?.orderEdit===true;
+      portfolioIsolationBackendEnabled=probe?.features?.portfolioIsolation===true;
     }
     if(cloudState.dirty&&localStorage.getItem(DB_KEY))
       localStorage.setItem('tatsanPreSecureMigrationBackup',localStorage.getItem(DB_KEY));
