@@ -3891,8 +3891,8 @@ async function pushToSheets(manual=true){
   cloudConflict=true;notify('Bekleyen stok kaydı başka kullanıcıya ait. Veriyi silmeyin.',true);return;
  }
  syncPushInProgress=true;
+ let saved=null,sent='';
  try{
-  let saved=null,sent='';
   for(let attempt=0;attempt<4;attempt++){
    el('syncIndicator').textContent=attempt?'Drive: işlem kuyruğu yeniden deneniyor…':'Drive: kaydediliyor…';
    if(!cloudState.pending){
