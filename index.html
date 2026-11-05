@@ -563,7 +563,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.0';
+const APP_VERSION='4.1';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -4255,6 +4255,7 @@ async function pushToSheets(manual=true){
  if(!syncBootstrapComplete){
   const ready=await bootstrapSheetsBeforeLogin();if(!ready){if(manual&&!secureMode)configureCloud();return}
  }
+ if(cloudState.pending&&!cloudState.dirty){cloudState.dirty=true;rememberCloud()}
  if(!cloudState.dirty&&manual){cloudState.dirty=true;rememberCloud()}
  if(!cloudState.dirty)return;
  if(cloudState.ownerId&&currentUser?.id!==cloudState.ownerId){
@@ -4326,7 +4327,20 @@ async function pullFromSheets(){
  }catch(e){notify(e.message,true)}finally{syncPullInProgress=false}
 }
 async function refreshCloudIfIdle(manual=false){
- if(!syncBootstrapComplete||syncPushInProgress||syncPullInProgress||cloudConflict||cloudState.dirty){if(manual)notify('Bekleyen işlem veya çakışma varken otomatik yenileme yapılamaz.',true);return}
+ if(!syncBootstrapComplete){if(manual)notify('Drive oturumu henüz hazır değil. Bağlantıyı kontrol edin.',true);return}
+ if(syncPushInProgress||syncPullInProgress){if(manual)notify('Drive işlemi devam ediyor. İşlem tamamlanınca tekrar kontrol edin.');return}
+ if(cloudConflict){
+  if(manual)notify('Drive sürüm çakışması var. Bekleyen kayıtlar korunuyor; önce JSON yedeği alın, güncel veriyi üzerine yazmayın.',true);
+  return;
+ }
+ // Bekleyen yerel işlemleri uzaktaki kayıt ile ezmek yerine önce güvenli şekilde gönder.
+ // Yalnızca pending kalmış olsa bile aynı requestId ile tekrar gönderilir.
+ if(cloudState.dirty||cloudState.pending){
+  if(!cloudState.dirty){cloudState.dirty=true;rememberCloud()}
+  if(manual)notify('Bekleyen kayıtlar önce Drive’a gönderiliyor; ardından güncel sürüm kontrol edilecek.');
+  await pushToSheets(manual);
+  if(cloudState.dirty||cloudState.pending||cloudConflict||syncPushInProgress)return;
+ }
  if(document.hidden&&!manual)return;
  syncPullInProgress=true;
  try{const r=cloudResultCheck(await rpc('cloudRead'));
