@@ -1419,7 +1419,13 @@ function nextSupplierCode(firms=db.firms){
  while(used.has('TDR'+String(n).padStart(3,'0')))n++;
  return 'TDR'+String(n).padStart(3,'0');
 }
-function newFirmCodeForType(){return el('firmType').value==='supplier'?nextSupplierCode():nextFirmCode()}
+function newFirmCodeForType(){
+ if(currentUser?.role==='sales'){
+  const prefix=el('firmType').value==='supplier'?'TDR':'FRM';
+  return prefix+'-'+currentUser.username.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12)+'-'+uid('c').replace(/[^a-zA-Z0-9]/g,'').slice(-8).toUpperCase();
+ }
+ return el('firmType').value==='supplier'?nextSupplierCode():nextFirmCode();
+}
 function firmBalanceCents(id){
  return (db.firmLedger||[]).filter(x=>x.firmId===id).reduce((total,x)=>
   total+(x.type==='DEBT'?Number(x.amountCents||0):-Number(x.amountCents||0)),0);
@@ -1565,6 +1571,8 @@ function orderMoney(cents){
  return new Intl.NumberFormat('tr-TR',{style:'currency',currency:'TRY'}).format(Number(cents||0)/100);
 }
 function nextOrderNumber(orders=db.orders){
+ if(currentUser?.role==='sales')
+  return 'SIP-'+currentUser.username.toUpperCase().replace(/[^A-Z0-9]/g,'').slice(0,12)+'-'+uid('o').replace(/[^a-zA-Z0-9]/g,'').slice(-8).toUpperCase();
  const used=new Set((orders||[]).map(x=>String(x.number||'')));
  const ns=(orders||[]).map(x=>/^SIP-0*(\d+)$/i.exec(String(x.number||''))).filter(Boolean).map(m=>Number(m[1]));
  let n=Math.max(0,...ns)+1;
@@ -2279,7 +2287,7 @@ function saveOrder(e){
  const date=el('orderDate').value;
  if(!/^\d{4}-\d{2}-\d{2}$/.test(date)||Number.isNaN(Date.parse(date)))
   return notify('Geçerli sipariş tarihi girin.',true);
- const number=nextOrderNumber(),order={id:uid('ord'),number,date,firmId:firm.id,
+ const number=currentUser?.role==='sales'?(el('orderNumber').value||nextOrderNumber()):nextOrderNumber(),order={id:uid('ord'),number,date,firmId:firm.id,
   firmCode:firm.code||'',firmName:firm.name,lines:quote.lines,
   subtotalCents:quote.subtotalCents,discountBasisPoints:quote.discountBasisPoints,
   discountExpression:quote.discountExpression,
@@ -4143,7 +4151,7 @@ async function savePurchase(e){
  audit(editId?'Satın alma düzenlendi':'Satın alma kaydedildi','Tedarik',record.firmName+' | '+record.productName+' | '+kg+' KG | '+firmMoney(record.grossCents));saveDB();
  resetPurchaseEdit();notify(editId?'Satın alma düzenlendi.':'Satın alma kaydedildi. Stok değişmedi.');
 }
-function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
+function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=currentUser?.role==='sales'?(el('firmCode').value||newFirmCodeForType()):nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
 el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
 ['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).addEventListener('change',renderBizReport));
