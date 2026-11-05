@@ -94,7 +94,7 @@
 <button data-page="warehouses">🏭 Depolar</button><button data-page="firms">🏢 Firmalar</button>
 <button data-page="orders">🧾 Sipariş Formu</button>
 <button data-page="purchasing">🛒 Tedarik ve Satın Alma</button>
-<button data-admin-only="" data-page="ledger">💳 Cari Hesap / Tahsilat / Peşin Satış / Gider</button>
+<button data-page="ledger">💳 Cari Hesap / Tahsilat / Peşin Satış / Gider</button>
 <div class="sep"></div>
 <button data-page="entry">➕ Stok Girişi</button>
 <button data-page="exit">➖ Stok Çıkışı</button>
@@ -105,9 +105,9 @@
 <button data-page="movements">🕒 Hareketler</button>
 <button data-page="reports">📈 Raporlar</button>
 <button data-page="history">📅 Tarihsel İşlem Özeti</button>
-<button data-page="daily">📊 Günlük Rapor</button><div class="sep"></div><button data-admin-only="" data-page="audit">🛡️ İşlem Kayıtları</button><button data-admin-only="" data-page="users">👥 Kullanıcılar</button>
-<button data-admin-only="" data-page="settings">⚙️ Ayarlar</button>
-<button type="button" data-admin-only="" onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
+<button data-page="daily">📊 Günlük Rapor</button><div class="sep"></div><button data-page="audit">🛡️ İşlem Kayıtları</button><button data-page="users">👥 Kullanıcılar</button>
+<button data-page="settings">⚙️ Ayarlar</button>
+<button type="button" data-cloud-control onclick="closeSidebar();configureCloud()">☁️ Bulut Bağlantısı</button>
 </nav>
 </aside>
 <div class="mobile-overlay" id="overlay"></div>
@@ -509,7 +509,7 @@ const DEFAULT_SERVER_URL='https://script.google.com/macros/s/AKfycbxA6YlNkcDIEcu
 const REMEMBER_LOGIN_KEY='tatsanStokTakip_rememberedLogin_v1';
 const DEFAULT_ADMIN_HASH='03ac674216f3e15c761ee1a5e255f067953623c8b388b4459e13f978d7c846f4';
 const PAGE_TITLES={dashboard:'Ana Panel',products:'Ürünler',categories:'Kategoriler',warehouses:'Depolar',firms:'Firmalar',ledger:'Cari Hesap / Tahsilat / Peşin Satış / Gider',orders:'Sipariş Formu',purchasing:'Tedarik ve Satın Alma',entry:'Stok Girişi',exit:'Stok Çıkışı',transfer:'Depo Transferi',count:'Stok Sayımı',stock:'Stok Durumu',movements:'Hareketler',reports:'Raporlar',history:'Tarihsel İşlem Özeti',daily:'Günlük Rapor',audit:'İşlem Kayıtları',users:'Kullanıcılar',settings:'Ayarlar'};
-const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['purchasing','Tedarik ve Satın Alma'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar']];
+const PERMISSION_DEFS=[['dashboard','Ana Panel'],['products','Ürünler'],['categories','Kategoriler'],['warehouses','Depolar'],['firms','Firmalar'],['orders','Sipariş Formu'],['purchasing','Tedarik ve Satın Alma'],['entry','Stok Girişi'],['exit','Stok Çıkışı'],['transfer','Depo Transferi'],['count','Stok Sayımı'],['stock','Stok Durumu'],['movements','Hareketler'],['reports','Raporlar'],['history','Tarihsel İşlem Özeti'],['daily','Günlük Rapor'],['ledger','Cari Hesap / Tahsilat / Peşin Satış / Gider'],['audit','İşlem Kayıtları'],['users','Kullanıcılar'],['settings','Ayarlar'],['cloud','Bulut Bağlantısı']];
 const ACTION_PERMISSION_DEFS=[['approveOrders','Sipariş Onaylama (Stok Çıkışı)'],['editOrders','Kayıtlı Sipariş Düzenleme'],['deleteOrders','Kayıtlı Sipariş Silme'],['editPurchases','Satın Alma Düzenleme'],['deletePurchases','Satın Alma Silme']];
 const USER_PERMISSION_DEFS=[...PERMISSION_DEFS,...ACTION_PERMISSION_DEFS];
 const PAGE_PERMISSION=Object.fromEntries(PERMISSION_DEFS.map(([key])=>[key,key]));
@@ -671,9 +671,9 @@ function updateFirmOwnerPicker(){
 function requireAdminAction(){if(isAdmin())return true;notify('Düzenleme ve silme işlemleri yalnızca yöneticiye açıktır.',true);return false}
 function hasPermission(permission){return !!currentUser&&(isAdmin()||currentUser.permissions?.[permission]===true)}
 function requirePermission(permission){if(hasPermission(permission))return true;notify('Bu işlem için kullanıcı yetkiniz bulunmuyor.',true);return false}
-function canAccessPage(name){if(name==='history'||name==='daily')return hasPermission('reports');if(['users','audit','settings','ledger'].includes(name))return isAdmin();if(PERMISSION_DEFS.some(([key])=>key===name))return hasPermission(name);return false}
-function firstAllowedPage(){return PERMISSION_DEFS.find(([key])=>hasPermission(key))?.[0]||'dashboard'}
-function applyPermissionUI(){document.querySelectorAll('#nav button[data-page]').forEach(btn=>{btn.style.display=canAccessPage(btn.dataset.page)?'':'none'});document.querySelectorAll('[data-admin-only],[data-admin-column]').forEach(x=>x.style.display=isAdmin()?'':'none')}
+function canAccessPage(name){if(['users','settings'].includes(name))return isAdmin()&&hasPermission(name);if(PERMISSION_DEFS.some(([key])=>key===name&&key!=='cloud'))return hasPermission(name);return false}
+function firstAllowedPage(){return PERMISSION_DEFS.find(([key])=>canAccessPage(key))?.[0]||'dashboard'}
+function applyPermissionUI(){document.querySelectorAll('#nav button[data-page]').forEach(btn=>{btn.style.display=canAccessPage(btn.dataset.page)?'':'none'});document.querySelectorAll('[data-admin-only],[data-admin-column]').forEach(x=>x.style.display=isAdmin()?'':'none');document.querySelectorAll('[data-cloud-control]').forEach(x=>x.style.display=isAdmin()&&hasPermission('cloud')?'':'none')}
 function notify(msg,error=false){const t=el('toast');t.textContent=msg;t.className='toast show'+(error?' error':'');clearTimeout(t._x);t._x=setTimeout(()=>t.className='toast',3000)}
 function audit(action,module,detail=''){
   if(!currentUser)return;
@@ -708,7 +708,7 @@ function getRememberedLogin(){try{const saved=JSON.parse(localStorage.getItem(RE
 function applyRememberedLogin(){const saved=getRememberedLogin();el('loginUsername').value=saved?.username||'';el('loginPassword').value='';el('rememberMe').checked=!!saved}
 function updateRememberedLogin(username,password){if(el('rememberMe').checked){localStorage.setItem(REMEMBER_LOGIN_KEY,JSON.stringify({username:encodeRememberedValue(username),savedAt:new Date().toISOString()}))}else localStorage.removeItem(REMEMBER_LOGIN_KEY)}
 function showLogin(){document.body.classList.add('app-locked');el('loginScreen').classList.remove('hidden');el('loginCloudButton').style.display=secureMode?'none':'';el('loginError').textContent=secureMode?'':syncBootstrapComplete?'':'Google Drive bağlantısı gerekli. Üstteki Bulut Bağlantısı düğmesinden bağlanın.';applyRememberedLogin();setTimeout(()=>{(el('loginUsername').value?el('loginPassword'):el('loginUsername')).focus()},50)}
-function showApp(){el('changePasswordBtn').style.display=secureMode?'':'none';document.body.classList.remove('app-locked');el('loginScreen').classList.add('hidden');el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=currentUser.role==='admin'?'Yönetici':'Depo Kullanıcısı';applyPermissionUI();if(!canAccessPage(activePage))activePage=firstAllowedPage();goPage(activePage)}
+function showApp(){el('changePasswordBtn').style.display=secureMode?'':'none';document.body.classList.remove('app-locked');el('loginScreen').classList.add('hidden');el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=({admin:'Yönetici',sales:'Satışçı',accounting:'Muhasebe',depo:'Depo Kullanıcısı'}[currentUser.role]||'Kullanıcı');applyPermissionUI();if(!canAccessPage(activePage))activePage=firstAllowedPage();goPage(activePage)}
 async function login(e){
   e.preventDefault();const enteredUsername=el('loginUsername').value.trim(),username=enteredUsername.toLowerCase(),password=el('loginPassword').value;el('loginError').textContent='';
   try{
@@ -3628,7 +3628,7 @@ function renderPermissionEditor(permissions={}){const grid=el('userPermissionGri
 function updatePermissionEditorState(){const admin=el('userRole').value==='admin';document.querySelectorAll('input[name="userPermission"]').forEach(x=>{x.disabled=admin;if(admin)x.checked=true})}
 function setAllUserPermissions(value){if(el('userRole').value==='admin')return;document.querySelectorAll('input[name="userPermission"]').forEach(x=>x.checked=value)}
 function readUserPermissions(){return Object.fromEntries(USER_PERMISSION_DEFS.map(([key])=>[key,!!document.querySelector(`input[name="userPermission"][value="${key}"]`)?.checked]))}
-function renderUsers(){if(!isAdmin())return;el('userTable').innerHTML=db.users.length?db.users.map(u=>`<tr><td><b>${esc(u.fullName)}</b></td><td>${esc(u.username)}</td><td>${u.role==='admin'?'<span class="badge b-blue">Yönetici</span>':'<span class="badge b-gray">Depo Kullanıcısı</span>'}</td><td>${u.role==='admin'?'Tüm modüller':`${permissionCount(u)} / ${USER_PERMISSION_DEFS.length} modül / işlem`}</td><td>${u.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-red">Pasif</span>'}</td><td>${dt(u.createdAt)}</td><td><button class="btn btn-light btn-sm" onclick="editUser('${u.id}')">Düzenle</button></td></tr>`).join(''):`<tr><td colspan="7" class="empty">Kullanıcı bulunamadı.</td></tr>`}
+function renderUsers(){if(!isAdmin())return;el('userTable').innerHTML=db.users.length?db.users.map(u=>`<tr><td><b>${esc(u.fullName)}</b></td><td>${esc(u.username)}</td><td>${u.role==='admin'?'<span class="badge b-blue">Yönetici</span>':'<span class="badge b-gray">'+esc(({sales:'Satışçı',accounting:'Muhasebe',depo:'Depo Kullanıcısı'}[u.role]||'Kullanıcı'))+'</span>'}</td><td>${u.role==='admin'?'Tüm modüller':`${permissionCount(u)} / ${USER_PERMISSION_DEFS.length} modül / işlem`}</td><td>${u.active!==false?'<span class="badge b-green">Aktif</span>':'<span class="badge b-red">Pasif</span>'}</td><td>${dt(u.createdAt)}</td><td><button class="btn btn-light btn-sm" onclick="editUser('${u.id}')">Düzenle</button></td></tr>`).join(''):`<tr><td colspan="7" class="empty">Kullanıcı bulunamadı.</td></tr>`}
 async function saveUser(e){e.preventDefault();if(!isAdmin())return;const id=el('userId').value,username=el('userUsername').value.trim().toLowerCase(),fullName=el('userFullName').value.trim(),password=el('userPassword').value,role=el('userRole').value,active=el('userActive').value==='true',permissions=readUserPermissions();if(db.users.some(u=>u.username.toLowerCase()===username&&u.id!==id))return notify('Bu kullanıcı adı zaten kullanılıyor.',true);let obj=id?{...userById(id)}:{id:uid('usr'),createdAt:new Date().toISOString()};if(!id&&!password)return notify('Yeni kullanıcı için şifre zorunludur.',true);if(secureMode&&password&&password.length<8)return notify('Yeni şifre en az 8 karakter olmalıdır.',true);if(id===currentUser.id&&!active)return notify('Kendi kullanıcınızı pasif yapamazsınız.',true);if(obj.role==='admin'&&(role!=='admin'||!active)&&db.users.filter(u=>u.role==='admin'&&u.active!==false&&u.id!==id).length===0)return notify('En az bir aktif yönetici bulunmalıdır.',true);if(role!=='admin'&&!Object.values(permissions).some(Boolean))return notify('Depo kullanıcısına en az bir modül yetkisi vermelisiniz.',true);obj={...obj,username,fullName,role,active,permissions:role==='admin'?Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,true])):permissions};try{if(password)obj.passwordHash=await hashPassword(password)}catch(err){return notify(err.message,true)}if(id)db.users[db.users.findIndex(x=>x.id===id)]=obj;else db.users.push(obj);audit(id?'Kullanıcı güncellendi':'Kullanıcı oluşturuldu','Kullanıcılar',`${obj.fullName} (${obj.username}) - ${obj.role}`);saveDB();resetUserForm();notify('Kullanıcı kaydedildi.')}
 function editUser(id){const u=userById(id);if(!u)return;el('userId').value=u.id;el('userFullName').value=u.fullName;el('userUsername').value=u.username;el('userRole').value=u.role;el('userActive').value=String(u.active!==false);el('userPassword').value='';renderPermissionEditor(u.permissions||{});window.scrollTo({top:0,behavior:'smooth'})}
 function resetUserForm(){el('userForm').reset();el('userId').value='';el('userRole').value='depo';el('userActive').value='true';renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'&&k!=='deleteOrders'&&k!=='editPurchases'&&k!=='deletePurchases'])))}
