@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v3.6</title>
+<title>Tatsan Stok Takip v3.7</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -561,7 +561,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.6';
+const APP_VERSION='3.7';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -4477,130 +4477,130 @@ async function savePurchase(e){
 }
 function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=currentUser?.role==='sales'?(el('firmCode').value||newFirmCodeForType()):nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=({admin:'Yönetici',sales:'Satışçı',accounting:'Muhasebe',depo:'Depo Kullanıcısı'}[currentUser.role]||'Kullanıcı');if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
-el('entryBarcodeAdd').addEventListener('click',()=>addScannedEntryBarcode(el('entryBarcodeManual').value));
-el('entryBarcodeManual').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addScannedEntryBarcode(e.target.value)}});
-el('countBarcodeFind').addEventListener('click',()=>findCountBarcode(el('countBarcodeManual').value));
-el('countBarcodeManual').addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findCountBarcode(e.target.value)}});
-el('countCameraStart').addEventListener('click',startCountCamera);
-el('countCameraStop').addEventListener('click',()=>{closeCountCamera();countBarcodeStatus('Kamera kapatıldı; sayım listesi korundu.')});
-el('countBarcodeQuantityForm').addEventListener('submit',confirmCountBarcodeQuantity);
-el('countBarcodeUnit').addEventListener('change',updateCountBarcodeQuantityUnit);
-el('countBarcodeCancel').addEventListener('click',cancelCountBarcodeQuantity);
-el('countBarcodeCancelTop').addEventListener('click',cancelCountBarcodeQuantity);
-el('countBarcodeQuantityDialog').addEventListener('close',()=>{countBarcodePendingProductId=null});
-el('entryBarcodeQuantityForm').addEventListener('submit',confirmEntryBarcodeQuantity);
-el('entryBarcodeUnit').addEventListener('change',updateEntryBarcodeQuantityUnit);
-el('entryBarcodeCancel').addEventListener('click',cancelEntryBarcodeQuantity);
-el('entryBarcodeCancelTop').addEventListener('click',cancelEntryBarcodeQuantity);
-el('entryBarcodeQuantityDialog').addEventListener('close',()=>{entryBarcodePendingProductId=null});
-el('entryCameraStart').addEventListener('click',startEntryCamera);
-el('entryCameraStop').addEventListener('click',()=>{closeEntryCamera();entryBarcodeStatus('Kamera kapatıldı. Henüz kaydedilmemiş girişler listede duruyor.')});
-el('stockTable').addEventListener('click',e=>{const b=e.target.closest('[data-stock-product]');if(b)showStockProductDetail(b.dataset.stockProduct)});
-el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
-['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).addEventListener('change',renderBizReport));
-el('bizTabs').addEventListener('click',e=>{const b=e.target.closest('[data-biz-tab]');if(b){bizTab=b.dataset.bizTab;renderBizReport()}});
+el('entryBarcodeAdd')?.addEventListener('click',()=>addScannedEntryBarcode(el('entryBarcodeManual').value));
+el('entryBarcodeManual')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();addScannedEntryBarcode(e.target.value)}});
+el('countBarcodeFind')?.addEventListener('click',()=>findCountBarcode(el('countBarcodeManual').value));
+el('countBarcodeManual')?.addEventListener('keydown',e=>{if(e.key==='Enter'){e.preventDefault();findCountBarcode(e.target.value)}});
+el('countCameraStart')?.addEventListener('click',startCountCamera);
+el('countCameraStop')?.addEventListener('click',()=>{closeCountCamera();countBarcodeStatus('Kamera kapatıldı; sayım listesi korundu.')});
+el('countBarcodeQuantityForm')?.addEventListener('submit',confirmCountBarcodeQuantity);
+el('countBarcodeUnit')?.addEventListener('change',updateCountBarcodeQuantityUnit);
+el('countBarcodeCancel')?.addEventListener('click',cancelCountBarcodeQuantity);
+el('countBarcodeCancelTop')?.addEventListener('click',cancelCountBarcodeQuantity);
+el('countBarcodeQuantityDialog')?.addEventListener('close',()=>{countBarcodePendingProductId=null});
+el('entryBarcodeQuantityForm')?.addEventListener('submit',confirmEntryBarcodeQuantity);
+el('entryBarcodeUnit')?.addEventListener('change',updateEntryBarcodeQuantityUnit);
+el('entryBarcodeCancel')?.addEventListener('click',cancelEntryBarcodeQuantity);
+el('entryBarcodeCancelTop')?.addEventListener('click',cancelEntryBarcodeQuantity);
+el('entryBarcodeQuantityDialog')?.addEventListener('close',()=>{entryBarcodePendingProductId=null});
+el('entryCameraStart')?.addEventListener('click',startEntryCamera);
+el('entryCameraStop')?.addEventListener('click',()=>{closeEntryCamera();entryBarcodeStatus('Kamera kapatıldı. Henüz kaydedilmemiş girişler listede duruyor.')});
+el('stockTable')?.addEventListener('click',e=>{const b=e.target.closest('[data-stock-product]');if(b)showStockProductDetail(b.dataset.stockProduct)});
+el('dashboardExitFirms')?.addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
+['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id)?.addEventListener('change',renderBizReport));
+el('bizTabs')?.addEventListener('click',e=>{const b=e.target.closest('[data-biz-tab]');if(b){bizTab=b.dataset.bizTab;renderBizReport()}});
 document.querySelectorAll('[data-biz-period]').forEach(b=>b.addEventListener('click',()=>applyBizPeriod(b.dataset.bizPeriod)));
-el('bizReset').addEventListener('click',()=>{['bizFrom','bizTo'].forEach(id=>el(id).value='');['bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).value='all');renderBizReport()});
-el('bizExport').addEventListener('click',exportBizCSV);
-['historyFrom','historyTo','historyFirm'].forEach(id=>el(id).addEventListener('change',renderHistoricalOverview));
+el('bizReset')?.addEventListener('click',()=>{['bizFrom','bizTo'].forEach(id=>el(id).value='');['bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).value='all');renderBizReport()});
+el('bizExport')?.addEventListener('click',exportBizCSV);
+['historyFrom','historyTo','historyFirm'].forEach(id=>el(id)?.addEventListener('change',renderHistoricalOverview));
 document.querySelectorAll('[data-history-period]').forEach(b=>b.addEventListener('click',()=>applyHistoryPeriod(b.dataset.historyPeriod)));
-el('historyReset').addEventListener('click',()=>{el('historyFrom').value='';el('historyTo').value='';renderHistoricalOverview()});
-el('historyExport').addEventListener('click',exportHistoricalOverview);
+el('historyReset')?.addEventListener('click',()=>{el('historyFrom').value='';el('historyTo').value='';renderHistoricalOverview()});
+el('historyExport')?.addEventListener('click',exportHistoricalOverview);
 document.querySelectorAll('[data-daily-period]').forEach(b=>b.addEventListener('click',()=>setDailyPeriod(b.dataset.dailyPeriod)));
-['dailyFrom','dailyTo','dailyFirm','dailyWarehouse'].forEach(id=>el(id).addEventListener('change',renderDailyReport));
-el('dailyExport').addEventListener('click',exportDailyReport);
-el('bizRows').addEventListener('click',e=>{const btn=e.target.closest('[data-biz-view]');if(btn)viewBizReportItem(Number(btn.dataset.bizView))});
-el('syncOrderDebtsBtn').addEventListener('click',syncMissingOrderDebts);
-el('nav').addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
+['dailyFrom','dailyTo','dailyFirm','dailyWarehouse'].forEach(id=>el(id)?.addEventListener('change',renderDailyReport));
+el('dailyExport')?.addEventListener('click',exportDailyReport);
+el('bizRows')?.addEventListener('click',e=>{const btn=e.target.closest('[data-biz-view]');if(btn)viewBizReportItem(Number(btn.dataset.bizView))});
+el('syncOrderDebtsBtn')?.addEventListener('click',syncMissingOrderDebts);
+el('nav')?.addEventListener('click',e=>{const b=e.target.closest('button[data-page]');if(b)goPage(b.dataset.page)});
 el('hamburger').onclick=()=>{el('sidebar').classList.toggle('open');el('overlay').classList.toggle('show')};el('overlay').onclick=closeSidebar;
-el('loginForm').addEventListener('submit',login);el('passwordChangeForm').addEventListener('submit',changeOwnPassword);el('rememberMe').addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
-el('productExcelInput').addEventListener('change',importProductsExcel);el('productSearch').addEventListener('input',renderProducts);el('productForm').addEventListener('submit',saveProduct);el('productUnit').addEventListener('change',updateProductUnitUI);
-el('productPackQty').addEventListener('input',updateCartonPrice);
+el('loginForm')?.addEventListener('submit',login);el('passwordChangeForm')?.addEventListener('submit',changeOwnPassword);el('rememberMe')?.addEventListener('change',()=>{if(!el('rememberMe').checked)localStorage.removeItem(REMEMBER_LOGIN_KEY)});el('logoutBtn').onclick=logout;
+el('productExcelInput')?.addEventListener('change',importProductsExcel);el('productSearch')?.addEventListener('input',renderProducts);el('productForm')?.addEventListener('submit',saveProduct);el('productUnit')?.addEventListener('change',updateProductUnitUI);
+el('productPackQty')?.addEventListener('input',updateCartonPrice);
 // KG satış fiyatı hesaplanan alandır; yalnızca koli satış fiyatı değiştirilebilir.
-el('productSale').addEventListener('input',updateCartonPrice);
-el('productPriceUnit').addEventListener('change',updateProductPricePreview);
-el('productTable').addEventListener('change',e=>{
+el('productSale')?.addEventListener('input',updateCartonPrice);
+el('productPriceUnit')?.addEventListener('change',updateProductPricePreview);
+el('productTable')?.addEventListener('change',e=>{
  if(e.target.classList.contains('product-price-unit-select'))updateProductListPrice(e.target.closest('tr[data-product-id]'));
 });
-el('categorySearch').addEventListener('input',renderCategories);el('categoryForm').addEventListener('submit',saveCategory);
-el('warehouseForm').addEventListener('submit',saveWarehouse);el('orderForm').addEventListener('submit',saveOrder);
-el('orderFirm').addEventListener('change',()=>{applySelectedFirmDiscount();renderOrderSuggestions();renderOrderFirmMatches()});
-el('orderFirmSearch').addEventListener('input',()=>{el('orderFirm').value='';applySelectedFirmDiscount();renderOrderSuggestions();renderOrderFirmMatches()});
-el('orderFirmMatches').addEventListener('click',e=>{const b=e.target.closest('[data-order-firm]');if(!b)return;const firm=firmById(b.dataset.orderFirm);if(!firm)return;el('orderFirm').value=firm.id;el('orderFirmSearch').value=(firm.code||'')+' - '+firm.name;el('orderFirm').dispatchEvent(new Event('change',{bubbles:true}));renderOrderFirmMatches()});
-el('orderSuggestionItems').addEventListener('click',e=>{const btn=e.target.closest('[data-suggest-product]');if(btn)addSuggestedProduct(btn.dataset.suggestProduct)});
-el('orderApproveWarehouse').addEventListener('change',renderOrderApprovalPreview);
-el('orderProductSearch').addEventListener('input',filterOrderProductPicker);
-el('orderProductMatches').addEventListener('click',e=>{const b=e.target.closest('[data-order-product-pick]');if(b)selectOrderSearchProduct(b.dataset.orderProductPick)});
-el('orderProductPicker').addEventListener('change',refreshOrderProductStock);
-el('orderDiscount').addEventListener('input',updateOrderTotals);
-el('orderVatRate').addEventListener('input',updateOrderTotals);
-el('orderSearch').addEventListener('input',renderOrders);
-el('orderLineRows').addEventListener('input',handleOrderLineEvent);
-el('orderLineRows').addEventListener('change',handleOrderLineEvent);
-el('orderLineRows').addEventListener('click',handleOrderLineEvent);
-el('countHistoryRows').addEventListener('click',e=>{const b=e.target.closest('[data-count-history]');if(b)showCountHistory(b.dataset.countHistory)});
-el('orderListRows').addEventListener('click',e=>{
+el('categorySearch')?.addEventListener('input',renderCategories);el('categoryForm')?.addEventListener('submit',saveCategory);
+el('warehouseForm')?.addEventListener('submit',saveWarehouse);el('orderForm')?.addEventListener('submit',saveOrder);
+el('orderFirm')?.addEventListener('change',()=>{applySelectedFirmDiscount();renderOrderSuggestions();renderOrderFirmMatches()});
+el('orderFirmSearch')?.addEventListener('input',()=>{el('orderFirm').value='';applySelectedFirmDiscount();renderOrderSuggestions();renderOrderFirmMatches()});
+el('orderFirmMatches')?.addEventListener('click',e=>{const b=e.target.closest('[data-order-firm]');if(!b)return;const firm=firmById(b.dataset.orderFirm);if(!firm)return;el('orderFirm').value=firm.id;el('orderFirmSearch').value=(firm.code||'')+' - '+firm.name;el('orderFirm').dispatchEvent(new Event('change',{bubbles:true}));renderOrderFirmMatches()});
+el('orderSuggestionItems')?.addEventListener('click',e=>{const btn=e.target.closest('[data-suggest-product]');if(btn)addSuggestedProduct(btn.dataset.suggestProduct)});
+el('orderApproveWarehouse')?.addEventListener('change',renderOrderApprovalPreview);
+el('orderProductSearch')?.addEventListener('input',filterOrderProductPicker);
+el('orderProductMatches')?.addEventListener('click',e=>{const b=e.target.closest('[data-order-product-pick]');if(b)selectOrderSearchProduct(b.dataset.orderProductPick)});
+el('orderProductPicker')?.addEventListener('change',refreshOrderProductStock);
+el('orderDiscount')?.addEventListener('input',updateOrderTotals);
+el('orderVatRate')?.addEventListener('input',updateOrderTotals);
+el('orderSearch')?.addEventListener('input',renderOrders);
+el('orderLineRows')?.addEventListener('input',handleOrderLineEvent);
+el('orderLineRows')?.addEventListener('change',handleOrderLineEvent);
+el('orderLineRows')?.addEventListener('click',handleOrderLineEvent);
+el('countHistoryRows')?.addEventListener('click',e=>{const b=e.target.closest('[data-count-history]');if(b)showCountHistory(b.dataset.countHistory)});
+el('orderListRows')?.addEventListener('click',e=>{
  const del=e.target.closest('button[data-order-delete]');if(del){deleteSavedOrder(del.dataset.orderDelete);return}
  const pdf=e.target.closest('button[data-order-pdf]');if(pdf){exportSavedOrderPDF(pdf.dataset.orderPdf);return}
  const edit=e.target.closest('button[data-order-edit]');if(edit){editSavedOrder(edit.dataset.orderEdit);return}
  const approve=e.target.closest('button[data-order-approve]');if(approve){openOrderApproval(approve.dataset.orderApprove);return}
  const b=e.target.closest('button[data-order-view]');if(b)showOrderDetails(b.dataset.orderView);
 });
-el('firmSearch').addEventListener('input',renderFirms);el('firmForm').addEventListener('submit',saveFirm);
-el('firmType').addEventListener('change',toggleFirmDiscountField);
-el('firmLedgerForm').addEventListener('submit',saveFirmLedger);
-el('expenseEditForm').addEventListener('submit',saveExpenseEdit);
-el('expenseRows').addEventListener('click',e=>{const b=e.target.closest('[data-expense-action]');if(b)expenseAction(b.dataset.expenseId,b.dataset.expenseAction)});
-el('purchaseForm').addEventListener('submit',savePurchase);
-el('purchaseRows').addEventListener('click',e=>{const v=e.target.closest('[data-purchase-view]'),ed=e.target.closest('[data-purchase-edit]'),del=e.target.closest('[data-purchase-delete]');if(v)openPurchaseDetail(v.dataset.purchaseView);if(ed)editPurchase(ed.dataset.purchaseEdit);if(del)deletePurchase(del.dataset.purchaseDelete)});
-el('purchaseCancelEdit').addEventListener('click',resetPurchaseEdit);
-el('purchaseFirmSearch').addEventListener('input',()=>{el('purchaseFirmId').value='';renderPurchaseFirms()});
-el('purchaseFirmMatches').addEventListener('click',e=>{const b=e.target.closest('[data-purchase-firm]');if(!b)return;const f=firmById(b.dataset.purchaseFirm);if(!f)return;el('purchaseFirmId').value=f.id;el('purchaseFirmSearch').value=(f.code||'')+' - '+f.name;renderPurchaseFirms()});
-['purchaseKg','purchaseAmount','purchaseVat'].forEach(id=>el(id).addEventListener('input',purchaseTotals));
-el('guestSaleEditForm').addEventListener('submit',saveGuestSaleEdit);
-el('guestSalesRows').addEventListener('click',e=>{const b=e.target.closest('[data-guest-action]');if(!b)return;const id=b.dataset.guestId;switch(b.dataset.guestAction){case 'view':openGuestSale(id);break;case 'edit':openGuestSale(id,true);break;case 'delete':deleteGuestSale(id);break;}});
-el('guestAddProduct').addEventListener('click',addGuestProduct);
-el('guestProductSearch').addEventListener('input',renderGuestProductPicker);
-el('guestProductMatches').addEventListener('click',e=>{const b=e.target.closest('[data-guest-pick]');if(!b)return;el('guestProductSelect').value=b.dataset.guestPick;addGuestProduct();el('guestProductSearch').value='';renderGuestProductPicker()});
-el('guestWarehouse').addEventListener('change',refreshGuestStocks);
-el('guestProductRows').addEventListener('click',e=>{const b=e.target.closest('[data-remove-guest]');if(b)b.closest('tr').remove()});
-el('ledgerCustomerType').addEventListener('change',toggleLedgerCustomerType);
-el('firmLedgerType').addEventListener('change',toggleLedgerCustomerType);
-el('ledgerPaymentMethod').addEventListener('change',updateLedgerCheckFields);
-el('firmLedgerSearch').addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
-el('firmLedgerBalance').addEventListener('click',e=>{if(e.target.closest('#ledgerFillBalance'))fillLedgerAmountFromBalance()});
-el('firmLedgerMatches').addEventListener('click',e=>{const b=e.target.closest('[data-ledger-firm]');if(!b)return;const f=firmById(b.dataset.ledgerFirm);if(!f)return;el('firmLedgerFirm').value=f.id;el('firmLedgerSearch').value=(f.code||'')+' - '+f.name;renderLedgerFirmMatches()});
-el('firmExcelInput').addEventListener('change',importFirmsExcel);
-el('firmTable').addEventListener('click',e=>{
+el('firmSearch')?.addEventListener('input',renderFirms);el('firmForm')?.addEventListener('submit',saveFirm);
+el('firmType')?.addEventListener('change',toggleFirmDiscountField);
+el('firmLedgerForm')?.addEventListener('submit',saveFirmLedger);
+el('expenseEditForm')?.addEventListener('submit',saveExpenseEdit);
+el('expenseRows')?.addEventListener('click',e=>{const b=e.target.closest('[data-expense-action]');if(b)expenseAction(b.dataset.expenseId,b.dataset.expenseAction)});
+el('purchaseForm')?.addEventListener('submit',savePurchase);
+el('purchaseRows')?.addEventListener('click',e=>{const v=e.target.closest('[data-purchase-view]'),ed=e.target.closest('[data-purchase-edit]'),del=e.target.closest('[data-purchase-delete]');if(v)openPurchaseDetail(v.dataset.purchaseView);if(ed)editPurchase(ed.dataset.purchaseEdit);if(del)deletePurchase(del.dataset.purchaseDelete)});
+el('purchaseCancelEdit')?.addEventListener('click',resetPurchaseEdit);
+el('purchaseFirmSearch')?.addEventListener('input',()=>{el('purchaseFirmId').value='';renderPurchaseFirms()});
+el('purchaseFirmMatches')?.addEventListener('click',e=>{const b=e.target.closest('[data-purchase-firm]');if(!b)return;const f=firmById(b.dataset.purchaseFirm);if(!f)return;el('purchaseFirmId').value=f.id;el('purchaseFirmSearch').value=(f.code||'')+' - '+f.name;renderPurchaseFirms()});
+['purchaseKg','purchaseAmount','purchaseVat'].forEach(id=>el(id)?.addEventListener('input',purchaseTotals));
+el('guestSaleEditForm')?.addEventListener('submit',saveGuestSaleEdit);
+el('guestSalesRows')?.addEventListener('click',e=>{const b=e.target.closest('[data-guest-action]');if(!b)return;const id=b.dataset.guestId;switch(b.dataset.guestAction){case 'view':openGuestSale(id);break;case 'edit':openGuestSale(id,true);break;case 'delete':deleteGuestSale(id);break;}});
+el('guestAddProduct')?.addEventListener('click',addGuestProduct);
+el('guestProductSearch')?.addEventListener('input',renderGuestProductPicker);
+el('guestProductMatches')?.addEventListener('click',e=>{const b=e.target.closest('[data-guest-pick]');if(!b)return;el('guestProductSelect').value=b.dataset.guestPick;addGuestProduct();el('guestProductSearch').value='';renderGuestProductPicker()});
+el('guestWarehouse')?.addEventListener('change',refreshGuestStocks);
+el('guestProductRows')?.addEventListener('click',e=>{const b=e.target.closest('[data-remove-guest]');if(b)b.closest('tr').remove()});
+el('ledgerCustomerType')?.addEventListener('change',toggleLedgerCustomerType);
+el('firmLedgerType')?.addEventListener('change',toggleLedgerCustomerType);
+el('ledgerPaymentMethod')?.addEventListener('change',updateLedgerCheckFields);
+el('firmLedgerSearch')?.addEventListener('input',()=>{el('firmLedgerFirm').value='';renderLedgerFirmMatches()});
+el('firmLedgerBalance')?.addEventListener('click',e=>{if(e.target.closest('#ledgerFillBalance'))fillLedgerAmountFromBalance()});
+el('firmLedgerMatches')?.addEventListener('click',e=>{const b=e.target.closest('[data-ledger-firm]');if(!b)return;const f=firmById(b.dataset.ledgerFirm);if(!f)return;el('firmLedgerFirm').value=f.id;el('firmLedgerSearch').value=(f.code||'')+' - '+f.name;renderLedgerFirmMatches()});
+el('firmExcelInput')?.addEventListener('change',importFirmsExcel);
+el('firmTable')?.addEventListener('click',e=>{
  const btn=e.target.closest('button[data-firm-action]');if(!btn)return;
  const id=btn.dataset.firmId,action=btn.dataset.firmAction;
  if(action==='edit')editFirm(id);else if(action==='delete')deleteFirm(id);else if(action==='statement')showFirmStatement(id);else if(action==='balance')showFirmBalance(id);
 });
-el('movementEditForm').addEventListener('submit',saveMovementEdit);el('movementEditModal').addEventListener('click',e=>{if(e.target===el('movementEditModal'))closeMovementEditor()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&el('movementEditModal').classList.contains('show'))closeMovementEditor()});
-el('exitFirm').addEventListener('change',updateExitPriceSummary);el('exitVatRate').addEventListener('change',updateExitPriceSummary);
-el('exitBatchRows').addEventListener('input',updateExitPriceSummary);el('exitBatchRows').addEventListener('change',updateExitPriceSummary);
-el('entryForm').addEventListener('submit',saveEntry);el('exitForm').addEventListener('submit',saveExit);el('transferForm').addEventListener('submit',saveTransfer);el('countForm').addEventListener('submit',saveCount);
+el('movementEditForm')?.addEventListener('submit',saveMovementEdit);el('movementEditModal')?.addEventListener('click',e=>{if(e.target===el('movementEditModal'))closeMovementEditor()});document.addEventListener('keydown',e=>{if(e.key==='Escape'&&el('movementEditModal').classList.contains('show'))closeMovementEditor()});
+el('exitFirm')?.addEventListener('change',updateExitPriceSummary);el('exitVatRate')?.addEventListener('change',updateExitPriceSummary);
+el('exitBatchRows')?.addEventListener('input',updateExitPriceSummary);el('exitBatchRows')?.addEventListener('change',updateExitPriceSummary);
+el('entryForm')?.addEventListener('submit',saveEntry);el('exitForm')?.addEventListener('submit',saveExit);el('transferForm')?.addEventListener('submit',saveTransfer);el('countForm')?.addEventListener('submit',saveCount);
 ['entry','exit','count'].forEach(prefix=>{
-  el(prefix+'Warehouse').addEventListener('change',()=>renderBatchRows(prefix,true));
-  el(prefix+'ProductSearch').addEventListener('input',()=>filterBatchRows(prefix));
-  ['input','change'].forEach(event=>el(prefix+'BatchRows').addEventListener(event,e=>handleBatchInput(prefix,e)));
-});el('transferFrom').addEventListener('change',updateTransferCurrent);el('transferProduct').addEventListener('change',updateTransferCurrent);
-el('transferUnit').addEventListener('change',()=>{el('transferQty').step=el('transferUnit').value==='Kg'?'0.001':'1';updateUnitLabel('transfer')});el('movementEditProduct').addEventListener('change',()=>{
+  el(prefix+'Warehouse')?.addEventListener('change',()=>renderBatchRows(prefix,true));
+  el(prefix+'ProductSearch')?.addEventListener('input',()=>filterBatchRows(prefix));
+  ['input','change'].forEach(event=>el(prefix+'BatchRows')?.addEventListener(event,e=>handleBatchInput(prefix,e)));
+});el('transferFrom')?.addEventListener('change',updateTransferCurrent);el('transferProduct')?.addEventListener('change',updateTransferCurrent);
+el('transferUnit')?.addEventListener('change',()=>{el('transferQty').step=el('transferUnit').value==='Kg'?'0.001':'1';updateUnitLabel('transfer')});el('movementEditProduct')?.addEventListener('change',()=>{
  const id=el('movementEditProduct').value;
  setUnitOptions('movementEditUnit',id);
  el('movementEditQty').step=el('movementEditUnit').value==='Kg'?'0.001':'1';
  const type=el('movementEditType').value;
  el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+' ('+el('movementEditUnit').value+') *';
 });
-el('movementEditUnit').addEventListener('change',()=>{
+el('movementEditUnit')?.addEventListener('change',()=>{
  const type=el('movementEditType').value,unit=el('movementEditUnit').value;
  el('movementEditQty').step=unit==='Kg'?'0.001':'1';
  el('movementEditQtyLabel').textContent=(type==='Stok Sayımı'?'Sayılan Gerçek Stok':'Miktar')+' ('+unit+') *';
 });
-el('dashboardWarehouseFilter').addEventListener('change',renderDashboard);['reportFrom','reportTo','reportWarehouse'].forEach(id=>el(id).addEventListener('change',renderReports));['stockWarehouseFilter','stockStatusFilter'].forEach(id=>el(id).addEventListener('change',renderStock));el('stockSearch').addEventListener('input',renderStock);
-['movementType','movementWarehouse','movementProduct','movementFirm','movementUser','movementFrom','movementTo'].forEach(id=>el(id).addEventListener('change',renderMovements));
-['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id).addEventListener('change',renderAudit));el('auditSearch').addEventListener('input',renderAudit);
-el('userForm').addEventListener('submit',saveUser);el('userRole').addEventListener('change',updatePermissionEditorState);el('settingsForm').addEventListener('submit',saveSettings);el('sheetsForm').addEventListener('submit',saveSheetsSettings);el('backupInput').addEventListener('change',loadBackup);
+el('dashboardWarehouseFilter')?.addEventListener('change',renderDashboard);['reportFrom','reportTo','reportWarehouse'].forEach(id=>el(id)?.addEventListener('change',renderReports));['stockWarehouseFilter','stockStatusFilter'].forEach(id=>el(id)?.addEventListener('change',renderStock));el('stockSearch')?.addEventListener('input',renderStock);
+['movementType','movementWarehouse','movementProduct','movementFirm','movementUser','movementFrom','movementTo'].forEach(id=>el(id)?.addEventListener('change',renderMovements));
+['auditUser','auditModule','auditFrom','auditTo'].forEach(id=>el(id)?.addEventListener('change',renderAudit));el('auditSearch')?.addEventListener('input',renderAudit);
+el('userForm')?.addEventListener('submit',saveUser);el('userRole')?.addEventListener('change',updatePermissionEditorState);el('settingsForm')?.addEventListener('submit',saveSettings);el('sheetsForm')?.addEventListener('submit',saveSheetsSettings);el('backupInput')?.addEventListener('change',loadBackup);
 setInterval(()=>el('clock').textContent=new Date().toLocaleString('tr-TR'),1000);el('clock').textContent=new Date().toLocaleString('tr-TR');
 renderPermissionEditor(Object.fromEntries(USER_PERMISSION_DEFS.map(([k])=>[k,k!=='approveOrders'&&k!=='editOrders'&&k!=='deleteOrders'])));resetDefaultUnits();updateCartonPrice();initializeApplication();
 </script>
