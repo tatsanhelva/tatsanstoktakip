@@ -4,7 +4,7 @@
 <head>
 <meta charset="utf-8"/>
 <meta content="width=device-width, initial-scale=1" name="viewport"/>
-<title>Tatsan Stok Takip v3.2</title>
+<title>Tatsan Stok Takip v3.3</title>
 <style>
     :root{--bg:#f4f7fb;--panel:#fff;--text:#172033;--muted:#6b7280;--primary:#1f6feb;--primary2:#174ea6;--danger:#c62828;--warning:#b26a00;--ok:#1b7f3a;--border:#dfe5ef;--shadow:0 10px 30px rgba(23,32,51,.08);--radius:14px}
     *{box-sizing:border-box} body{margin:0;font-family:Inter,Segoe UI,Arial,sans-serif;background:var(--bg);color:var(--text)}
@@ -86,7 +86,7 @@
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
 <div class="app">
 <aside class="sidebar" id="sidebar">
-<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.2</small></div>
+<div class="brand"><h1 id="brandName">Tatsan Stok Takip</h1><small id="appVersionLabel">Stok ve depo yönetimi v3.3</small></div>
 <nav class="nav" id="nav">
 <button class="active" data-page="dashboard">📊 Ana Panel</button>
 <button data-page="products">📦 Ürünler</button>
@@ -361,6 +361,13 @@
 <div class="card-head"><h3 id="countHistoryTitle">Sayım Tutanağı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('countHistoryDialog').close()">Kapat</button></div>
 <p id="countHistoryInfo" class="muted"></p><div class="table-wrap"><table><thead><tr><th>Ürün</th><th>Önceki Stok</th><th>Sayılan Stok</th><th>Fark</th></tr></thead><tbody id="countHistoryDetails"></tbody></table></div></dialog>
 <div class="page" id="page-stock"><div class="card"><div class="card-head"><h3>Stok Durumu</h3><div class="actions" style="margin:0"><button type="button" class="btn btn-primary btn-sm" onclick="exportStockPDF()">PDF Çıktı Al</button><button type="button" class="btn btn-light btn-sm" onclick="exportStockCSV()">Excel/CSV İndir</button></div></div><div class="filter-row"><div class="field"><label>Depo</label><select id="stockWarehouseFilter"></select></div><div class="field"><label>Arama</label><input id="stockSearch" placeholder="Kod, barkod, ürün..."/></div><div class="field"><label>Durum</label><select id="stockStatusFilter"><option value="all">Tümü</option><option value="positive">Stokta Var</option><option value="critical">Kritik</option><option value="zero">Stok Bitti</option></select></div></div><div class="table-wrap"><table><thead><tr><th>Kod</th><th>Ürün</th><th>Birim</th><th class="num">Mevcut Stok</th><th>Durum</th></tr></thead><tbody id="stockTable"></tbody></table></div></div></div>
+<dialog id="stockDetailDialog" style="width:min(650px,96vw);max-height:90vh;overflow:auto;border:0;border-radius:14px;padding:22px">
+ <div class="card-head"><h3 id="stockDetailTitle">Ürün Stok Detayı</h3><button type="button" class="btn btn-light btn-sm" onclick="el('stockDetailDialog').close()">Kapat</button></div>
+ <p class="muted" id="stockDetailCode"></p>
+ <div class="stat" style="margin:12px 0"><div class="label">Tüm Depolardaki Toplam Stok</div><div class="value" id="stockDetailTotal">0 Koli</div></div>
+ <div class="table-wrap"><table><thead><tr><th>Depo</th><th class="num">Mevcut Stok</th><th>Durum</th></tr></thead><tbody id="stockDetailRows"></tbody></table></div>
+ <p class="muted" style="margin-top:10px">Miktarlar kayıtlı güncel stoktan hesaplanır. Bu pencere stokları değiştirmez.</p>
+</dialog>
 <div class="page" id="page-movements"><div class="card"><div class="card-head"><h3>Stok Hareketleri</h3><div class="actions" style="margin-top:0">
 <button class="btn btn-light btn-sm" type="button" onclick="exportMovementsCSV()">Excel/CSV İndir</button>
 <button class="btn btn-danger btn-sm" type="button" id="clearAllMovementsBtn" data-admin-only onclick="clearAllStockMovements()">Tüm Hareketleri Sil</button>
@@ -504,7 +511,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='3.2';
+const APP_VERSION='3.3';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -3300,7 +3307,23 @@ function filteredStockRows(){
 }
 function renderStock(){if(!hasPermission('stock')&&!isAdmin())return;
  const rows=filteredStockRows();
- el('stockTable').innerHTML=rows.length?rows.map(x=>{const status=stockIsVisiblyEmpty(x.product.id,x.current)?'<span class="badge b-red">Bitti</span>':x.current<=num(x.product.minStock)?'<span class="badge b-orange">Kritik</span>':'<span class="badge b-green">Normal</span>';return `<tr><td>${esc(x.product.code)}</td><td><b>${esc(x.product.name)}</b></td><td>${isKgProduct(x.product)?'Koli / KG':'Koli / Adet'}</td><td class="num"><b>${formatStockAmount(x.product.id,x.current)}</b></td><td>${status}</td></tr>`}).join(''):`<tr><td colspan="5" class="empty">Kayıt bulunamadı.</td></tr>`}
+ el('stockTable').innerHTML=rows.length?rows.map(x=>{const status=stockIsVisiblyEmpty(x.product.id,x.current)?'<span class="badge b-red">Bitti</span>':x.current<=num(x.product.minStock)?'<span class="badge b-orange">Kritik</span>':'<span class="badge b-green">Normal</span>';return `<tr><td>${esc(x.product.code)}</td><td><button type="button" class="btn btn-light btn-sm" data-stock-product="${esc(x.product.id)}" style="font-weight:700;color:#174ea6;text-decoration:underline;text-underline-offset:2px;text-align:left;white-space:normal">${esc(x.product.name)}</button></td><td>${isKgProduct(x.product)?'Koli / KG':'Koli / Adet'}</td><td class="num"><b>${formatStockAmount(x.product.id,x.current)}</b></td><td>${status}</td></tr>`}).join(''):`<tr><td colspan="5" class="empty">Kayıt bulunamadı.</td></tr>`}
+function showStockProductDetail(productId){
+ if(!hasPermission('stock'))return notify('Stok görme yetkiniz bulunmuyor.',true);
+ const product=productById(productId);
+ if(!product)return notify('Ürün bulunamadı.',true);
+ const warehouses=db.warehouses||[];
+ const total=warehouses.reduce((n,w)=>n+getStock(w.id,productId),0);
+ el('stockDetailTitle').textContent=product.name+' — Stok Detayı';
+ el('stockDetailCode').textContent='Ürün kodu: '+(product.code||'—')+' · Birim: '+(isKgProduct(product)?'Koli / KG':'Koli / Adet');
+ el('stockDetailTotal').textContent=formatStockAmount(productId,total);
+ el('stockDetailRows').innerHTML=warehouses.length?warehouses.map(w=>{
+  const stock=getStock(w.id,productId);
+  const status=stockIsVisiblyEmpty(productId,stock)?'<span class="badge b-red">Bitti</span>':stock<=num(product.minStock)?'<span class="badge b-orange">Kritik</span>':'<span class="badge b-green">Normal</span>';
+  return '<tr><td>'+esc(w.name)+'</td><td class="num"><b>'+esc(formatStockAmount(productId,stock))+'</b></td><td>'+status+'</td></tr>';
+ }).join(''):'<tr><td colspan="3" class="empty">Depo bulunamadı.</td></tr>';
+ el('stockDetailDialog').showModal();
+}
 function movementTypeMatch(m,f){if(f==='all')return true;if(f==='TRANSFER')return m.type.startsWith('TRANSFER');return m.type===f}
 function filteredMovements(){const type=el('movementType').value||'all',w=el('movementWarehouse').value||'all',p=el('movementProduct').value||'all',firm=el('movementFirm').value||'all',user=el('movementUser').value||'all',from=el('movementFrom').value,to=el('movementTo').value;return [...db.movements].filter(m=>movementTypeMatch(m,type)&&(w==='all'||m.warehouseId===w)&&(p==='all'||m.productId===p)&&(firm==='all'||m.firmId===firm)&&(user==='all'||m.userId===user)&&(!from||new Date(m.date)>=new Date(from+'T00:00:00'))&&(!to||new Date(m.date)<=new Date(to+'T23:59:59'))).sort(newestFirst)}
 function renderMovements(){const btn=el('clearAllMovementsBtn');if(btn)btn.disabled=!isAdmin()||!db.movements.length;const rows=filteredMovements();el('movementTable').innerHTML=rows.length?rows.map(m=>`<tr><td>${dt(m.date)}</td><td>${movementBadge(m.type)}</td><td>${esc(warehouseById(m.warehouseId)?.name||'-')}</td><td>${esc(productById(m.productId)?.name||'-')}</td><td>${esc(m.firmName||firmById(m.firmId)?.name||'-')}</td><td class="num">${formatMovementQuantity(m,true)}</td><td class="num">${formatStockAmount(m.productId,m.before)}</td><td class="num">${formatStockAmount(m.productId,m.after)}</td><td>${esc(m.userName||userById(m.userId)?.fullName||'-')}</td><td>${esc(m.doc)}</td><td title="${esc(m.detail)}">${esc((m.detail||'').slice(0,80))}</td>${isAdmin()?`<td>${movementAdminButtons(m)}</td>`:''}</tr>`).join(''):`<tr><td colspan="${isAdmin()?12:11}" class="empty">Hareket bulunamadı.</td></tr>`}
@@ -4165,6 +4188,7 @@ async function savePurchase(e){
 }
 function renderAll(){if(!currentUser)return;db.settings.autoSync=true;applyPermissionUI();fillAllSelects();setDefaultDates();updateProductUnitUI();if(!el('firmId').value)el('firmCode').value=currentUser?.role==='sales'?(el('firmCode').value||newFirmCodeForType()):nextFirmCode();renderBatchRows('entry');renderBatchRows('exit');renderBatchRows('count');renderDashboard();renderProducts();renderCategories();renderWarehouses();renderFirms();renderGuestSales();renderExpenses();renderPurchases();toggleLedgerCustomerType();renderOrders();renderStock();renderCountHistory();refreshCountMetadata();renderMovements();renderReports();renderUsers();renderAudit();renderSettings();updateTransferCurrent();el('currentUserName').textContent=currentUser.fullName||currentUser.username;el('currentUserRole').textContent=({admin:'Yönetici',sales:'Satışçı',accounting:'Muhasebe',depo:'Depo Kullanıcısı'}[currentUser.role]||'Kullanıcı');if(!db.settings.sheetsUrl)el('syncIndicator').textContent='Drive: bağlı değil'}
 
+el('stockTable').addEventListener('click',e=>{const b=e.target.closest('[data-stock-product]');if(b)showStockProductDetail(b.dataset.stockProduct)});
 el('dashboardExitFirms').addEventListener('click',e=>{const b=e.target.closest('[data-firm-exit-index]');if(b)showDashboardFirmExits(Number(b.dataset.firmExitIndex))});
 ['bizFrom','bizTo','bizFirm','bizProduct','bizWarehouse'].forEach(id=>el(id).addEventListener('change',renderBizReport));
 el('bizTabs').addEventListener('click',e=>{const b=e.target.closest('[data-biz-tab]');if(b){bizTab=b.dataset.bizTab;renderBizReport()}});
