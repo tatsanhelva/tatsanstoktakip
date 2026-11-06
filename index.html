@@ -563,7 +563,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.2';
+const APP_VERSION='4.3';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -585,6 +585,8 @@ let ordersBackendEnabled=false;
 let orderApprovalBackendEnabled=false;
 let orderEditBackendEnabled=false;
 let portfolioIsolationBackendEnabled=false;
+let stockQueueBackendEnabled=false;
+let stockQueueBusy=false;
 let orderEditingId=null;
 let orderEditingRevision=null;
 let orderEditBusy=false;
@@ -941,6 +943,7 @@ async function initializeApplication(){
       orderApprovalBackendEnabled=probe?.features?.orderApproval===true;
       orderEditBackendEnabled=probe?.features?.orderEdit===true;
       portfolioIsolationBackendEnabled=probe?.features?.portfolioIsolation===true;
+       stockQueueBackendEnabled=probe?.features?.stockQueue===true;
     }
     if(cloudState.dirty&&localStorage.getItem(DB_KEY))
       localStorage.setItem('tatsanPreSecureMigrationBackup',localStorage.getItem(DB_KEY));
@@ -3317,8 +3320,73 @@ async function startEntryCamera(){
   entryBarcodeStatus('Kamera açılamadı: '+(e?.message||e)+'. Barkodu elle girebilirsiniz.',true);
  }
 }
+// v4.3 central stock queue. Activated only when the deployed server explicitly advertises support.
+async function executeStockQueue(op,onSuccess){
+ if(stockQueueBusy)return notify('Stok işlemi zaten devam ediyor.',true);
+ if(!syncBootstrapComplete||cloudConflict||cloudState.dirty||cloudState.pending||syncPushInProgress||syncPullInProgress)
+  return notify('Önce bekleyen Drive kayıtlarını tamamlayın.',true);
+ let existing;try{existing=JSON.parse(sessionStorage.getItem('tatsanPendingStockTx_v43')||'null')}catch(_){}
+ if(existing&&existing.type!==op.type)
+  return notify('Daha önce gönderilmiş stok işleminin sonucu belirsiz. Önce aynı işlem ekranından tekrar deneyin.',true);
+ const tx=existing||{...op,requestId:uid('stockTx')};
+ stockQueueBusy=true;
+ try{
+  if(!existing)sessionStorage.setItem('tatsanPendingStockTx_v43',JSON.stringify(tx));
+  const r=await rpc('stockTransaction',tx);
+  if(!r?.ok||!r.data||!Number.isInteger(r.revision)||r.requestId!==tx.requestId)
+   throw new Error('Stok kaydı sunucu tarafından doğrulanmadı.');
+  db=normalizeDB(r.data);
+  localStorage.setItem(DB_KEY,JSON.stringify(db));
+  cloudState={revision:r.revision,dirty:false,pending:null,
+   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,
+   baseOrderCount:db.orders.length,baseFirmCount:db.firms.length,ownerId:currentUser?.id||null};
+  cloudConflict=false;rememberCloud();sessionStorage.removeItem('tatsanPendingStockTx_v43');
+  const u=currentUser&&userById(currentUser.id);
+  if(!u||u.active===false){currentUser=null;showLogin();return}
+  currentUser=u;showApp();onSuccess?.();
+  notify(r.duplicate?'İşlem önceden kaydedilmiş; ikinci kez işlenmedi.':'Merkezi stok kaydı tamamlandı · v'+r.revision);
+ }catch(err){
+  notify('Stok kaydı doğrulanamadı: '+(err?.message||err)+'. Aynı ekrandan yeniden deneyin; işlem kimliği korunuyor.',true);
+ }finally{stockQueueBusy=false}
+}
+function submitStockQueueBatch(type){
+ if(!requirePermission(type)||(type==='entry'&&!requireCards()))return;
+ const items=selectedBatchItems(type);if(!items)return;
+ const warehouse=el(type+'Warehouse').value;
+ const op={type,warehouseId:warehouse,
+  items:items.map(i=>({productId:i.product.id,unit:i.unit,amount:i.amount})),
+  doc:el(type+'Doc')?.value.trim()||'',notes:el(type+'Notes')?.value.trim()||''};
+ if(type==='entry'){op.lot=el('entryLot').value.trim();op.expiry=el('entryExpiry').value;}
+ if(type==='exit'){
+  const firm=firmById(el('exitFirm').value);
+  if(!firm||firm.active===false||!canViewFirm(firm))return notify('Cari firma seçin.',true);
+  if(!calculateExitQuote(items,firm))return notify('Satış fiyatı veya KDV geçersiz.',true);
+  op.firmId=firm.id;op.vatRate=el('exitVatRate').value;
+  op.reason=el('exitReason').value;op.receiver=el('exitReceiver').value.trim();
+  if(!confirm(firm.name+' için stok çıkışı ve cari borç birlikte sunucuda kaydedilsin mi?'))return;
+ }
+ executeStockQueue(op,()=>{
+  resetBatchForm(type,warehouse,type==='exit'?op.firmId:undefined);
+  if(type==='count'){renderCountHistory();refreshCountMetadata()}
+ });
+}
+function submitStockQueueTransfer(){
+ if(!requirePermission('transfer'))return;
+ const from=el('transferFrom').value,to=el('transferTo').value,
+  product=el('transferProduct').value,unit=el('transferUnit').value,
+  amountText=el('transferQty').value.trim();
+ if(!warehouseById(from)||!warehouseById(to)||from===to||!productById(product)||
+    !isValidStockInput(amountText,product,unit))
+  return notify('Transfer depo, ürün ve miktarını kontrol edin.',true);
+ const op={type:'transfer',warehouseId:from,targetWarehouseId:to,
+  items:[{productId:product,unit,amount:Number(amountText)}],
+  doc:el('transferDoc').value.trim(),notes:el('transferNotes').value.trim()};
+ executeStockQueue(op,()=>{
+  el('transferForm').reset();setDefaultDates();updateTransferCurrent();
+ });
+}
 function saveEntry(e){
-  e.preventDefault();if(!requirePermission('entry')||!requireCards())return;
+  e.preventDefault();if(secureMode&&stockQueueBackendEnabled)return submitStockQueueBatch('entry');if(!requirePermission('entry')||!requireCards())return;
   const items=selectedBatchItems('entry');if(!items)return;
   const warehouse=el('entryWarehouse').value,doc=el('entryDoc').value.trim(),
     date=el('entryDate').value||new Date().toISOString(),
@@ -3365,7 +3433,7 @@ function updateExitPriceSummary(){
  box.innerHTML=q?'Ürünler: '+firmMoney(q.subtotalCents)+' · İskonto: -'+firmMoney(q.discountCents)+' · KDV: '+firmMoney(q.vatCents)+' <b>· Cari borç: '+firmMoney(q.grandTotalCents)+'</b>':'Ürün, miktar ve firma seçilince borç otomatik hesaplanır.';
 }
 function saveExit(e){
-  e.preventDefault();if(!requirePermission('exit'))return;
+  e.preventDefault();if(secureMode&&stockQueueBackendEnabled)return submitStockQueueBatch('exit');if(!requirePermission('exit'))return;
   const warehouse=el('exitWarehouse').value,firm=firmById(el('exitFirm').value);
   if(!firm||firm.active===false||!canViewFirm(firm)){notify('Stok çıkışı için yetkili olduğunuz bir cari seçin.',true);return}
   if(secureMode&&!isAdmin())return notify('Cari borçlu stok çıkışı için mevcut güvenli sunucuda yönetici oturumu gereklidir.',true);
@@ -3407,7 +3475,7 @@ function updateTransferCurrent(){
  updateUnitLabel('transfer');
 }
 function saveTransfer(e){
- e.preventDefault();if(!requirePermission('transfer'))return;
+ e.preventDefault();if(secureMode&&stockQueueBackendEnabled)return submitStockQueueTransfer();if(!requirePermission('transfer'))return;
  const from=el('transferFrom').value,to=el('transferTo').value,p=el('transferProduct').value;
  const unit=el('transferUnit').value||defaultStockUnit(p),text=el('transferQty').value.trim(),amount=Number(text);
  if(!from||!to||!p||!warehouseById(from)||!warehouseById(to)||!productById(p))
@@ -3579,7 +3647,7 @@ async function startCountCamera(){
  }
 }
 function saveCount(e){
- e.preventDefault();if(!requirePermission('count'))return;
+ e.preventDefault();if(secureMode&&stockQueueBackendEnabled)return submitStockQueueBatch('count');if(!requirePermission('count'))return;
  const items=selectedBatchItems('count');if(!items)return;
  const warehouse=el('countWarehouse').value,
    person=currentUser.fullName||currentUser.username,
