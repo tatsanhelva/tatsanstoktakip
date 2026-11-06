@@ -3354,7 +3354,7 @@ function submitStockQueueBatch(type){
  const items=selectedBatchItems(type);if(!items)return;
  const warehouse=el(type+'Warehouse').value;
  const op={type,warehouseId:warehouse,
-  items:items.map(i=>({productId:i.product.id,unit:i.unit,amount:i.amount})),
+  items:items.map(i=>({productId:i.product.id,unit:i.unit,amount:i.amount,...(type==='count'?{expectedBefore:i.before}:{})})),
   doc:el(type+'Doc')?.value.trim()||'',notes:el(type+'Notes')?.value.trim()||''};
  if(type==='entry'){op.lot=el('entryLot').value.trim();op.expiry=el('entryExpiry').value;}
  if(type==='exit'){
