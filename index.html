@@ -563,7 +563,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.1';
+const APP_VERSION='4.2';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -4326,11 +4326,75 @@ async function pullFromSheets(){
   el('syncIndicator').textContent='Drive: güncel · v'+r.revision;
  }catch(e){notify(e.message,true)}finally{syncPullInProgress=false}
 }
+async function resolveCloudConflict(){
+ if(!syncBootstrapComplete||syncPushInProgress||syncPullInProgress)return notify('Drive işlemi sürüyor; tekrar deneyin.',true);
+ syncPullInProgress=true;
+ let latest;
+ try{latest=cloudResultCheck(await rpc('cloudRead'));if(!latest?.data)throw new Error('Drive verileri okunamadı. Yerel kayıtlar korundu.')}
+ catch(err){notify('Çakışma kontrolü yapılamadı: '+(err?.message||err),true);return}
+ finally{syncPullInProgress=false}
+ // Remote is already identical to the local or in-flight snapshot: nothing to replay.
+ const same=JSON.stringify(latest.data)===JSON.stringify(db);
+ const pendingSame=!!cloudState.pending&&JSON.stringify(latest.data)===JSON.stringify(cloudState.pending.data);
+ if(same||pendingSame){
+  if(pendingSame&&!same){
+   // This browser has more changes than its previously sent snapshot.
+   cloudState.pending=null;cloudState.revision=latest.revision;
+   markSyncedBase(latest.data,latest.revision);cloudState.dirty=true;
+   rememberCloud();cloudConflict=false;syncBootstrapComplete=true;
+   el('syncIndicator').textContent='Drive: sıradaki yerel kayıt gönderiliyor';
+   await pushToSheets(true);return;
+  }
+  cloudState.pending=null;cloudState.dirty=false;cloudConflict=false;
+  markSyncedBase(latest.data,latest.revision);rememberCloud();
+  el('syncIndicator').textContent='Drive: güncel · v'+latest.revision;
+  notify('Yerel kayıtlar Drive ile aynı. Çakışma güvenle kaldırıldı.');
+  return;
+ }
+ // Try only the existing conservative record-by-record merge. Never overwrite remote data.
+ if(rebaseQueuedStockMovements(latest)){
+  cloudConflict=false;rememberCloud();
+  notify('Kuyruktaki kayıtlar güncel Drive sürümüyle güvenle birleştirildi; gönderiliyor.');
+  await pushToSheets(true);return;
+ }
+ // A merge is unsafe: export BOTH copies plus the exact queued write before offering recovery.
+ const archive={exportedAt:new Date().toISOString(),reason:'Drive sürüm çakışması - otomatik birleştirme güvenli değil',
+  localData:JSON.parse(JSON.stringify(db)),pendingWrite:cloudState.pending?JSON.parse(JSON.stringify(cloudState.pending)):null,
+  localSyncState:JSON.parse(JSON.stringify(cloudState)),remoteRevision:latest.revision,remoteData:latest.data};
+ try{
+  const contents=JSON.stringify(archive,null,2);
+  const filename='Tatsan-Cakisma-Kurtarma-'+new Date().toISOString().replace(/[:.]/g,'-')+'.json';
+  downloadFile(filename,contents,'application/json');
+ }catch(err){notify('Kurtarma yedeği indirilemedi. Hiçbir kayıt değiştirilmedi: '+(err.message||err),true);return}
+ el('syncIndicator').textContent='Drive: çakışma · kurtarma yedeği indirildi';
+ if(!confirm('ÇAKIŞMA: Yerel kayıtlar Drive ile otomatik birleştirilemiyor. Hem bu cihazdaki bekleyen kayıtları hem de Drive kopyasını içeren kurtarma yedeği indirildi.\n\nDrive’ın güncel verisine geçilirse bu cihazdaki BEKLEYEN işlemler otomatik olarak aktarılmayacak; indirilen yedekten kontrol edilmesi gerekecek.\n\nKurtarma dosyasının gerçekten indirildiğini kontrol ettiniz mi? Drive verisine geçmek istiyor musunuz?'))return;
+ if(!confirm('SON ONAY: İndirilen kurtarma dosyasını açabildiğinizi doğruladınız mı? Bu cihazdaki bekleyen işlem kuyruğu kaldırılacak ve Drive’daki mevcut kayıtlar görüntülenecek. Emin misiniz?'))return;
+ // Keep an in-browser recovery copy as well as the downloaded file.
+ try{localStorage.setItem('tatsanConflictRecovery_'+Date.now(),JSON.stringify(archive))}
+ catch(err){notify('Tarayıcıda ek kurtarma kopyası saklanamadı; yerel kayıt korunuyor. Yeterli alan açıp tekrar deneyin.',true);return}
+ syncPullInProgress=true;
+ try{
+  // Fetch again in case another user saved while the confirmation dialogs were open.
+  const fresh=cloudResultCheck(await rpc('cloudRead'));
+  if(!fresh?.data)throw new Error('Güncel Drive verisi okunamadı.');
+  db=normalizeDB(fresh.data);
+  localStorage.setItem(DB_KEY,JSON.stringify(db));
+  cloudState={revision:fresh.revision,dirty:false,pending:null,
+   baseMovementCount:db.movements.length,baseAuditCount:db.auditLogs.length,
+   baseOrderCount:db.orders.length,baseFirmCount:db.firms.length,ownerId:currentUser?.id||null};
+  rememberCloud();cloudConflict=false;syncBootstrapComplete=true;
+  const u=currentUser?userById(currentUser.id):null;
+  if(u&&u.active!==false){currentUser=u;showApp()}else{currentUser=null;sessionStorage.removeItem('stokDepoCurrentUser');showLogin()}
+  el('syncIndicator').textContent='Drive: güncel · v'+fresh.revision;
+  notify('Drive güncel verileri yüklendi. Bekleyen eski işlemler kurtarma JSON dosyasında saklandı.');
+ }catch(err){cloudConflict=true;notify('Drive verileri yüklenemedi. Kurtarma dosyası saklandı: '+(err.message||err),true)}
+ finally{syncPullInProgress=false}
+}
 async function refreshCloudIfIdle(manual=false){
  if(!syncBootstrapComplete){if(manual)notify('Drive oturumu henüz hazır değil. Bağlantıyı kontrol edin.',true);return}
  if(syncPushInProgress||syncPullInProgress){if(manual)notify('Drive işlemi devam ediyor. İşlem tamamlanınca tekrar kontrol edin.');return}
  if(cloudConflict){
-  if(manual)notify('Drive sürüm çakışması var. Bekleyen kayıtlar korunuyor; önce JSON yedeği alın, güncel veriyi üzerine yazmayın.',true);
+  if(manual)await resolveCloudConflict();
   return;
  }
  // Bekleyen yerel işlemleri uzaktaki kayıt ile ezmek yerine önce güvenli şekilde gönder.
