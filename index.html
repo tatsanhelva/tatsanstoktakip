@@ -656,7 +656,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.4';
+const APP_VERSION='4.5';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -877,6 +877,7 @@ async function login(e){
       try{
         const r=await rpc('authLogin',{username,password});
         if(!r?.ok||!r.token||!r.user||!r.data)throw new Error('Sunucudan giriş yanıtı alınamadı.');
+        await verifyPortfolioFeatureForUser(r.user);
         if(cloudState.dirty&&cloudState.ownerId&&cloudState.ownerId!==r.user.id)
           throw new Error('Bu tarayıcıda başka kullanıcıya ait gönderilmemiş stok hareketleri var. Önce o kullanıcıyla giriş yapın.');
         sessionStorage.setItem('tatsanSecureSession',r.token);
@@ -958,6 +959,19 @@ async function bootstrapSheetsBeforeLogin(){
  finally{setLoginBusy(false,'')}
 }
 window.addEventListener('online',async()=>{if(!syncBootstrapComplete)await bootstrapSheetsBeforeLogin();else pushToSheets(false)});
+async function verifyPortfolioFeatureForUser(user){
+ if(user?.role!=='sales'||portfolioIsolationBackendEnabled)return;
+ // A failed first capability request must not be mistaken for an insecure server.
+ // Trust only a fresh authenticated backend feature declaration, never a client flag.
+ const probe=await rpc('authProbe',null,{url:DEFAULT_SERVER_URL,key:''});
+ if(probe?.mode!=='secure'||probe?.features?.portfolioIsolation!==true)
+  throw new Error('Sunucu satışçı portföy güvenliği desteğini doğrulamadı. Yönetici güncel güvenli Apps Script dağıtımını etkinleştirmelidir.');
+ portfolioIsolationBackendEnabled=true;
+ ordersBackendEnabled=probe?.features?.orders===true;
+ orderApprovalBackendEnabled=probe?.features?.orderApproval===true;
+ orderEditBackendEnabled=probe?.features?.orderEdit===true;
+ stockQueueBackendEnabled=probe?.features?.stockQueue===true;
+}
 function loadSecureCloudView(response){
  if(response?.user?.role==='sales'&&!portfolioIsolationBackendEnabled)
   throw new Error('Satışçı portföy güvenliği sunucuda henüz etkin değil. Yönetici güvenli Apps Script sürümünü dağıtmalıdır.');
@@ -998,6 +1012,7 @@ async function secureResume(){
   try{
     const r=await rpc('authResume');
     if(!r?.ok||!r.user||!r.data)throw new Error('Oturum bilgileri geçersiz.');
+     await verifyPortfolioFeatureForUser(r.user);
     loadSecureCloudView(r);
     showApp();
   }catch(e){
