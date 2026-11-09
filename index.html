@@ -81,6 +81,99 @@
     .order-totals .order-total{border-top:1px solid var(--border);padding-top:10px;font-size:17px}
     .order-details-totals{margin:14px 0 0 auto;max-width:330px;display:grid;gap:7px;text-align:right}
     @media(max-width:650px){.order-product-picker button{width:100%}.order-calculations{flex-direction:column}.order-totals{width:100%}}
+
+/* Tatsan mobile layout v4.4: touch-friendly, independent from desktop styles */
+@media screen and (max-width:760px){
+ html,body{width:100%;max-width:100%;overflow-x:hidden;-webkit-text-size-adjust:100%}
+ .app,.main,.content,.page,.card,.grid,.split,.settings-grid{min-width:0;max-width:100%}
+ .app{display:block;min-height:100dvh}
+ .topbar{height:auto;min-height:64px;padding:9px 12px;gap:8px;align-items:center}
+ .topbar>div:first-child{min-width:0;flex:1;gap:8px!important}
+ #pageTitle{font-size:17px;line-height:1.2;overflow-wrap:anywhere}
+ .hamburger{flex:0 0 auto;min-height:44px;min-width:44px;padding:10px;justify-content:center}
+ .top-actions{gap:5px;flex:0 0 auto}
+ .top-actions .user-chip{padding:3px 5px;border:0;background:transparent}
+ .top-actions .user-avatar{width:28px;height:28px}
+ .top-actions .user-meta{display:none}
+ .top-actions .btn{min-height:40px;padding:8px 9px;font-size:12px}
+ #changePasswordBtn{max-width:66px;line-height:1.1;white-space:normal}
+ #logoutBtn{min-width:44px}
+ .sidebar{width:min(310px,84vw);left:0;transform:translateX(-105%);transition:transform .22s ease;overscroll-behavior:contain;height:100dvh;padding-bottom:max(24px,env(safe-area-inset-bottom))}
+ .sidebar.open{transform:translateX(0)}
+ .nav button{min-height:46px;font-size:15px}
+ .mobile-overlay.show{z-index:20}
+ .content{padding:12px 10px max(28px,env(safe-area-inset-bottom))}
+ .card{padding:14px 12px;border-radius:13px;margin-bottom:12px}
+ .card-head{align-items:flex-start;flex-wrap:wrap}
+ .card-head h3{flex:1 1 100%}
+ .card-head .muted{white-space:normal}
+ .field input,.field select,.field textarea,.filter-row input,.filter-row select,input[type="search"]{min-height:44px;font-size:16px;max-width:100%}
+ .actions{gap:9px}
+ .actions>.btn,.actions>button{min-height:44px;flex:1 1 160px;white-space:normal;overflow-wrap:anywhere}
+ .btn{min-height:42px}
+ .btn-sm{min-height:40px}
+ .stats{grid-template-columns:repeat(2,minmax(0,1fr))}
+ .stat .value{font-size:21px;overflow-wrap:anywhere}
+ .filter-row,.filter-row.wide,.form-grid,.form-grid.cols-2,.form-grid.cols-3,.report-filter-grid,.settings-grid{grid-template-columns:minmax(0,1fr)}
+ .table-wrap:not(.batch-table-wrap){max-width:100%;overflow-x:auto;-webkit-overflow-scrolling:touch}
+ .table-wrap:not(.batch-table-wrap) table{width:max-content;min-width:100%}
+ .batch-toolbar{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:9px;align-items:stretch}
+ .batch-search{grid-column:1/-1;min-width:0}
+ .batch-toolbar .btn{min-height:44px;width:100%;font-size:13px;padding:9px;white-space:normal}
+ .batch-table-wrap{max-height:none;overflow:visible;border:0;border-radius:0}
+ .batch-table{display:block;width:100%;min-width:0}
+ .batch-table thead{display:none}
+ .batch-table tbody{display:grid;gap:11px}
+ .batch-table tbody tr[data-product-id]{display:grid;grid-template-columns:minmax(0,1fr) minmax(0,1fr);gap:9px 10px;padding:13px;border:1px solid var(--border);border-radius:13px;background:#fff;box-shadow:0 2px 9px rgba(20,30,50,.045)}
+ .batch-table tbody tr[data-product-id][hidden]{display:none!important}
+ .batch-table tbody tr.batch-selected{background:#eff7ff;border-color:#9cc7ff}
+ .batch-table tbody td{display:block;min-width:0;padding:0;border:0;white-space:normal;font-size:14px}
+ .batch-table tbody td:first-child{grid-column:1;grid-row:1;display:flex;align-items:center;gap:8px}
+ .batch-table tbody td:first-child:after{content:"Seç";font-size:13px;font-weight:700;color:#445069}
+ .batch-table tbody td:nth-child(2){grid-column:2;grid-row:1;text-align:right;font-size:12px;color:#64748b}
+ .batch-table tbody td:nth-child(2):before{content:"Kod: "}
+ .batch-table tbody td:nth-child(3){grid-column:1/-1;font-size:15px;line-height:1.4;font-weight:750;max-width:none;overflow-wrap:anywhere}
+ .batch-table tbody td:nth-child(4){grid-column:1/-1;padding:8px 10px;background:#f4f7fb;border-radius:8px}
+ .batch-table tbody td:nth-child(4):before{content:"Mevcut stok: ";font-weight:700;color:#475569}
+ #countBatchRows tr[data-product-id] td:nth-child(4):before{content:"Sistem stoku: "}
+ .batch-table tbody td:nth-child(5){grid-column:1;min-width:0}
+ .batch-table tbody td:nth-child(5):before{content:"Miktar";display:block;margin-bottom:5px;color:#475569;font-size:12px;font-weight:700}
+ #countBatchRows tr[data-product-id] td:nth-child(5):before{content:"Sayılan miktar"}
+ .batch-table tbody td:nth-child(6){grid-column:2;min-width:0}
+ .batch-table tbody td:nth-child(6):before{content:"Birim";display:block;margin-bottom:5px;color:#475569;font-size:12px;font-weight:700}
+ .batch-table tbody td:nth-child(7){grid-column:1/-1;padding-top:8px;border-top:1px solid var(--border);font-weight:750}
+ .batch-table tbody td:nth-child(7):before{content:"İşlem sonrası: ";font-weight:600;color:#475569}
+ #countBatchRows tr[data-product-id] td:nth-child(7):before{content:"Sayım farkı: "}
+ .batch-table .batch-check{width:22px;height:22px;accent-color:var(--primary)}
+ .batch-table .batch-qty,.batch-table .batch-unit{width:100%;max-width:none;min-width:0;min-height:45px;font-size:16px}
+ .batch-table tbody tr:not([data-product-id]){display:block}
+ .batch-table tbody tr:not([data-product-id]) td{display:block;padding:20px;white-space:normal}
+ #entryBarcodeQuantityDialog,#countBarcodeQuantityDialog,dialog{max-width:calc(100vw - 20px);max-height:calc(100dvh - 24px);overflow-y:auto;margin:auto;border-radius:14px}
+ dialog .form-grid{grid-template-columns:minmax(0,1fr)}
+ dialog input,dialog select{font-size:16px;min-height:44px}
+ #entryCameraVideo,#countCameraVideo{width:100%;max-width:100%;height:auto;max-height:44dvh;object-fit:contain}
+ .modal-overlay{padding:10px}
+ .modal-card{max-height:calc(100dvh - 20px);width:100%;padding:14px}
+ .toast{position:fixed;left:10px;right:10px;bottom:max(12px,env(safe-area-inset-bottom));width:auto;max-width:none;line-height:1.45;white-space:normal;overflow-wrap:anywhere}
+ .order-product-picker{display:grid;grid-template-columns:minmax(0,1fr)}
+ .order-product-picker button{width:100%}
+ .order-calculations{display:grid;grid-template-columns:minmax(0,1fr)}
+ .order-calculations>.field,.order-totals{width:100%;max-width:100%}
+ .permission-grid,.warehouse-summary-grid{grid-template-columns:minmax(0,1fr)}
+}
+@media screen and (max-width:390px){
+ .topbar{padding:8px}
+ #pageTitle{font-size:15px}
+ .top-actions{gap:3px}
+ .top-actions .user-chip{display:none}
+ #changePasswordBtn{max-width:55px;font-size:11px;padding:5px}
+ #logoutBtn{font-size:11px;padding:6px}
+ .stats{grid-template-columns:minmax(0,1fr)}
+ .batch-toolbar{grid-template-columns:1fr}
+}
+@media print{
+ .batch-table-wrap{max-height:none}
+}
 </style>
 </head>
 <body class="app-locked"><div class="login-screen" id="loginScreen"><div class="login-card"><div class="login-logo">📦</div><h1>Tatsan Stok Takip</h1><p>Kullanıcı bilgilerinizle giriş yapın.</p><button type="button" id="loginCloudButton" class="btn btn-light" onclick="configureCloud()" style="margin-bottom:12px">☁️ Bulut Bağlantısı</button><form id="loginForm"><div class="field"><label>Kullanıcı Adı</label><input autocomplete="username" id="loginUsername" required=""/></div><div class="field" style="margin-top:12px"><label>Şifre</label><input autocomplete="current-password" id="loginPassword" required="" type="password"/></div><label class="remember-row"><input id="rememberMe" type="checkbox"/> <span>Beni Hatırla <small>(yalnızca kullanıcı adı)</small></span></label><button class="btn btn-primary" style="width:100%;margin-top:16px" type="submit">Giriş Yap</button><div class="login-error" id="loginError"></div></form><div class="login-note">Giriş bilgilerinizi yöneticinizden alın. Beni Hatırla yalnızca kullanıcı adınızı kaydeder.</div></div></div>
@@ -563,7 +656,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.3';
+const APP_VERSION='4.4';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
