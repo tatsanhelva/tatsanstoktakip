@@ -656,7 +656,7 @@
 <script>const DB_KEY='stokDepoPro_v1_0';
 const DEFAULT_SHEETS_URL='DRIVE';
 const DEFAULT_SHEETS_TOKEN='GOOGLE_ACCOUNT';
-const APP_VERSION='4.5';
+const APP_VERSION='4.6';
 // Her yeni uygulama güncellemesinde yalnızca APP_VERSION değerini yükseltin.
 // Sekme başlığı ve sol menü bu değerden otomatik beslenir.
 const APP_VERSION_LABEL='Stok ve depo yönetimi v'+APP_VERSION;
@@ -2234,6 +2234,18 @@ function orderEditButton(order){
  if(order.status&&order.status!=='Yeni')return '';
  return ' <button type="button" class="btn btn-light btn-sm" data-order-edit="'+esc(order.id)+'">Düzenle</button>';
 }
+// Display only: normalize legacy UTF-8 mojibake without changing saved order data.
+function orderStatusDisplay(order){
+ if(!order)return 'Yeni';
+ if(orderIsApproved(order))return 'Onaylandı';
+ const raw=String(order.status||'Yeni').trim();
+ const normalized=raw.toLocaleLowerCase('tr-TR');
+ if(raw==='Yeni'||raw==='PENDING')return 'Yeni';
+ if(raw==='APPROVED'||raw==='Onaylandı'||raw==='OnaylandÄ±'||raw==='OnaylandÃ„Â±'||
+    raw.startsWith('Onayland')||raw.startsWith('Onaylanm'))return 'Onaylandı';
+ if(raw==='CANCELLED'||normalized==='iptal'||normalized==='i̇ptal')return 'İptal';
+ return raw;
+}
 function orderIsApproved(order,data=db){
  if(!order)return false;
  const status=String(order.status||'');
@@ -2464,7 +2476,7 @@ function renderOrders(){
   '<tr><td><b>'+esc(o.number)+'</b></td><td>'+esc(o.date||'')+'</td><td>'+esc(o.firmName||'')+
   '</td><td>'+Number(o.lines?.length||0)+'</td><td>'+esc(orderDiscountText(o))+
   '</td><td class="num"><b>'+orderMoney(orderPayableCents(o))+'</b><div class="muted" style="font-size:11px">'+
-   (storedOrderVat(o).hasVat?'KDV dahil':'Eski kayıt · KDV hesaplanmamış')+'</div></td><td><span class="badge b-blue">'+esc(o.status||'Yeni')+
+   (storedOrderVat(o).hasVat?'KDV dahil':'Eski kayıt · KDV hesaplanmamış')+'</div></td><td><span class="badge b-blue">'+esc(orderStatusDisplay(o))+
   '</span></td><td><button class="btn btn-light btn-sm" type="button" data-order-view="'+esc(o.id)+'">Görüntüle</button> '+
   '<button class="btn btn-primary btn-sm" type="button" data-order-pdf="'+esc(o.id)+'">PDF</button>'+orderEditButton(o)+orderApproveButton(o)+orderDeleteButton(o)+'</td></tr>'
  ).join(''):'<tr><td colspan="8" class="empty">Henüz sipariş kaydı yok.</td></tr>';
