@@ -2242,7 +2242,7 @@ function orderStatusDisplay(order){
  const normalized=raw.toLocaleLowerCase('tr-TR');
  if(raw==='Yeni'||raw==='PENDING')return 'Yeni';
  if(raw==='APPROVED'||raw==='Onaylandı'||raw==='OnaylandÄ±'||raw==='OnaylandÃ„Â±'||
-    raw.startsWith('Onayland')||raw.startsWith('Onaylanm'))return 'Onaylandı';
+    raw.startsWith('Onayland'))return 'Onaylandı';
  if(raw==='CANCELLED'||normalized==='iptal'||normalized==='i̇ptal')return 'İptal';
  return raw;
 }
